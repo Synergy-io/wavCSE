@@ -1,0 +1,67 @@
+# ============================
+# Upstream Config
+# ============================
+
+# ----------------------------
+# Logging
+# ----------------------------
+log_level: INFO        # Logging verbosity level
+                       # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# ----------------------------
+# Device configuration
+# ----------------------------
+device:
+  type: cuda          # Device type to use
+                       # Options: cuda, cpu
+  index: 0             # GPU index (only used if type = cuda)
+                       # Ignored if device type is cpu
+
+# ----------------------------
+# Paths
+# ----------------------------
+paths:
+  root_data_path: ~/voice_dataset
+                       # Root directory containing raw audio datasets
+                       # Expected directory structure:
+                       #
+                       # ~/voice_dataset/
+                       # ├── dataset1/
+                       # ├── dataset2/
+                       # └── datasetN/
+
+  root_emb_path: ~/embedding2
+                       # Root directory where extracted embeddings will be saved
+
+  upstream_checkpoint_path: ~/pretrained_checkpoints/SSL/WavLM-Large.pt
+                       # Path to pretrained upstream model checkpoint
+                       # Example: WavLM, HuBERT, wav2vec2 checkpoints
+
+# ----------------------------
+# Upstream model
+# ----------------------------
+upstream:
+  model_type: wavlm_large
+                       # Type of upstream SSL model to use
+                       # Current options:
+                       # - wavlm_large
+                       # (Extendable later: wavlm_base, hubert, wav2vec2, etc.)
+
+# ----------------------------
+# Pooling
+# ----------------------------
+pooling:
+  frame_pooling_type: mean
+                       # Frame-level pooling (time dimension pooling)
+                       # Options:
+                       # - mean : Average over time
+                       # - max  : Max over time
+                       # (Other pooling types can be added later)
+
+# ----------------------------
+# Dataset control
+# ----------------------------
+dataset:
+  limit: null          # Maximum number of samples to process
+                       # - Integer > 0 : process only first N samples
+                       # - null        : process entire dataset

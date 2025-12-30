@@ -1,0 +1,51 @@
+import os
+import logging
+import torch
+from utils.get_size import get_file_size
+
+def process_and_write_data(
+    data,
+    root_emb_path,
+    upstream_model_type,
+    frame_pooling_type,
+    dataset_name,
+    limit: int = None,
+    append: bool = False,               
+):
+    root_emb_path = os.path.abspath(os.path.expanduser(root_emb_path))
+    dir_emb_path = os.path.join(root_emb_path, upstream_model_type, frame_pooling_type, dataset_name)
+    os.makedirs(dir_emb_path, exist_ok=True)
+
+    csv_path = os.path.join(
+        dir_emb_path,
+        f"{dataset_name}_{upstream_model_type}_{frame_pooling_type}.csv"
+    )
+
+    logging.info("Path embedding: %s", dir_emb_path)
+
+    mode = "a" if append else "w"
+    write_header = (not append) or (not os.path.exists(csv_path))
+
+    with open(csv_path, mode) as csv_file:
+        if write_header:
+            csv_file.write("wavpath,label,file_size\n")
+
+        for index, (embedding, label, wavpath) in enumerate(data):
+            if limit is not None and index >= limit:
+                break
+
+            embpath = os.path.join(dir_emb_path, wavpath)
+            embpath = embpath.replace(".wav", f"_{upstream_model_type}_{frame_pooling_type}.pt")
+
+            os.makedirs(os.path.dirname(embpath), exist_ok=True)
+            torch.save(embedding, embpath)
+
+            csv_file.write(f"{wavpath},{label},{get_file_size(embpath)}\n")
+
+            if (index + 1) % 200 == 0:
+                logging.info("[%s] Processed %d files", dataset_name, index + 1)
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+    logging.info("CSV written: %s", csv_path)
