@@ -1,3 +1,14 @@
+"""
+Utility function for computing human readable file sizes.
+
+This module provides a helper function to convert raw file sizes
+in bytes into a human readable string representation (e.g., KB, MB, GB).
+It is primarily used when writing embedding metadata to CSV files.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import os
 import math
 

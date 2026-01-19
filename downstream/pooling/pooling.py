@@ -1,3 +1,23 @@
+"""
+Pooling modules for aggregating transformer layer outputs.
+
+This module implements a unified pooling interface for reducing
+a sequence of layer wise representations into a single fixed
+dimensional vector. It is primarily used in downstream models
+to aggregate selected transformer encoder layer outputs.
+
+Supported pooling strategies include mean, max, mixed, learned norm,
+softmax, log sum exp, weighted pooling, gated pooling, auto pooling,
+and self attentive pooling.
+
+The module also stores optional auxiliary outputs from the most
+recent forward pass, enabling inspection of learned pooling weights
+or attention distributions.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

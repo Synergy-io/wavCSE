@@ -1,3 +1,17 @@
+"""
+Logging configuration utilities.
+
+This module provides a centralized helper function for
+initializing consistent logging across the project.
+It configures both console and file based logging with
+timestamped log files, configurable verbosity levels,
+and clean handler management to support repeated runs
+and notebook based execution.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import logging
 from pathlib import Path
 from datetime import datetime

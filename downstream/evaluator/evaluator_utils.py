@@ -1,4 +1,21 @@
-# evaluator/evaluator_utils.py
+"""
+Evaluation utilities for multi task learning.
+
+This module provides shared helper functions, data structures,
+and writers used during downstream model evaluation, including:
+- Batch and evaluation level statistics containers
+- Safe numerical helpers and directory management
+- Masked loss and accuracy computation for multi task settings
+- Metric writing utilities
+- CSV prediction writers for per task label and prediction export
+
+These utilities are used by the downstream evaluator to ensure
+consistent evaluation reporting and reproducible outputs.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import os
 import csv
 from dataclasses import dataclass

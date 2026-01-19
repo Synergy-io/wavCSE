@@ -1,3 +1,20 @@
+"""
+Label and task keyword mappings used across datasets and tasks.
+
+This file defines:
+1. Label-to-index and index-to-label mappings for supported datasets
+   (Speech Commands, VoxCeleb, IEMOCAP, Fluent Speech Commands).
+2. Task keyword mappings for readable task names.
+3. Task-to-dataset mappings to maintain consistent identifiers
+   across the pipeline.
+
+These mappings are used by dataset builders, evaluators, and
+embedding extraction scripts to ensure consistent label handling.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 from enum import Enum
 
 class LabelKeywordMapping:

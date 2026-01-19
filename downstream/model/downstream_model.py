@@ -1,13 +1,31 @@
-# models/downstream_multitask.py
-import torch
-import torch.nn as nn
-from pooling.pooling import Pooling
-from typing import Optional
-import torch.nn.functional as F
-from utils.constant_mapping import *
-from utils.pooling_id import make_pooling_name
+"""
+Downstream multi task classification model.
+
+This module defines a shared representation based downstream
+multi task learning model that operates on pre computed
+upstream embeddings. It supports:
+- Layer wise pooling across transformer layers
+- Shared projection and hidden layers
+- Multiple task specific classification heads
+- Retrieval of pooled embeddings and pooling weights
+
+The model is designed to be used with upstream SSL
+representations such as WavLM.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import logging
 from typing import Optional, Union
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from pooling.pooling import Pooling
+from utils.constant_mapping import LabelKeywordMapping, TaskDatasetMapping
+from utils.pooling_id import make_pooling_name
 
 class MultiClassifierOutput:
     def __init__(self, logits=None, prediction=None):

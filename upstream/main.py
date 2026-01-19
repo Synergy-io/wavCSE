@@ -10,6 +10,9 @@ This script:
 
 This file is intentionally kept as an orchestration layer.
 All heavy logic lives in utils/, dataset/, and model/.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
 """
 
 import os

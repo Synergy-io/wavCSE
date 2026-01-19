@@ -1,6 +1,17 @@
-# ============================
-# Upstream Config
-# ============================
+# ============================================================
+# Upstream Embedding Extraction Configuration
+#
+# This configuration file defines all settings required for
+# extracting embeddings using an upstream SSL speech model.
+# It includes logging, device selection, dataset paths,
+# model configuration, pooling strategy, and dataset limits.
+#
+# This file is intended to be used by the main upstream
+# embedding extraction orchestration script.
+#
+# Author: Braveenan Sritharan
+# Created: 2026-01-19
+# ============================================================
 
 # ----------------------------
 # Logging

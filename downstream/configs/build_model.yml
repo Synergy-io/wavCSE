@@ -1,6 +1,18 @@
-# ============================
-# Downstream Config
-# ============================
+# =============================================================================
+# Downstream configuration for multi task training and evaluation
+#
+# This configuration controls:
+#  - Logging verbosity
+#  - Device selection (CPU or GPU)
+#  - Dataset and embedding paths
+#  - Upstream representation selection (SSL model type and chosen layers)
+#  - Pooling configuration (frame pooling and layer pooling)
+#  - Downstream model architecture hyperparameters
+#  - Training and evaluation settings
+#
+# Author: Braveenan Sritharan
+# Created: 2026-01-19
+# =============================================================================
 
 # ----------------------------
 # Logging

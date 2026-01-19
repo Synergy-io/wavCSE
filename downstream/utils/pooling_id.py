@@ -1,3 +1,19 @@
+"""
+Pooling identifier and display name utilities.
+
+This module provides helper functions for generating:
+- Compact, filesystem safe pooling identifiers used in
+  directory and file naming
+- Human readable pooling names used for logging,
+  visualization, and reporting
+
+These utilities ensure consistent representation of pooling
+configurations across experiments.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 def make_pooling_id(pooling_type, pooling_param):
     """
     Examples:

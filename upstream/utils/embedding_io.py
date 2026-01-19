@@ -1,3 +1,22 @@
+"""
+Utilities for writing extracted embeddings and metadata to disk.
+
+This file handles:
+1. Saving per utterance embeddings as .pt files
+2. Creating a structured directory hierarchy based on
+   upstream model type and pooling configuration
+3. Writing a CSV file that tracks wav paths, labels,
+   and embedding file sizes
+4. Supporting incremental writes across dataset splits
+   (train, validation, test)
+
+This utility is used by the upstream embedding extraction
+orchestration script.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import os
 import logging
 import torch

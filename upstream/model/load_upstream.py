@@ -1,4 +1,19 @@
-# models/factory.py
+"""
+Upstream SSL model factory.
+
+This module provides a centralized interface for loading
+upstream self supervised learning speech models based on
+a string identifier. It handles checkpoint validation,
+device placement, and evaluation mode setup.
+
+Currently supported upstream models include WavLM variants.
+The factory design allows easy extension to additional
+models such as HuBERT or wav2vec 2.0.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

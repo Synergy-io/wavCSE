@@ -1,4 +1,18 @@
-# utils/device_utils.py
+"""
+Device selection and setup utilities.
+
+This module provides a helper function for selecting and
+initializing the computation device (CPU or GPU). It handles
+CUDA availability checks, device index validation, and
+graceful fallback to CPU when a requested GPU is unavailable.
+
+This utility is shared across training, evaluation, and
+embedding extraction pipelines.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import torch
 
 def set_device(

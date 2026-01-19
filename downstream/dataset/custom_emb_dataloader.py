@@ -1,3 +1,16 @@
+"""
+Custom DataLoader for embedding based datasets.
+
+This module defines a lightweight wrapper around PyTorch's
+DataLoader for handling pre computed embedding datasets.
+It provides a custom collate function that stacks embedding
+tensors and corresponding label tensors into batched inputs
+suitable for downstream training.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import torch
 from torch.utils.data import DataLoader
 

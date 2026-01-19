@@ -1,14 +1,38 @@
-# evaluator/evaluator_model.py
+"""
+Evaluator implementation for downstream multi task learning.
+
+This module evaluates a trained downstream multi task model
+using pre computed embeddings. It supports:
+- Loading a specific checkpoint variant (opt, best, epoch, or epochX)
+- Computing masked loss and accuracy for multi task settings
+- Writing evaluation metrics to a text report
+- Exporting per task labels and predictions to CSV files
+
+The evaluator is designed to reuse the same run directory
+created during training and to produce reproducible outputs.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import os
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple
 import logging
+from typing import Dict, Any, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
 
 from dataset.custom_emb_dataloader import CustomEmbDataLoader
-from evaluator.evaluator_utils import *
+from evaluator.evaluator_utils import (
+    BatchStats,
+    EvalStats,
+    safe_div,
+    create_file_path,
+    masked_ce_loss,
+    masked_accuracy,
+    MetricsWriter,
+    CsvPredictionWriter,
+)
 
 class MultiTasksModelEvaluator:
     def __init__(

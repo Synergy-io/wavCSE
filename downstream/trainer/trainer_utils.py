@@ -1,4 +1,21 @@
-# trainer/trainer_utils.py
+"""
+Training utilities for multi task learning.
+
+This module provides shared helper functions, data structures,
+and managers used during model training, including:
+- Safe numerical helpers
+- Task and epoch level statistics containers
+- Masked loss and accuracy computation for multi task settings
+- Metric file writers
+- Checkpoint management for epoch, best, and optimal models
+
+These utilities are used by the downstream training pipeline
+to ensure consistent training behavior and evaluation tracking.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import os
 import json
 from dataclasses import dataclass

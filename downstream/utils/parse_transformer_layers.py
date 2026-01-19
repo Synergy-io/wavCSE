@@ -1,5 +1,17 @@
-from typing import List
+"""
+Transformer layer selection parsing utility.
 
+This module provides a helper function for parsing user specified
+transformer layer selections from configuration files. It supports
+common formats such as full layer selection, explicit index lists,
+and contiguous index ranges, and resolves them based on the
+upstream model variant.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
+from typing import List
 
 def parse_transformer_layers(transformer_layers: str, upstream_model_type: str) -> List[int]:
     """

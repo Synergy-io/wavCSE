@@ -10,10 +10,13 @@ This script:
 6. Evaluates three checkpoint variants on the test split:
    - opt  : checkpoint chosen by your CheckpointManager as the "optimal" model
    - best : checkpoint chosen by your CheckpointManager as the "best" model
-   - epoch: a specific epoch checkpoint 
+   - epoch: a specific epoch checkpoint
 
 This file should stay as orchestration only.
 All heavy logic remains inside dataset/, model/, trainer/, evaluator/, utils/.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
 """
 
 import torch

@@ -1,8 +1,26 @@
-# trainer/trainer_model.py
+"""
+Trainer implementation for downstream multi task learning.
+
+This module implements the full training loop for a downstream
+multi task classification model, including:
+- DataLoader construction
+- Training and validation epochs
+- Masked loss and accuracy computation
+- Learning rate scheduling
+- Checkpoint management (epoch, best, optimal)
+- Metric logging and visualization
+
+The trainer operates on pre computed embeddings and supports
+an arbitrary number of tasks.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import os
+import logging
 from datetime import datetime
 from typing import Dict, Optional, List, Any, Tuple
-import logging
 
 import torch
 import torch.nn as nn
@@ -12,12 +30,20 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 from matplotlib.ticker import LogLocator
 
-from trainer.trainer_utils import *
+from trainer.trainer_utils import (
+    safe_div,
+    create_file_path,
+    build_tasks_display_name,
+    BatchStats,
+    EpochStats,
+    masked_ce_loss,
+    masked_accuracy,
+    MetricsWriter,
+    CheckpointManager,
+)
 
 from utils.constant_mapping import TaskKeywordMapping
-
 from dataset.custom_emb_dataloader import CustomEmbDataLoader
-
 
 class MultiTasksModelTrainer:
     def __init__(

@@ -1,3 +1,21 @@
+"""
+Dataset loaders for downstream training using pre computed embeddings.
+
+This module defines dataset wrappers that load pre extracted
+embeddings from disk for downstream training and evaluation.
+It supports multiple speech datasets and handles:
+- Locating embeddings based on upstream model and pooling settings
+- Selecting transformer layer subsets
+- Mapping labels to task specific index tuples
+- Combining datasets and creating percentage based subsets
+
+These loaders are designed to be used by downstream multi task
+training and evaluation pipelines.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import torch
 from torch import Tensor
 from torch.hub import download_url_to_file

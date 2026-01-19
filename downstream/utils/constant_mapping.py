@@ -1,3 +1,19 @@
+"""
+Label, task, and dataset keyword mappings.
+
+This module defines centralized mappings used across both
+upstream and downstream pipelines, including:
+- Label to index and index to label mappings for supported datasets
+- Task keyword to human readable task name mappings
+- Task keyword to dataset identifier mappings
+
+These mappings ensure consistent label handling and task
+resolution across training, evaluation, and embedding pipelines.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 from enum import Enum
 
 class LabelKeywordMapping:

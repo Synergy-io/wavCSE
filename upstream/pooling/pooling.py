@@ -1,3 +1,18 @@
+"""
+Temporal pooling modules for sequence representations.
+
+This module implements a unified pooling interface for converting
+frame level representations into fixed dimensional vectors.
+It supports multiple pooling strategies including mean, max,
+mixed, learned norm pooling, softmax pooling, and log sum exp pooling.
+
+The pooling module is designed to be used with upstream SSL
+representations such as WavLM and related transformer models.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

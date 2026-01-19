@@ -1,3 +1,25 @@
+"""
+Dataset specific embedding extraction modules.
+
+This module defines dataset wrappers for extracting embeddings
+from multiple speech datasets using an upstream SSL model.
+It includes dataset specific preprocessing, silence aware
+trimming, optional resampling, label mapping, and temporal
+pooling to produce fixed dimensional representations.
+
+Supported datasets include:
+- Speech Commands
+- VoxCeleb1
+- IEMOCAP
+- Fluent Speech Commands
+
+These classes are designed to integrate seamlessly with
+the upstream embedding extraction pipeline.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import torch
 from torch import Tensor
 from torch.hub import download_url_to_file

@@ -1,3 +1,19 @@
+"""
+Dataset specific embedding builders.
+
+This module defines a unified interface for constructing
+dataset specific embedding objects using an upstream SSL
+model. It handles dataset selection, label mapping,
+train validation test splits, and logging of dataset
+statistics.
+
+The BuildEmbedding class acts as a bridge between
+upstream models and dataset level embedding extraction.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 from dataset.extract_embedding import *
 import os
 import logging

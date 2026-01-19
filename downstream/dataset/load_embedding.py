@@ -1,3 +1,23 @@
+"""
+Embedding loader for downstream multi task learning.
+
+This module provides a unified interface for loading pre computed
+embeddings from disk and constructing train, validation, and test
+datasets for downstream tasks. It handles:
+- Dataset selection based on task type
+- Mapping tasks to datasets
+- Locating embedding directories using upstream model and pooling settings
+- Selecting transformer layer subsets
+- Building task specific index patterns for multi task learning
+- Combining datasets and creating percentage based subsets
+
+This loader is used by the downstream training and evaluation
+orchestration scripts.
+
+Author: Braveenan Sritharan
+Created: 2026-01-19
+"""
+
 import os
 from dataset.preprocess_embedding import *
 from utils.constant_mapping import *
