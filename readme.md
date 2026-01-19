@@ -27,10 +27,26 @@ Upstream embedding extraction must be completed before downstream training.
 
 ```text
 wavCSE/
-├── upstream/        # Upstream SSL based embedding extraction
-├── downstream/      # Downstream multi task training and evaluation
-└── README.md        # Project documentation
+├── upstream/          # Upstream SSL based embedding extraction
+├── downstream/        # Downstream multi task training and evaluation
+├── environment.yml    # Conda environment definition
+└── README.md          # Project documentation
 ```
+
+---
+
+### Environment setup
+
+Create the conda environment:
+
+```bash
+conda env create -f environment.yml
+```
+
+Core libraries (already included in environment.yml):
+- python 3.9
+- torch 2.7.1
+- torchaudio 2.7.1
 
 ---
 
@@ -171,6 +187,43 @@ For example, specifying `epoch10` loads the checkpoint saved at the tenth traini
 
 ---
 
+## Pretrained Models and Checkpoints
+
+### Upstream model checkpoints
+
+wavCSE uses pretrained self supervised models for upstream embedding extraction.
+
+The latest official **WavLM Large** checkpoint is automatically downloaded when running the upstream embedding extraction stage. No manual download is required.
+
+### Downstream pretrained checkpoints
+
+Pretrained downstream multi task models are available for selected task configurations.
+
+For the task combination:
+
+- **ks_si_er** (Keyword Spotting + Speaker Identification + Emotion Recognition)
+
+Pretrained checkpoints can be downloaded from:
+
+https://drive.google.com/drive/folders/1kRlOutpEg9Ii7BR4QbntdSr01ZmIjdgo?usp=drive_link
+
+The folder contains the following checkpoint files:
+
+- `wavlm_large_ks_si_er_best.pth`  
+  Best validation checkpoint
+
+- `wavlm_large_ks_si_er_epoch100.pth`  
+  Checkpoint saved at epoch 100
+
+- `wavlm_large_ks_si_er_opt.pth`  
+  Best average task performance checkpoint (multi task optimization)
+
+#### Usage
+
+The checkpoint can then be evaluated using the corresponding checkpoint option (`best`, `epoch100`, or `opt`) in the downstream evaluation stage.
+
+---
+
 ## Configuration
 
 All experimental settings are controlled via YAML configuration files, including:
@@ -208,4 +261,3 @@ The wavCSE framework is designed to support future research extensions, includin
 ## License
 
 This project is intended for research and academic use.  
-License details can be added as needed.

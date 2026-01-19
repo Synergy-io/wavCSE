@@ -2,16 +2,19 @@ from dataset.extract_embedding import *
 import os
 import logging
 from utils.constant_mapping import *
+from utils.pooling_id import make_pooling_name
 
 class BuildEmbedding:
     def __init__(
         self,
         upstream_model=None,
         frame_pooling_type=None,
-        device=None
+        device=None,
+        frame_pooling_param: Optional[int] = None,
     ):
         self.upstream_model = upstream_model
         self.frame_pooling_type = frame_pooling_type
+        self.frame_pooling_param = frame_pooling_param
         self.device = device
         
         self.label_mapping_speechcommand = LabelKeywordMapping.get_label_mapping("speechcommand")[0]
@@ -19,7 +22,8 @@ class BuildEmbedding:
         self.label_mapping_iemocap = LabelKeywordMapping.get_label_mapping("iemocap")[0]
         self.label_mapping_fluentspeechcommand = LabelKeywordMapping.get_label_mapping("fluentspeechcommand")[0]
         
-        logging.info(f"Frame pooling type: {frame_pooling_type}")
+        frame_pool_name = make_pooling_name(frame_pooling_type, frame_pooling_param) 
+        logging.info(f"Frame pooling: {frame_pool_name}")
 
     def build_embedding(self, dataset_name, root_data_path):
         dataset_mapping = {
@@ -59,7 +63,8 @@ class BuildEmbedding:
             model=self.upstream_model,
             device=self.device,
             frame_pooling_type=self.frame_pooling_type,
-            label_mapping=label_mapping
+            label_mapping=label_mapping,
+            frame_pooling_param = self.frame_pooling_param
         )
         
         speechcommand_val_data = SPEECHCOMMANDSEmbedding (
@@ -70,7 +75,8 @@ class BuildEmbedding:
             model=self.upstream_model,
             device=self.device,
             frame_pooling_type=self.frame_pooling_type,
-            label_mapping=label_mapping
+            label_mapping=label_mapping,
+            frame_pooling_param = self.frame_pooling_param
         )
         
         speechcommand_test_data = SPEECHCOMMANDSEmbedding (
@@ -81,7 +87,8 @@ class BuildEmbedding:
             model=self.upstream_model,
             device=self.device,
             frame_pooling_type=self.frame_pooling_type,
-            label_mapping=label_mapping
+            label_mapping=label_mapping,
+            frame_pooling_param = self.frame_pooling_param
         )
 
         return speechcommand_train_data, speechcommand_val_data, speechcommand_test_data
@@ -96,7 +103,8 @@ class BuildEmbedding:
             model=self.upstream_model,
             device=self.device,
             frame_pooling_type=self.frame_pooling_type,
-            label_mapping=label_mapping
+            label_mapping=label_mapping,
+            frame_pooling_param = self.frame_pooling_param
         )
         
         voxceleb_val_data = VoxCeleb1Embedding (
@@ -106,7 +114,8 @@ class BuildEmbedding:
             model=self.upstream_model,
             device=self.device,
             frame_pooling_type=self.frame_pooling_type,
-            label_mapping=label_mapping
+            label_mapping=label_mapping,
+            frame_pooling_param = self.frame_pooling_param
         )
         
         voxceleb_test_data = VoxCeleb1Embedding (
@@ -116,7 +125,8 @@ class BuildEmbedding:
             model=self.upstream_model,
             device=self.device,
             frame_pooling_type=self.frame_pooling_type,
-            label_mapping=label_mapping
+            label_mapping=label_mapping,
+            frame_pooling_param = self.frame_pooling_param
         )
 
         return voxceleb_train_data, voxceleb_val_data, voxceleb_test_data
@@ -130,7 +140,8 @@ class BuildEmbedding:
             model=self.upstream_model,
             device=self.device,
             frame_pooling_type=self.frame_pooling_type,
-            label_mapping=label_mapping
+            label_mapping=label_mapping,
+            frame_pooling_param = self.frame_pooling_param
         )
         iemocap_total_samples = len(iemocap_total_data)
 
@@ -155,7 +166,8 @@ class BuildEmbedding:
             model=self.upstream_model,
             device=self.device,
             frame_pooling_type=self.frame_pooling_type,
-            label_mapping=label_mapping
+            label_mapping=label_mapping,
+            frame_pooling_param = self.frame_pooling_param
         )
         
         fluentspeechcommand_val_data = FluentSpeechCommandEmbedding (
@@ -164,7 +176,8 @@ class BuildEmbedding:
             model=self.upstream_model,
             device=self.device,
             frame_pooling_type=self.frame_pooling_type,
-            label_mapping=label_mapping
+            label_mapping=label_mapping,
+            frame_pooling_param = self.frame_pooling_param
         )
         
         fluentspeechcommand_test_data = FluentSpeechCommandEmbedding (
@@ -173,7 +186,8 @@ class BuildEmbedding:
             model=self.upstream_model,
             device=self.device,
             frame_pooling_type=self.frame_pooling_type,
-            label_mapping=label_mapping
+            label_mapping=label_mapping,
+            frame_pooling_param = self.frame_pooling_param
         )
 
         return fluentspeechcommand_train_data, fluentspeechcommand_val_data, fluentspeechcommand_test_data

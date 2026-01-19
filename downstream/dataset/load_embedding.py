@@ -1,6 +1,7 @@
 import os
 from dataset.preprocess_embedding import *
 from utils.constant_mapping import *
+from utils.pooling_id import make_pooling_id, make_pooling_name
 import logging
 
 class LoadEmbedding:
@@ -10,6 +11,7 @@ class LoadEmbedding:
         root_emb_path,
         upstream_model_type=None,
         frame_pooling_type=None,
+        frame_pooling_param=None,
         transformer_layer_array=None,
         device=None
     ):
@@ -28,10 +30,11 @@ class LoadEmbedding:
         self.data_fluentspeechcommand_path = os.path.join(self.root_data_path, "fluentspeechcommand")
 
         # Embedding roots (match names used inside _load_* methods)
-        self.emb_speechcommand_path = os.path.join(self.root_emb_path, upstream_model_type, frame_pooling_type, "speechcommand")
-        self.emb_voxceleb_path = os.path.join(self.root_emb_path, upstream_model_type, frame_pooling_type, "voxceleb")
-        self.emb_iemocap_path = os.path.join(self.root_emb_path, upstream_model_type, frame_pooling_type, "iemocap")
-        self.emb_fluentspeechcommand_path = os.path.join(self.root_emb_path, upstream_model_type, frame_pooling_type, "fluentspeechcommand")
+        frame_pool_id = make_pooling_id(frame_pooling_type, frame_pooling_param)
+        self.emb_speechcommand_path = os.path.join(self.root_emb_path, upstream_model_type, frame_pool_id, "speechcommand")
+        self.emb_voxceleb_path = os.path.join(self.root_emb_path, upstream_model_type, frame_pool_id, "voxceleb")
+        self.emb_iemocap_path = os.path.join(self.root_emb_path, upstream_model_type, frame_pool_id, "iemocap")
+        self.emb_fluentspeechcommand_path = os.path.join(self.root_emb_path, upstream_model_type, frame_pool_id, "fluentspeechcommand")
 
         # Label mappings
         self.label_mapping_speechcommand = LabelKeywordMapping.get_label_mapping("speechcommand")[0]
@@ -42,6 +45,7 @@ class LoadEmbedding:
         # Other configs
         self.upstream_model_type = upstream_model_type
         self.frame_pooling_type = frame_pooling_type
+        self.frame_pooling_param = frame_pooling_param
         self.device = device
         
         self.transformer_layer_array = transformer_layer_array
@@ -53,7 +57,9 @@ class LoadEmbedding:
         logging.info(f"Root embedding path: {root_emb_path}")
 
         logging.info(f"Upstream model type: {upstream_model_type}")
-        logging.info(f"Frame pooling type: {frame_pooling_type}")
+        
+        frame_pool_name = make_pooling_name(frame_pooling_type, frame_pooling_param)
+        logging.info(f"Frame pooling type: {frame_pool_name}")
         
         selected_transformer_layers = self._format_names(transformer_layer_array)
         logging.info(f"Transformer layers: {selected_transformer_layers}")
@@ -152,6 +158,7 @@ class LoadEmbedding:
         emb_speechcommand_path = self.emb_speechcommand_path
         label_mapping_speechcommand = self.label_mapping_speechcommand
         frame_pooling_type = self.frame_pooling_type
+        frame_pooling_param = self.frame_pooling_param
         upstream_model_type = self.upstream_model_type
         transformer_layer_array = self.transformer_layer_array
         device = self.device
@@ -171,6 +178,7 @@ class LoadEmbedding:
             root=data_speechcommand_path,
             root_embedding=emb_speechcommand_path,
             frame_pooling_type=frame_pooling_type,
+            frame_pooling_param=frame_pooling_param,
             url="speech_commands_v0.01",
             subset="training",
             download=False,
@@ -185,6 +193,7 @@ class LoadEmbedding:
             root=data_speechcommand_path,
             root_embedding=emb_speechcommand_path,
             frame_pooling_type=frame_pooling_type,
+            frame_pooling_param=frame_pooling_param,
             url="speech_commands_v0.01",
             subset="validation",
             download=False,
@@ -199,6 +208,7 @@ class LoadEmbedding:
             root=data_speechcommand_path,
             root_embedding=emb_speechcommand_path,
             frame_pooling_type=frame_pooling_type,
+            frame_pooling_param=frame_pooling_param,
             url="speech_commands_v0.01",
             subset="testing",
             download=False,
@@ -216,6 +226,7 @@ class LoadEmbedding:
         emb_voxceleb_path = self.emb_voxceleb_path
         label_mapping_voxceleb = self.label_mapping_voxceleb
         frame_pooling_type = self.frame_pooling_type
+        frame_pooling_param = self.frame_pooling_param
         upstream_model_type = self.upstream_model_type
         transformer_layer_array = self.transformer_layer_array
         device = self.device
@@ -235,6 +246,7 @@ class LoadEmbedding:
             root=data_voxceleb_path,
             root_embedding=emb_voxceleb_path,
             frame_pooling_type=frame_pooling_type,
+            frame_pooling_param=frame_pooling_param,
             subset='train',
             download=False,
             label_mapping=label_mapping_voxceleb,
@@ -248,6 +260,7 @@ class LoadEmbedding:
             root=data_voxceleb_path,
             root_embedding=emb_voxceleb_path,
             frame_pooling_type=frame_pooling_type,
+            frame_pooling_param=frame_pooling_param,
             subset='dev',
             download=False,
             label_mapping=label_mapping_voxceleb,
@@ -261,6 +274,7 @@ class LoadEmbedding:
             root=data_voxceleb_path,
             root_embedding=emb_voxceleb_path,
             frame_pooling_type=frame_pooling_type,
+            frame_pooling_param=frame_pooling_param,
             subset='test',
             download=False,
             label_mapping=label_mapping_voxceleb,
@@ -277,6 +291,7 @@ class LoadEmbedding:
         emb_iemocap_path = self.emb_iemocap_path
         label_mapping_iemocap = self.label_mapping_iemocap
         frame_pooling_type = self.frame_pooling_type
+        frame_pooling_param = self.frame_pooling_param
         upstream_model_type = self.upstream_model_type
         transformer_layer_array = self.transformer_layer_array
         device = self.device
@@ -296,6 +311,7 @@ class LoadEmbedding:
             root=data_iemocap_path,
             root_embedding=emb_iemocap_path,
             frame_pooling_type=frame_pooling_type,
+            frame_pooling_param=frame_pooling_param,
             sessions=("1", "2", "3", "4", "5"),
             label_mapping=label_mapping_iemocap,
             upstream_model_type=upstream_model_type,
@@ -322,6 +338,7 @@ class LoadEmbedding:
         emb_fluentspeechcommand_path = self.emb_fluentspeechcommand_path
         label_mapping_fluentspeechcommand = self.label_mapping_fluentspeechcommand
         frame_pooling_type = self.frame_pooling_type
+        frame_pooling_param = self.frame_pooling_param
         upstream_model_type = self.upstream_model_type
         transformer_layer_array = self.transformer_layer_array
         device = self.device
@@ -341,6 +358,7 @@ class LoadEmbedding:
             root=data_fluentspeechcommand_path,
             root_embedding=emb_fluentspeechcommand_path,
             frame_pooling_type=frame_pooling_type,
+            frame_pooling_param=frame_pooling_param,
             subset="train",
             label_mapping=label_mapping_fluentspeechcommand,
             upstream_model_type=upstream_model_type,
@@ -353,6 +371,7 @@ class LoadEmbedding:
             root=data_fluentspeechcommand_path,
             root_embedding=emb_fluentspeechcommand_path,
             frame_pooling_type=frame_pooling_type,
+            frame_pooling_param=frame_pooling_param,
             subset="valid",
             label_mapping=label_mapping_fluentspeechcommand,
             upstream_model_type=upstream_model_type,
@@ -365,6 +384,7 @@ class LoadEmbedding:
             root=data_fluentspeechcommand_path,
             root_embedding=emb_fluentspeechcommand_path,
             frame_pooling_type=frame_pooling_type,
+            frame_pooling_param=frame_pooling_param,
             subset="test",
             label_mapping=label_mapping_fluentspeechcommand,
             upstream_model_type=upstream_model_type,

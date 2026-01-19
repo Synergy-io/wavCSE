@@ -116,6 +116,7 @@ ignore_index = cfg["dataset"]["ignore_index"]
 # Pooling settings
 frame_pooling_type = cfg["pooling"]["frame_pooling_type"]
 layer_pooling_type = cfg["pooling"]["layer_pooling_type"]
+frame_pooling_param = cfg["pooling"]["frame_pooling_param"]
 
 # Some layer pooling needs a parameter:
 # - weighted / gated need seq_len (number of selected layers)
@@ -161,6 +162,7 @@ loader = LoadEmbedding(
     root_emb_path=root_emb_path,
     upstream_model_type=upstream_model_type,
     frame_pooling_type=frame_pooling_type,
+    frame_pooling_param=frame_pooling_param,
     transformer_layer_array=transformer_layer_array,
     device=device
 )
@@ -184,9 +186,9 @@ model = DownstreamMultiTaskModel(
     embedding_dim_shared1=embedding_dim_shared1,
     embedding_dim_shared2=embedding_dim_shared2,
     layer_pooling_type=layer_pooling_type,
+    layer_pooling_param=layer_pooling_param,
     dropout_prob_shared1=dropout_prob_shared1,
-    dropout_prob_shared2=dropout_prob_shared2,
-    layer_pooling_param=layer_pooling_param
+    dropout_prob_shared2=dropout_prob_shared2
 )
 
 model.to(device)

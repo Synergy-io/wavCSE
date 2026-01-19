@@ -348,4 +348,4 @@ dependencies:
       - upsetplot==0.9.0
       - widgetsnbextension==4.0.9
       - xgboost==2.1.4
-prefix: /home/braveenan/anaconda3/envs/opencv
+

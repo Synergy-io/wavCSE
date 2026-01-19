@@ -39,7 +39,7 @@ upstream:
 # Dataset behavior
 # ----------------------------
 dataset:
-  subset_percentage: 100 # Percentage of dataset to use (1-100). Useful for quick experiments.
+  subset_percentage: 10 # Percentage of dataset to use (1-100). Useful for quick experiments.
   ignore_index: -1      # Label value treated as "invalid/masked" (excluded from loss + accuracy).
                         # Make sure your datasets set missing labels to this value.
 
@@ -48,12 +48,23 @@ dataset:
 # ----------------------------
 pooling:
   # Frame pooling: pools time dimension inside each layer representation
-  frame_pooling_type: mean   # Options (based on your Pooling class):
-                             # mean, max
-                             # (Other pooling types can be added later)
+  frame_pooling_type: mean        # Options: mean, max, mix, lnp, smp, lse
+                                  # mean      : Mean Pooling
+                                  # max       : Max Pooling
+                                  # mix       : Mixed Pooling (mix of max + mean)
+                                  # lnp       : Learned Norm Pooling
+                                  # smp       : Softmax Pooling
+                                  # lse       : Log Sum Exp Pooling
+  
+  frame_pooling_param: null       # Parameter rules:
+                                  # mean, max : null
+                                  # mix       : mix_ratio in [0.0, 1.0]
+                                  # lnp       : p (integer), e.g., 2, 3, 4, 16
+                                  # smp       : lambda (float), e.g., 0.5 to 10.0
+                                  # lse       : r (float), e.g., 0.5 to 10.0
                              
   # Layer pooling: pools across selected transformer layers (layer dimension)
-  layer_pooling_type: weighted    # Options (your Pooling class):
+  layer_pooling_type: mix    # Options (your Pooling class):
                                   # mean      : Mean Pooling
                                   # max       : Max Pooling
                                   # mix       : Mixed Pooling (mix of max + mean)
@@ -65,7 +76,7 @@ pooling:
                                   # auto      : Auto Pooling (learned alpha, like soft attention strength)
                                   # sap       : Self Attentive Pooling
 
-  layer_pooling_param: null       # Parameter rules (what value to provide):
+  layer_pooling_param: 0.5       # Parameter rules (what value to provide):
                                   # mean, max        : null (no parameter needed)
                                   # weighted, gated  : null (no parameter needed)
                                   # sap              : D (input_dim) = embedding dimension per layer (e.g., 512, 768, 1024)
@@ -89,7 +100,7 @@ model:
 # Training configuration
 # ----------------------------
 training:
-  num_epochs: 30
+  num_epochs: 5
   batch_size: 2048                # Adjust batch size based on dataset count
   learning_rate: 0.0025
   weight_decay: 0.00000005         # AdamW weight decay. Set 0.0 to disable.

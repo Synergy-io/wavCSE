@@ -5,7 +5,9 @@ from pooling.pooling import Pooling
 from typing import Optional
 import torch.nn.functional as F
 from utils.constant_mapping import *
+from utils.pooling_id import make_pooling_name
 import logging
+from typing import Optional, Union
 
 class MultiClassifierOutput:
     def __init__(self, logits=None, prediction=None):
@@ -23,7 +25,7 @@ class DownstreamMultiTaskModel(nn.Module):
         layer_pooling_type: str,
         dropout_prob_shared1: float,
         dropout_prob_shared2: float,
-        layer_pooling_param: Optional[int] = None,
+        layer_pooling_param: Optional[Union[int, float]] = None
     ):
         super().__init__()
         
@@ -44,7 +46,8 @@ class DownstreamMultiTaskModel(nn.Module):
         self.layer_pooling_type = layer_pooling_type
         self.pooling = Pooling(layer_pooling_type, pooling_param=layer_pooling_param)
         
-        logging.info(f"Layer pooling type: {layer_pooling_type}")
+        layer_pool_name = make_pooling_name(layer_pooling_type, layer_pooling_param)
+        logging.info(f"Layer pooling type: {layer_pool_name}")
         
     def _input_dim_from_upstream(self, upstream_model_type: str) -> int:
         upstream_model_variation = upstream_model_type.split("_")[-1].lower()

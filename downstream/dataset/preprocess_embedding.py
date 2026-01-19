@@ -12,6 +12,8 @@ from typing import Union, Optional, Tuple, Dict, List, Any
 import os
 import re
 
+from utils.pooling_id import make_pooling_id
+
 # Speech Commands dataset pre-processing
 FOLDER_IN_ARCHIVE = "SpeechCommands"
 URL = "speech_commands_v0.01"
@@ -21,6 +23,7 @@ class SPEECHCOMMANDSEmbedding(SPEECHCOMMANDS):
         root: Union[str, Path],
         root_embedding: Union[str, Path],
         frame_pooling_type: str,
+        frame_pooling_param: Optional[Union[int, float]],
         upstream_model_type: str,
         label_mapping: Dict[str, int],
         transformer_layer_array: Optional[List[int]] = None,
@@ -35,6 +38,8 @@ class SPEECHCOMMANDSEmbedding(SPEECHCOMMANDS):
 
         self.root_embedding = str(root_embedding)
         self.frame_pooling_type = frame_pooling_type
+        self.frame_pooling_param = frame_pooling_param
+        self.frame_pool_id = make_pooling_id(frame_pooling_type, frame_pooling_param)
         self.upstream_model_type = upstream_model_type
         self.label_mapping = label_mapping
         self.transformer_layer_array = transformer_layer_array
@@ -57,7 +62,7 @@ class SPEECHCOMMANDSEmbedding(SPEECHCOMMANDS):
         label = str(metadata[2])
 
         emb_relpath = wav_relpath.replace(
-            ".wav", f"_{self.upstream_model_type}_{self.frame_pooling_type}.pt"
+            ".wav", f"_{self.upstream_model_type}_{self.frame_pool_id}.pt"
         )
         emb_path = os.path.join(self.root_embedding, emb_relpath)
 
@@ -86,6 +91,7 @@ class VoxCeleb1Embedding(VoxCeleb1Identification):
         root: Union[str, Path],
         root_embedding: Union[str, Path],
         frame_pooling_type: str,
+        frame_pooling_param: Optional[Union[int, float]],
         upstream_model_type: str,
         label_mapping: Dict[str, int],
         subset: str = "train",
@@ -98,6 +104,8 @@ class VoxCeleb1Embedding(VoxCeleb1Identification):
 
         self.root_embedding = str(root_embedding)
         self.frame_pooling_type = frame_pooling_type
+        self.frame_pooling_param = frame_pooling_param
+        self.frame_pool_id = make_pooling_id(frame_pooling_type, frame_pooling_param)
         self.upstream_model_type = upstream_model_type
         self.label_mapping = label_mapping
         self.transformer_layer_array = transformer_layer_array
@@ -120,7 +128,7 @@ class VoxCeleb1Embedding(VoxCeleb1Identification):
         label = str(metadata[2])   # speaker id string
 
         emb_relpath = wav_relpath.replace(
-            ".wav", f"_{self.upstream_model_type}_{self.frame_pooling_type}.pt"
+            ".wav", f"_{self.upstream_model_type}_{self.frame_pool_id}.pt"
         )
         emb_path = os.path.join(self.root_embedding, emb_relpath)
 
@@ -149,6 +157,7 @@ class IEMOCAPEmbedding(IEMOCAP):
         root: Union[str, Path],
         root_embedding: Union[str, Path],
         frame_pooling_type: str,
+        frame_pooling_param: Optional[Union[int, float]],
         upstream_model_type: str,
         sessions: List[str],
         transformer_layer_array: Optional[List[int]] = None,
@@ -163,6 +172,8 @@ class IEMOCAPEmbedding(IEMOCAP):
 
         self.root_embedding = str(root_embedding)
         self.frame_pooling_type = frame_pooling_type
+        self.frame_pooling_param = frame_pooling_param
+        self.frame_pool_id = make_pooling_id(frame_pooling_type, frame_pooling_param)
         self.upstream_model_type = upstream_model_type
         self.transformer_layer_array = transformer_layer_array
         self.label_mapping = label_mapping or {}
@@ -212,7 +223,7 @@ class IEMOCAPEmbedding(IEMOCAP):
         label = str(metadata[3])   # emotion label string
 
         emb_relpath = wav_relpath.replace(
-            ".wav", f"_{self.upstream_model_type}_{self.frame_pooling_type}.pt"
+            ".wav", f"_{self.upstream_model_type}_{self.frame_pool_id}.pt"
         )
         emb_path = os.path.join(self.root_embedding, emb_relpath)
 
@@ -243,6 +254,7 @@ class FluentSpeechCommandEmbedding(FluentSpeechCommands):
         root: Union[str, Path],
         root_embedding: Union[str, Path],
         frame_pooling_type: str,
+        frame_pooling_param: Optional[Union[int, float]],
         upstream_model_type: str,
         label_mapping: Dict[str, int],
         subset: str = "train",
@@ -254,6 +266,8 @@ class FluentSpeechCommandEmbedding(FluentSpeechCommands):
 
         self.root_embedding = str(root_embedding)
         self.frame_pooling_type = frame_pooling_type
+        self.frame_pooling_param = frame_pooling_param
+        self.frame_pool_id = make_pooling_id(frame_pooling_type, frame_pooling_param)
         self.upstream_model_type = upstream_model_type
         self.label_mapping = label_mapping
         self.transformer_layer_array = transformer_layer_array
@@ -293,7 +307,7 @@ class FluentSpeechCommandEmbedding(FluentSpeechCommands):
 
         # Load embedding
         emb_relpath = wav_relpath.replace(
-            ".wav", f"_{self.upstream_model_type}_{self.frame_pooling_type}.pt"
+            ".wav", f"_{self.upstream_model_type}_{self.frame_pool_id}.pt"
         )
         emb_path = os.path.join(self.root_embedding, emb_relpath)
 

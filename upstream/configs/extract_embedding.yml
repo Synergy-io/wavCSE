@@ -51,17 +51,27 @@ upstream:
 # Pooling
 # ----------------------------
 pooling:
-  frame_pooling_type: mean
-                       # Frame-level pooling (time dimension pooling)
-                       # Options:
-                       # - mean : Average over time
-                       # - max  : Max over time
-                       # (Other pooling types can be added later)
+  # Layer pooling: pools across selected transformer layers (layer dimension)
+  frame_pooling_type: mix        # Options (your Pooling class):
+                                  # mean      : Mean Pooling
+                                  # max       : Max Pooling
+                                  # mix       : Mixed Pooling (mix of max + mean)
+                                  # lnp       : Learned Norm Pooling
+                                  # smp       : Softmax Pooling
+                                  # lse       : Log Sum Exp Pooling
+
+  frame_pooling_param: 0.5       # Parameter rules (what value to provide):
+                                  # mean, max        : null (no parameter needed)
+                                  # mix              : mix_ratio in [0.0, 1.0]
+                                  #                  0.0 -> pure mean, 1.0 -> pure max
+                                  # lnp              : p (integer norm order), typically 2, 3, 4
+                                  # smp              : lambda (float), controls sharpness (typical: 0.5 to 10.0)
+                                  # lse              : r (float), controls sharpness (typical: 0.5 to 10.0)
 
 # ----------------------------
 # Dataset control
 # ----------------------------
 dataset:
-  limit: null          # Maximum number of samples to process
+  limit: 1          # Maximum number of samples to process
                        # - Integer > 0 : process only first N samples
                        # - null        : process entire dataset

@@ -2,6 +2,7 @@ import os
 import logging
 import torch
 from utils.get_size import get_file_size
+from utils.pooling_id import make_pooling_id
 
 def process_and_write_data(
     data,
@@ -10,15 +11,19 @@ def process_and_write_data(
     frame_pooling_type,
     dataset_name,
     limit: int = None,
-    append: bool = False,               
+    append: bool = False,
+    frame_pooling_param=None,   # NEW: pass pooling param here
 ):
     root_emb_path = os.path.abspath(os.path.expanduser(root_emb_path))
-    dir_emb_path = os.path.join(root_emb_path, upstream_model_type, frame_pooling_type, dataset_name)
+
+    frame_pool_id = make_pooling_id(frame_pooling_type, frame_pooling_param)  
+
+    dir_emb_path = os.path.join(root_emb_path, upstream_model_type, frame_pool_id, dataset_name)
     os.makedirs(dir_emb_path, exist_ok=True)
 
     csv_path = os.path.join(
         dir_emb_path,
-        f"{dataset_name}_{upstream_model_type}_{frame_pooling_type}.csv"
+        f"{dataset_name}_{upstream_model_type}_{frame_pool_id}.csv"
     )
 
     logging.info("Path embedding: %s", dir_emb_path)
@@ -35,7 +40,7 @@ def process_and_write_data(
                 break
 
             embpath = os.path.join(dir_emb_path, wavpath)
-            embpath = embpath.replace(".wav", f"_{upstream_model_type}_{frame_pooling_type}.pt")
+            embpath = embpath.replace(".wav", f"_{upstream_model_type}_{frame_pool_id}.pt")
 
             os.makedirs(os.path.dirname(embpath), exist_ok=True)
             torch.save(embedding, embpath)

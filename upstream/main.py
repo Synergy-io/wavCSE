@@ -53,7 +53,14 @@ parser.add_argument(
     "--dataset_name",
     type=str,
     required=True,
-    help="Dataset identifier (e.g., speechcommand, voxceleb, iemocap)"
+    help=(
+        "Dataset ID to use. "
+        "Options: "
+        "speechcommand (Google Speech Commands), "
+        "voxceleb (VoxCeleb speaker dataset), "
+        "iemocap (IEMOCAP emotion dataset), "
+        "fluentspeechcommand (Fluent Speech Commands intent dataset)."
+    )
 )
 
 parser.add_argument(
@@ -68,7 +75,7 @@ parser.add_argument(
     "--device_index",
     type=int,
     default=None,
-    help="GPU index to use (overrides config file)"
+    help="GPU index to use"
 )
 
 args = parser.parse_args()
@@ -86,13 +93,14 @@ checkpoint_path = cfg["paths"]["upstream_checkpoint_path"]
 
 # Dataset
 dataset_name = args.dataset_name
-dataset_limit = cfg["dataset"]["limit"]      # None or integer
+dataset_limit = cfg["dataset"]["limit"]      
 
 # Upstream model
 upstream_model_type = cfg["upstream"]["model_type"]
 
 # Pooling
 frame_pooling_type = cfg["pooling"]["frame_pooling_type"]
+frame_pooling_param = cfg["pooling"]["frame_pooling_param"]
 
 # Device
 device_type = cfg["device"]["type"]
@@ -141,6 +149,7 @@ upstream_model = load_upstream_model(
 data_embedding = BuildEmbedding(
     upstream_model=upstream_model,
     frame_pooling_type=frame_pooling_type,
+    frame_pooling_param=frame_pooling_param,
     device=device
 )
 
@@ -158,31 +167,35 @@ training_data, validating_data, testing_data = data_embedding.build_embedding(
 # append=True  → add to existing CSV
 
 process_and_write_data(
-    training_data,
-    root_emb_path,
-    upstream_model_type,
-    frame_pooling_type,
-    dataset_name,
+    data=training_data,
+    root_emb_path=root_emb_path,
+    upstream_model_type=upstream_model_type,
+    frame_pooling_type=frame_pooling_type,
+    frame_pooling_param=frame_pooling_param,
+    dataset_name=dataset_name,
     limit=dataset_limit,
     append=False,
 )
 
 process_and_write_data(
-    validating_data,
-    root_emb_path,
-    upstream_model_type,
-    frame_pooling_type,
-    dataset_name,
+    data=validating_data,
+    root_emb_path=root_emb_path,
+    upstream_model_type=upstream_model_type,
+    frame_pooling_type=frame_pooling_type,
+    frame_pooling_param=frame_pooling_param,
+    dataset_name=dataset_name,
     limit=dataset_limit,
     append=True,
 )
 
 process_and_write_data(
-    testing_data,
-    root_emb_path,
-    upstream_model_type,
-    frame_pooling_type,
-    dataset_name,
+    data=testing_data,
+    root_emb_path=root_emb_path,
+    upstream_model_type=upstream_model_type,
+    frame_pooling_type=frame_pooling_type,
+    frame_pooling_param=frame_pooling_param,
+    dataset_name=dataset_name,
     limit=dataset_limit,
     append=True,
 )
+

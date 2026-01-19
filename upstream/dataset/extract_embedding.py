@@ -113,6 +113,7 @@ class SPEECHCOMMANDSEmbedding(SPEECHCOMMANDS):
         model: torch.nn.Module = None,
         device: torch.device = None,
         label_mapping: Dict[str, int] = None,
+        frame_pooling_param: Optional[int] = None,
     ) -> None:
         super().__init__(root, url, folder_in_archive, download, subset)
         self.model = model
@@ -123,7 +124,7 @@ class SPEECHCOMMANDSEmbedding(SPEECHCOMMANDS):
         if self.device is None:
             self.device = torch.device("cpu")
         
-        self.frame_pooling = Pooling(frame_pooling_type)
+        self.frame_pooling = Pooling(frame_pooling_type, frame_pooling_param)
         self.model = self.model.to(self.device)
 
     def get_metadata(self, n: int) -> Tuple[Tensor, int, int, str, str]:
@@ -178,6 +179,7 @@ class VoxCeleb1Embedding(VoxCeleb1Identification):
         download: bool = False,
         device: torch.device = None,
         label_mapping: Dict[str, int] = None,
+        frame_pooling_param: Optional[int] = None,
     ) -> None:
         super().__init__(root, subset, _IDEN_SPLIT_URL, download)
         self.model = model
@@ -188,7 +190,7 @@ class VoxCeleb1Embedding(VoxCeleb1Identification):
         if self.device is None:
             self.device = torch.device("cpu")
         
-        self.frame_pooling = Pooling(frame_pooling_type)
+        self.frame_pooling = Pooling(frame_pooling_type, frame_pooling_param)
         self.model = self.model.to(self.device)
 
     def get_metadata(self, n: int) -> Tuple[Tensor, int, int, str, str]:
@@ -235,6 +237,7 @@ class IEMOCAPEmbedding(IEMOCAP):
         model: torch.nn.Module = None,
         device: torch.device = None,
         label_mapping: Dict[str, int] = None,
+        frame_pooling_param: Optional[int] = None,
     ) -> None:
         super().__init__(root, sessions, utterance_type)
         self.model = model
@@ -249,7 +252,7 @@ class IEMOCAPEmbedding(IEMOCAP):
         self.data = [wav_stem for wav_stem in self.data if self.mapping[wav_stem]["label"] != "fru"]
         self.data = [wav_stem for wav_stem in self.data if self.mapping[wav_stem]["path"].split("/")[3].split("_")[0] in speakers]
         
-        self.frame_pooling = Pooling(frame_pooling_type)
+        self.frame_pooling = Pooling(frame_pooling_type, frame_pooling_param)
         self.model = self.model.to(self.device)
         
     def process_sessions(self, input_array):
@@ -315,6 +318,7 @@ class FluentSpeechCommandEmbedding(FluentSpeechCommands):
         model: torch.nn.Module = None,
         device: torch.device = None,
         label_mapping: Dict[str, int] = None,
+        frame_pooling_param: Optional[int] = None,
     ) -> None:
         super().__init__(root=root, subset=subset)
         self.model = model
@@ -325,7 +329,7 @@ class FluentSpeechCommandEmbedding(FluentSpeechCommands):
         if self.device is None:
             self.device = torch.device("cpu")
             
-        self.frame_pooling = Pooling(frame_pooling_type)
+        self.frame_pooling = Pooling(frame_pooling_type, frame_pooling_param)
         self.model = self.model.to(self.device)
 
     def _load_and_sample_waveform(self, waveform: Tensor, orig_sample_rate: int) -> Tensor:
