@@ -259,6 +259,18 @@ The wavCSE framework is designed to support future research extensions, includin
 
 ---
 
+## Contact
+
+For questions, or feedback related to wavCSE, please contact:
+
+- **Braveenan Sritharan**  
+  braveenans.22@cse.mrt.ac.lk
+
+- **Uthayasanker Thayasivam**  
+  rtuthaya@cse.mrt.ac.lk
+
+---
+
 ## License
 
 This project is intended for research and academic use.  
