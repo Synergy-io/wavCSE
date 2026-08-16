@@ -5,3 +5,5 @@
 **/*.pyc
 **/*.pkl
 **/*.DS_Store
+.env
+/embedding.tar.gz
