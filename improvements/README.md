@@ -55,9 +55,15 @@ python run_base.py --task_type ks_si_er --config configs/base_config.yml [--devi
 
 For a long unattended run, detach it from the terminal so it survives a dropped connection:
 ```bash
-nohup python run_base.py --task_type ks_si_er --config configs/base_config.yml > /tmp/run_base.log 2>&1 < /dev/null &
+# 3 original wavCSE tasks (ks_si_er)
+nohup python run_base.py --task_type ks_si_er --config configs/base_config.yml > /tmp/run_base_ks_si_er.log 2>&1 < /dev/null &
+disown
+
+# all 4 tasks, including intent classification (ks_si_er_ic)
+nohup python run_base.py --task_type ks_si_er_ic --config configs/base_config.yml > /tmp/run_base_ks_si_er_ic.log 2>&1 < /dev/null &
 disown
 ```
+Each backgrounds a separate process -- run both if you want both baselines, or just one. Progress: `tail -f /tmp/run_base_<task_type>.log`, or watch the run live on the MLflow/DagsHub page above.
 
 ## Run a taskrelation variant (existing)
 
