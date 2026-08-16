@@ -7,3 +7,7 @@
 **/*.DS_Store
 .env
 /embedding.tar.gz
+**/results/
+**/results_*/
+**/checkpoints/
+**/checkpoints_*/
