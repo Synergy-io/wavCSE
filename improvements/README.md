@@ -7,10 +7,10 @@ improvements/
 ├── base/            # plain wavCSE downstream model, MLflow-tracked (no new architecture)
 ├── taskrelation/     # Kevin -- GBC, TSM, PMR
 ├── lowrank/          # Chehan -- not yet implemented
-├── clustering/        # Induwara -- not yet implemented
+├── clustering/        # Induwara -- NCMTL three-task candidate-network clustering
 ├── decomposition/    # Pathumi -- not yet implemented
 ├── mlflow_utils.py    # shared MLflow helpers, used by base/ and importable by any owner folder
-└── run_improvements.py  # runs taskrelation/ variants (gbc/tsm/pmr/original)
+└── run_improvements.py  # runs taskrelation variants
 ```
 
 ## Prerequisites
