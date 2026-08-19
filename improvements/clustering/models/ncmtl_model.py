@@ -13,7 +13,7 @@ class DownstreamMultiTaskModelNCMTL(DownstreamMultiTaskModel):
 
     SUPPORTED_TASK_TYPE = "ks_si_er"
 
-    def __init__(self, *args, candidate_dim: int, **kwargs):
+    def __init__(self, *args, **kwargs):
         task_type = kwargs.get("task_type")
         if task_type is None and len(args) >= 2:
             task_type = args[1]
@@ -22,27 +22,22 @@ class DownstreamMultiTaskModelNCMTL(DownstreamMultiTaskModel):
                 "NCMTL v1 currently supports only task_type='ks_si_er' "
                 "(three tasks; intent classification is not supported)."
             )
-        if int(candidate_dim) <= 0:
-            raise ValueError("candidate_dim must be a positive integer")
-
         super().__init__(*args, **kwargs)
 
-        if "embedding_dim_shared2" in kwargs:
-            embedding_dim_shared2 = int(kwargs["embedding_dim_shared2"])
-        else:
-            embedding_dim_shared2 = int(args[3])
+        embedding_dim_shared2 = int(self.hidden_layer.out_features)
         output_dims = self._output_dims_from_task_type(task_type)
-        self.candidate_dim = int(candidate_dim)
+        self.candidate_dim = embedding_dim_shared2
         self.candidate_layers = nn.ModuleList(
-            nn.Linear(embedding_dim_shared2, self.candidate_dim, bias=False)
+            nn.Linear(embedding_dim_shared2, embedding_dim_shared2, bias=False)
             for _ in output_dims
         )
         self.classifiers = nn.ModuleList(
-            nn.Linear(self.candidate_dim, output_dim) for output_dim in output_dims
+            nn.Linear(embedding_dim_shared2, output_dim) for output_dim in output_dims
         )
 
         self.register_buffer(
-            "cluster_assignments", torch.full((3,), -1, dtype=torch.long)
+            "cluster_assignments",
+            torch.full((len(output_dims),), -1, dtype=torch.long),
         )
         self.register_buffer("cluster_frozen", torch.tensor(False, dtype=torch.bool))
 

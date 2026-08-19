@@ -36,6 +36,7 @@ from dataset.load_embedding import LoadEmbedding
 from evaluator.evaluator_model import MultiTasksModelEvaluator
 from improvements.clustering.models.ncmtl_model import DownstreamMultiTaskModelNCMTL
 from improvements.clustering.trainers.ncmtl_trainer import MultiTasksModelTrainerNCMTL
+from improvements.tensorboard_utils import tensorboard_trainer
 from utils.load_config import load_config
 from utils.parse_transformer_layers import parse_transformer_layers
 from utils.setup_device import set_device
@@ -170,10 +171,10 @@ def main():
             layer_pooling_param=layer_pooling_param,
             dropout_prob_shared1=cfg["model"]["dropout_prob_shared1"],
             dropout_prob_shared2=cfg["model"]["dropout_prob_shared2"],
-            candidate_dim=cfg["ncmtl"]["candidate_dim"],
         ).to(device)
 
-        trainer = MultiTasksModelTrainerNCMTL(
+        trainer_class = tensorboard_trainer(MultiTasksModelTrainerNCMTL)
+        trainer = trainer_class(
             model=model,
             device=device,
             task_type=args.task_type,
@@ -184,6 +185,7 @@ def main():
             validation_data=val_data,
             ignore_index=cfg["dataset"]["ignore_index"],
             ncmtl_cfg=cfg["ncmtl"],
+            tensorboard_cfg=cfg.get("tensorboard", {}),
         )
         trainer.train()
 

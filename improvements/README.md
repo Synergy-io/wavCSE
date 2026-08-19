@@ -24,6 +24,27 @@ improvements/
   MLFLOW_TRACKING_PASSWORD=<your dagshub access token>
   ```
 
+## TensorBoard (enabled by default)
+
+Every trainer launched from `improvements/` writes TensorBoard events to
+`<results_root>/<run_id>/tensorboard/`. The dashboard includes train/validation
+loss and accuracy, per-task metrics, learning rate, parameter and gradient
+norms, relative parameter changes, and periodic parameter histograms.
+
+```bash
+tensorboard --logdir results_ncmtl
+```
+
+To tune or disable it, add this optional block to any improvement config:
+
+```yaml
+tensorboard:
+  enabled: true
+  gradient_log_interval: 100
+  histogram_epoch_interval: 5
+  # log_dir: ~/custom_tensorboard_directory
+```
+
 ## Where data lives (this server)
 
 Raw datasets (audio + label/split metadata) -- required even though embeddings are precomputed, because `torchaudio`'s dataset classes need the file listing:

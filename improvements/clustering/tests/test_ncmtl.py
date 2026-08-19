@@ -32,7 +32,6 @@ def build_model(task_type="ks_si_er"):
         layer_pooling_param=None,
         dropout_prob_shared1=0.0,
         dropout_prob_shared2=0.0,
-        candidate_dim=4,
     )
 
 
@@ -84,9 +83,62 @@ class NCMTLModelTests(unittest.TestCase):
         outputs = model(input_seq=inputs)
         self.assertEqual([tuple(x.shape) for x in outputs.logits], [(2, 12), (2, 1251), (2, 4)])
         self.assertEqual(len(model.candidate_layers), 3)
-        self.assertTrue(all(x.weight.shape == torch.Size([4, 8]) for x in model.candidate_layers))
-        self.assertEqual(tuple(model.get_flattened_candidate_weights().shape), (3, 32))
+        shared_dim = model.hidden_layer.out_features
+        self.assertEqual(model.candidate_dim, shared_dim)
+        self.assertTrue(all(
+            layer.in_features == shared_dim and layer.out_features == shared_dim
+            for layer in model.candidate_layers
+        ))
+        self.assertTrue(all(
+            layer.weight.shape == torch.Size([shared_dim, shared_dim])
+            for layer in model.candidate_layers
+        ))
+        self.assertEqual(
+            [classifier.in_features for classifier in model.classifiers],
+            [shared_dim, shared_dim, shared_dim],
+        )
+        self.assertEqual(
+            [classifier.out_features for classifier in model.classifiers],
+            [12, 1251, 4],
+        )
+        self.assertEqual(
+            tuple(model.get_flattened_candidate_weights().shape),
+            (3, shared_dim * shared_dim),
+        )
         self.assertEqual(tuple(model.get_all_embeddings(inputs).shape), (2, 8))
+
+    def test_production_candidate_and_classifier_dimensions(self):
+        model = DownstreamMultiTaskModelNCMTL(
+            upstream_model_type="wavlm_large",
+            task_type="ks_si_er",
+            embedding_dim_shared1=512,
+            embedding_dim_shared2=2000,
+            layer_pooling_type="mix",
+            layer_pooling_param=0.5,
+            dropout_prob_shared1=0.4,
+            dropout_prob_shared2=0.6,
+        )
+        self.assertEqual(model.hidden_layer.out_features, 2000)
+        self.assertTrue(all(
+            layer.weight.shape == torch.Size([2000, 2000])
+            and layer.bias is None
+            for layer in model.candidate_layers
+        ))
+        self.assertEqual(
+            [(head.in_features, head.out_features) for head in model.classifiers],
+            [(2000, 12), (2000, 1251), (2000, 4)],
+        )
+        self.assertEqual(
+            tuple(model.get_flattened_candidate_weights().shape),
+            (3, 2000 * 2000),
+        )
+        inputs = torch.randn(2, 16, 1024)
+        outputs = model(input_seq=inputs)
+        self.assertEqual(
+            [tuple(logits.shape) for logits in outputs.logits],
+            [(2, 12), (2, 1251), (2, 4)],
+        )
+        self.assertEqual(tuple(model.get_all_embeddings(inputs).shape), (2, 2000))
 
     def test_hard_sharing_and_cluster_loss(self):
         model = build_model()

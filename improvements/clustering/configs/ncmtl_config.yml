@@ -33,7 +33,6 @@ model:
   dropout_prob_shared2: 0.6
 
 ncmtl:
-  candidate_dim: 256
   num_clusters: 2
   alpha: 0.001
 
@@ -68,6 +67,11 @@ training:
 
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
+
+tensorboard:
+  enabled: false
+  gradient_log_interval: 10
+  histogram_epoch_interval: 1
 
 evaluation:
   batch_size: 2048

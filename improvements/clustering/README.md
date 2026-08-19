@@ -12,10 +12,11 @@ classification is not supported by NCMTL v1.
 
 The baseline FC1, layer pooling, and FC2 path remains shared. After the
 2000-dimensional FC2 representation, every task has a cluster candidate layer
-with shape `2000 -> candidate_dim` and no bias. K-Means++ groups only the three
-candidate weight matrices. Tasks in a cluster are projected to their exact
-PyTorch mean after optimizer updates, while the final classifiers remain
-task-specific.
+with shape `2000 -> 2000` and no bias. Its dimension is derived automatically
+from the actual FC2 output dimension, so NCMTL introduces clustering without an
+additional representation bottleneck. K-Means++ groups only the three candidate
+weight matrices. Tasks in a cluster are projected to their exact PyTorch mean
+after optimizer updates, while the final classifiers remain task-specific.
 
 `get_all_embeddings()` continues to return the common FC2 representation before
 the candidate layers.
@@ -34,7 +35,6 @@ clustering/
 
 ## Key configuration
 
-- `candidate_dim`: candidate representation size; initially 256.
 - `num_clusters`: K for K-Means++; initially 2 and valid from 1 through 3.
 - `alpha`: cluster-loss coefficient; initially 0.001.
 - `cluster_every_n_batches`: training clustering interval; initially every batch.
