@@ -7,6 +7,7 @@ import os
 from typing import Dict, Optional
 
 import torch
+import torch.nn as nn
 
 from trainer.trainer_model import MultiTasksModelTrainer
 from trainer.trainer_utils import BatchStats, masked_accuracy, masked_ce_loss
@@ -20,6 +21,16 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         super().__init__(*args, **kwargs)
         if self.task_type != "ks_si_er":
             raise ValueError("NCMTL v1 supports only three tasks: task_type='ks_si_er'.")
+
+        self.label_smoothing = float(self.training_cfg.get("label_smoothing", 0.0))
+        if not 0.0 <= self.label_smoothing < 1.0:
+            raise ValueError("label_smoothing must satisfy 0 <= value < 1")
+        self.training_loss_fn = nn.CrossEntropyLoss(
+            label_smoothing=self.label_smoothing
+        )
+        # Keep validation loss unsmoothed so it remains comparable to test NLL
+        # and continues to reveal confidence-related overfitting.
+        self.validation_loss_fn = nn.CrossEntropyLoss()
 
         self.alpha = float(ncmtl_cfg.get("alpha", 0.001))
         self.num_clusters = int(ncmtl_cfg.get("num_clusters", 2))
@@ -63,11 +74,12 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             )
 
         logging.info(
-            "ncmtl_start | candidate_dim=%d | clusters=%d | alpha=%g | interval=%d",
+            "ncmtl_start | candidate_dim=%d | clusters=%d | alpha=%g | interval=%d | label_smoothing=%g",
             self.model.candidate_dim,
             self.num_clusters,
             self.alpha,
             self.cluster_every_n_batches,
+            self.label_smoothing,
         )
 
     def _process_data_loader(self, data_loader, train_mode: bool):
@@ -165,11 +177,14 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         valid_count_task: Dict[int, int] = {}
 
         per_task_losses = {}
+        prediction_loss_fn = (
+            self.training_loss_fn if train_mode else self.validation_loss_fn
+        )
         for task_index in range(self.num_tasks):
             loss, valid = masked_ce_loss(
                 logits=logits_tuple[task_index],
                 labels=labels_list[task_index],
-                loss_fn=self.loss_fn,
+                loss_fn=prediction_loss_fn,
                 ignore_index=self.ignore_index,
             )
             per_task_losses[task_index] = loss

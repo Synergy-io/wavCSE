@@ -54,6 +54,7 @@ class SyntheticDataset(Dataset):
 def training_config():
     return {
         "num_epochs": 1, "batch_size": 6, "learning_rate": 0.001,
+        "label_smoothing": 0.1,
         "weight_decay": 0.0, "saved_checkpoint_count": 1,
         "shuffle_train": False, "shuffle_val": False, "pin_memory": False,
         "drop_last_train": False, "drop_last_val": False, "num_workers": 0,
@@ -189,6 +190,8 @@ class NCMTLTrainerTests(unittest.TestCase):
     def test_masked_labels_produce_finite_loss_and_gradients(self):
         with tempfile.TemporaryDirectory() as directory:
             trainer = self._build_trainer(directory)
+            self.assertEqual(trainer.training_loss_fn.label_smoothing, 0.1)
+            self.assertEqual(trainer.validation_loss_fn.label_smoothing, 0.0)
             batch = next(iter(trainer.train_dataloader))
             trainer.current_epoch = 1
             stats = trainer._process_batch(batch, train_mode=True)

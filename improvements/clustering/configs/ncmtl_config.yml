@@ -52,6 +52,7 @@ training:
   num_epochs: 100
   batch_size: 2048
   learning_rate: 0.0025
+  label_smoothing: 0.1
   weight_decay: 0.00000005
   saved_checkpoint_count: 3
 
