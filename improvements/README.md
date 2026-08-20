@@ -7,10 +7,10 @@ improvements/
 ├── base/            # plain wavCSE downstream model, MLflow-tracked (no new architecture)
 ├── taskrelation/     # Kevin -- GBC, TSM, PMR
 ├── lowrank/          # Chehan -- not yet implemented
-├── clustering/        # Induwara -- not yet implemented
+├── clustering/        # Induwara -- NCMTL three-task candidate-network clustering
 ├── decomposition/    # Pathumi -- not yet implemented
 ├── mlflow_utils.py    # shared MLflow helpers, used by base/ and importable by any owner folder
-└── run_improvements.py  # runs taskrelation/ variants (gbc/tsm/pmr/original)
+└── run_improvements.py  # runs taskrelation variants
 ```
 
 ## Prerequisites
@@ -23,6 +23,27 @@ improvements/
   MLFLOW_TRACKING_USERNAME=<your dagshub username>
   MLFLOW_TRACKING_PASSWORD=<your dagshub access token>
   ```
+
+## TensorBoard (enabled by default)
+
+Every trainer launched from `improvements/` writes TensorBoard events to
+`<results_root>/<run_id>/tensorboard/`. The dashboard includes train/validation
+loss and accuracy, per-task metrics, learning rate, parameter and gradient
+norms, relative parameter changes, and periodic parameter histograms.
+
+```bash
+tensorboard --logdir results_ncmtl
+```
+
+To tune or disable it, add this optional block to any improvement config:
+
+```yaml
+tensorboard:
+  enabled: true
+  gradient_log_interval: 100
+  histogram_epoch_interval: 5
+  # log_dir: ~/custom_tensorboard_directory
+```
 
 ## Where data lives (this server)
 
