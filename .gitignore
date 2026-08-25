@@ -6,6 +6,7 @@
 **/*.pkl
 **/*.DS_Store
 .env
+.venv/
 /embedding.tar.gz
 **/results/
 **/results_*/

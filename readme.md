@@ -2,7 +2,7 @@
 
 wavCSE is a modular speech representation learning framework designed for systematic and reproducible research in self supervised speech representation learning and downstream multi task modeling.
 
-The framework enforces a clear separation between upstream embedding extraction and downstream model training and evaluation.
+The framework enforces a clear separation between upstream embedding extraction and downstream model training & evaluation.
 
 ---
 
@@ -29,7 +29,8 @@ Upstream embedding extraction must be completed before downstream training.
 wavCSE/
 ├── upstream/          # Upstream SSL based embedding extraction
 ├── downstream/        # Downstream multi task training and evaluation
-├── environment.yml    # Conda environment definition
+├── pyproject.toml     # Dependencies (managed with uv)
+├── uv.lock            # Locked dependency versions
 └── README.md          # Project documentation
 ```
 
@@ -37,17 +38,32 @@ wavCSE/
 
 ### Environment setup
 
-Create the conda environment:
+The project uses [uv](https://docs.astral.sh/uv/) for dependency management (replaces the previous conda setup).
 
-```bash
-conda env create -f environment.yml
-conda activate opencv
-```
+1. Install uv:
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
 
-Core libraries (already included in environment.yml):
+2. Create the virtual environment and install every dependency, pinned by the lock file:
+   ```bash
+   uv sync
+   ```
+   This creates `.venv/` with Python 3.9 and all packages at the exact versions in `uv.lock`.
+
+3. Run the project through the environment:
+   ```bash
+   uv run python main.py ...
+   # or activate it manually
+   source .venv/bin/activate
+   ```
+
+Core libraries (pinned in `pyproject.toml` / `uv.lock`):
 - python 3.9
-- torch 2.7.1
+- torch 2.7.1 (+CUDA)
 - torchaudio 2.7.1
+
+See [UV.md](UV.md) for the full uv workflow: adding or removing dependencies, upgrading, and lock file discipline.
 
 ---
 

@@ -15,8 +15,12 @@ live there: `../docs/`, `../WAVCSE_ANALYSIS.md`.
 ## Environment
 
 ```bash
-conda activate opencv   # Python 3.9, PyTorch 2.7.1, CUDA 12 (see environment.yml)
+uv sync   # creates .venv/ — Python 3.9, PyTorch 2.7.1+cu126, deps pinned in uv.lock
+uv run python ...   # or: source .venv/bin/activate
 ```
+
+Dependencies are managed with uv (`pyproject.toml` + committed `uv.lock`); the
+old conda setup was removed. See UV.md for the full workflow.
 
 ## Running the baseline pipeline
 
