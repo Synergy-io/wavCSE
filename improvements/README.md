@@ -70,4 +70,54 @@ Each backgrounds a separate process -- run both if you want both baselines, or j
 ```bash
 python run_improvements.py --model [gbc|tsm|pmr|original|all] --task_type ks_si_er
 ```
-No MLflow tracking wired in yet. Config is hardcoded to `taskrelation/configs/`.
+Tracked in MLflow the same way as `base/` (params/live epoch metrics/test
+metrics/artifacts). Config is hardcoded to `taskrelation/configs/`.
+
+## Experiment naming & tagging convention
+
+Every owner folder shares one MLflow tracking server (DagsHub, see above) but
+gets its **own experiment per (category, architecture)** pair, so runs stay
+comparable within an architecture while still being groupable across all of
+them. The `wavcse-` prefix is reserved for base and base-derived runs only --
+it marks "a variant of the baseline." Every other category is its own
+top-level architecture, not a baseline variant, so it's named without the
+prefix:
+
+| Category | Experiment name pattern | Example |
+|---|---|---|
+| base | `wavcse-baseline` | -- |
+| base + kfold | `wavcse-baseline-er-kfold` | -- |
+| base + small improvement (not a full new architecture) | `wavcse-base-<improvement-slug>` | `wavcse-base-poolingsweep` |
+| taskrelation (Kevin -- GBC/TSM/PMR) | `taskrelation-<model>` | `taskrelation-gbc`, `-tsm`, `-pmr` |
+| lowrank (Chehan) | `lowrank-<variant>` | once a variant is named |
+| clustering (Induwara) | `clustering-<variant>` | once a variant is named |
+| decomposition (Pathumi) | `decomposition-<variant>` | once a variant is named |
+
+Run names follow `{category}_{model}_{task_type}_{timestamp}`, e.g.
+`taskrelation_gbc_ks_si_er_2026_08_18_10_00_00` -- built by
+`mlflow_utils.build_run_name(category, model, task_type)`.
+
+Every run also carries standard tags (`mlflow_utils.set_standard_tags`), so
+runs are filterable/groupable *across* experiments via
+`MlflowClient.search_runs`, not just within one: `category`, `model`,
+`pooling_frame` (`cfg.pooling.frame_pooling_type`), `pooling_layer`
+(`cfg.pooling.layer_pooling_type`). All other hyperparameters are already
+logged as MLflow params by `mlflow_utils.log_config_params` (the whole config,
+flattened) -- tags are only for the coarse axes you want to slice on.
+
+When implementing `lowrank/`, `clustering/`, or `decomposition/`: copy
+`taskrelation/`'s config layout (add an `mlflow:` block with
+`experiment_name` following the table above), add your model_type(s) to
+`run_improvements.py`'s `MODEL_CATEGORY` dict (or your own run script if you
+don't reuse `run_improvements.py`), and the tracking wiring in
+`build_model`/`build_trainer`/`run_single_model` applies automatically.
+
+## Cross-category leaderboard
+
+```bash
+python mlflow_report.py [--metric metrics.test_opt_acc_all] [--top 20] [--csv report.csv]
+```
+Pulls every run across every experiment matching the table above via
+`mlflow.search_runs()` and prints one sorted comparison table -- this is what
+answers "compare, group, see progress" across categories, since MLflow's own
+UI only compares runs within a single experiment at a time.
