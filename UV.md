@@ -42,6 +42,12 @@ Notes:
 
 - Each clone has its **own `.venv/`** (git-ignored), so different branches can
   have different dependencies without clashing.
+- **No environment names.** Unlike conda, there is nothing to activate by
+  name. The environment belongs to the folder: `cd` into your clone, `uv sync`
+  there, and `uv run` / `source .venv/bin/activate` always uses *that* clone's
+  `.venv/` — even from subdirectories like `upstream/` or `downstream/`.
+  Packages installed in one clone can never leak into another, and you can
+  never accidentally run a wrong named env.
 - uv keeps a global cache (`~/.cache/uv`) and hardlinks packages into each
   venv, so after the first `uv sync`, additional clones cost almost no disk
   space. If `df -h` shows the root disk near full, see the repo CLAUDE.md
