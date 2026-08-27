@@ -23,7 +23,7 @@ dataset:
 pooling:
   frame_pooling_type: mean
   frame_pooling_param: null
-  layer_pooling_type: max
+  layer_pooling_type: mix
   layer_pooling_param: 0.5
 
 model:
