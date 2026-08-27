@@ -171,6 +171,9 @@ def main():
             layer_pooling_param=layer_pooling_param,
             dropout_prob_shared1=cfg["model"]["dropout_prob_shared1"],
             dropout_prob_shared2=cfg["model"]["dropout_prob_shared2"],
+            identical_candidate_initialization=cfg["ncmtl"].get(
+                "identical_candidate_initialization", True
+            ),
         ).to(device)
 
         trainer_class = tensorboard_trainer(MultiTasksModelTrainerNCMTL)

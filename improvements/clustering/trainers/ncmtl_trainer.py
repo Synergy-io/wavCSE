@@ -74,11 +74,16 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             )
 
         logging.info(
-            "ncmtl_start | candidate_dim=%d | clusters=%d | alpha=%g | interval=%d | label_smoothing=%g",
+            "ncmtl_start | candidate_dim=%d | identical_candidate_initialization=%s | "
+            "clusters=%d | alpha=%g | interval=%d | warmup_epochs=%d | "
+            "kmeans_n_init=%d | label_smoothing=%g",
             self.model.candidate_dim,
+            self.model.identical_candidate_initialization,
             self.num_clusters,
             self.alpha,
             self.cluster_every_n_batches,
+            self.warmup_epochs,
+            self.kmeans_n_init,
             self.label_smoothing,
         )
 
