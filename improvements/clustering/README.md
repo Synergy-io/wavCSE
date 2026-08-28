@@ -38,9 +38,15 @@ clustering/
 - `num_clusters`: K for K-Means++; initially 2 and valid from 1 through 3.
 - `alpha`: cluster-loss coefficient; initially 0.001.
 - `cluster_every_n_batches`: training clustering interval; initially every batch.
-- `warmup_epochs`: independent candidate training before clustering; initially 0.
+- `warmup_epochs`: number of complete epochs of independent candidate training
+  before clustering starts.
+- `identical_candidate_initialization`: initializes every candidate from the same
+  normally initialized weight matrix while retaining separate parameters.
+- `kmeans_n_init`: number of K-Means initializations tried at each clustering step.
 - `stability_patience`: unchanged partitions needed before freezing.
 - `max_recluster_epochs`: last epoch during which K-Means++ may run.
+- `training.label_smoothing`: smooths training targets to reduce overconfidence;
+  validation and test loss remain standard unsmoothed cross-entropy.
 
 These values are initial experiment settings, not claimed optimal values.
 

@@ -13,7 +13,9 @@ class DownstreamMultiTaskModelNCMTL(DownstreamMultiTaskModel):
 
     SUPPORTED_TASK_TYPE = "ks_si_er"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self, *args, identical_candidate_initialization: bool = False, **kwargs
+    ):
         task_type = kwargs.get("task_type")
         if task_type is None and len(args) >= 2:
             task_type = args[1]
@@ -31,6 +33,16 @@ class DownstreamMultiTaskModelNCMTL(DownstreamMultiTaskModel):
             nn.Linear(embedding_dim_shared2, embedding_dim_shared2, bias=False)
             for _ in output_dims
         )
+        self.identical_candidate_initialization = bool(
+            identical_candidate_initialization
+        )
+        if self.identical_candidate_initialization:
+            # Keep separate Parameters while removing candidate-specific random
+            # differences at the start of a new training run.
+            with torch.no_grad():
+                initial_weight = self.candidate_layers[0].weight.detach().clone()
+                for candidate_layer in self.candidate_layers[1:]:
+                    candidate_layer.weight.copy_(initial_weight)
         self.classifiers = nn.ModuleList(
             nn.Linear(embedding_dim_shared2, output_dim) for output_dim in output_dims
         )

@@ -22,7 +22,7 @@ from improvements.clustering.utils.ncmtl_clustering import (
 )
 
 
-def build_model(task_type="ks_si_er"):
+def build_model(task_type="ks_si_er", identical_candidate_initialization=False):
     return DownstreamMultiTaskModelNCMTL(
         upstream_model_type="wavlm_base",
         task_type=task_type,
@@ -32,6 +32,7 @@ def build_model(task_type="ks_si_er"):
         layer_pooling_param=None,
         dropout_prob_shared1=0.0,
         dropout_prob_shared2=0.0,
+        identical_candidate_initialization=identical_candidate_initialization,
     )
 
 
@@ -107,6 +108,26 @@ class NCMTLModelTests(unittest.TestCase):
             (3, shared_dim * shared_dim),
         )
         self.assertEqual(tuple(model.get_all_embeddings(inputs).shape), (2, 8))
+
+    def test_identical_candidate_initialization_uses_separate_parameters(self):
+        model = build_model(identical_candidate_initialization=True)
+        first, second, third = model.candidate_layers
+
+        self.assertTrue(torch.equal(first.weight, second.weight))
+        self.assertTrue(torch.equal(first.weight, third.weight))
+        self.assertIsNot(first.weight, second.weight)
+        self.assertNotEqual(first.weight.data_ptr(), second.weight.data_ptr())
+
+        with torch.no_grad():
+            first.weight.add_(1.0)
+        self.assertFalse(torch.equal(first.weight, second.weight))
+
+    def test_independent_candidate_initialization_remains_available(self):
+        model = build_model(identical_candidate_initialization=False)
+        self.assertFalse(torch.equal(
+            model.candidate_layers[0].weight,
+            model.candidate_layers[1].weight,
+        ))
 
     def test_production_candidate_and_classifier_dimensions(self):
         model = DownstreamMultiTaskModelNCMTL(
