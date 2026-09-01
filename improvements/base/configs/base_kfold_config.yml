@@ -1,9 +1,12 @@
 # =============================================================================
-# Base configuration: plain wavCSE downstream model, MLflow-tracked
+# ER 10-fold (leave-one-speaker-out) cross-validation config.
 #
-# Full schema copy of downstream/configs/build_model.yml, plus an `mlflow:`
-# block. paths.results_root / paths.checkpoints_root are renamed so runs
-# don't collide with plain `downstream/main.py` runs.
+# Copy of base_config.yml, with: separate results/checkpoints roots (so folds
+# don't collide with single-split base runs), num_epochs reduced to 5 (10x
+# fold count vs. the single-split baseline -- see improvements/base/README.md
+# for the compute-budget tradeoff), and a separate mlflow experiment name.
+# All other hyperparameters (patience, factor, learning_rate, ...) are left
+# unchanged from base_config.yml -- not in scope for this experiment.
 # =============================================================================
 
 log_level: INFO
@@ -15,16 +18,12 @@ device:
 paths:
   root_data_path: ~/voice_dataset
   root_emb_path: ~/dataset/embedding
-  results_root: results_base
-  checkpoints_root: checkpoints_base
+  results_root: results_base_kfold
+  checkpoints_root: checkpoints_base_kfold
 
 upstream:
   model_type: wavlm_large
-  selected_transformer_layers: all
-  # Options:
-  # - all
-  # - "6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13"
-
+  selected_transformer_layers: 6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13
 
 dataset:
   subset_percentage: 100
@@ -44,9 +43,9 @@ model:
   dropout_prob_shared2: 0.6
 
 training:
-  num_epochs: 30
+  num_epochs: 5
   batch_size: 2048
-  learning_rate: 0.001
+  learning_rate: 0.0025
   weight_decay: 0.00000005
   saved_checkpoint_count: 1
 
@@ -57,8 +56,8 @@ training:
   drop_last_val: false
   num_workers: 4
 
-  scheduler_patience: 1
-  scheduler_factor: 0.5
+  patience: 1
+  factor: 0.5
 
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
@@ -75,4 +74,4 @@ evaluation:
 # ----------------------------
 mlflow:
   tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
-  experiment_name: wavcse-baseline
+  experiment_name: wavcse-baseline-er-kfold

@@ -1,10 +1,9 @@
-# =============================================================================
-# Base configuration: plain wavCSE downstream model, MLflow-tracked
+# Baseline + lnp pooling + ALL 25 WavLM-Large layers.
 #
-# Full schema copy of downstream/configs/build_model.yml, plus an `mlflow:`
-# block. paths.results_root / paths.checkpoints_root are renamed so runs
-# don't collide with plain `downstream/main.py` runs.
-# =============================================================================
+# Copy of base_lnp_config.yml with selected_transformer_layers: <16-layer
+# list> -> "all", and roots renamed (*_base_lnp_alllayers). lnp's
+# layer_pooling_param (16) is the norm-power p, unrelated to layer count --
+# unchanged.
 
 log_level: INFO
 
@@ -15,16 +14,12 @@ device:
 paths:
   root_data_path: ~/voice_dataset
   root_emb_path: ~/dataset/embedding
-  results_root: results_base
-  checkpoints_root: checkpoints_base
+  results_root: results_base_lnp_alllayers
+  checkpoints_root: checkpoints_base_lnp_alllayers
 
 upstream:
   model_type: wavlm_large
   selected_transformer_layers: all
-  # Options:
-  # - all
-  # - "6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13"
-
 
 dataset:
   subset_percentage: 100
@@ -34,8 +29,8 @@ pooling:
   frame_pooling_type: mean
   frame_pooling_param: null
 
-  layer_pooling_type: mix
-  layer_pooling_param: 0.5
+  layer_pooling_type: lnp
+  layer_pooling_param: 16
 
 model:
   embedding_dim_shared1: 512
@@ -46,7 +41,7 @@ model:
 training:
   num_epochs: 30
   batch_size: 2048
-  learning_rate: 0.001
+  learning_rate: 0.0025
   weight_decay: 0.00000005
   saved_checkpoint_count: 1
 
@@ -57,8 +52,8 @@ training:
   drop_last_val: false
   num_workers: 4
 
-  scheduler_patience: 1
-  scheduler_factor: 0.5
+  patience: 1
+  factor: 0.5
 
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
@@ -75,4 +70,4 @@ evaluation:
 # ----------------------------
 mlflow:
   tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
-  experiment_name: wavcse-baseline
+  experiment_name: wavcse-base-lnp

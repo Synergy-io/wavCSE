@@ -1,0 +1,301 @@
+{
+  "num_layers": 16,
+  "screen": [
+    {
+      "pooling_type": "smp",
+      "pooling_param": 0.5,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9643633812697299,
+      "val_best_acc_all": 0.9643633812697299,
+      "val_opt_acc_task": {
+        "0": 0.9836716681376876,
+        "1": 0.9597334878331402,
+        "2": 0.7848101265822784
+      }
+    },
+    {
+      "pooling_type": "mix",
+      "pooling_param": 0.25,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9634514205541915,
+      "val_best_acc_all": 0.9634514205541915,
+      "val_opt_acc_task": {
+        "0": 0.9833774639599883,
+        "1": 0.958864426419467,
+        "2": 0.7757685352622061
+      }
+    },
+    {
+      "pooling_type": "max",
+      "pooling_param": null,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9630305156085583,
+      "val_best_acc_all": 0.9630305156085583,
+      "val_opt_acc_task": {
+        "0": 0.9838187702265372,
+        "1": 0.956981460023175,
+        "2": 0.783001808318264
+      }
+    },
+    {
+      "pooling_type": "lse",
+      "pooling_param": 2,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9626797614871975,
+      "val_best_acc_all": 0.9658365485794458,
+      "val_opt_acc_task": {
+        "0": 0.9847013827596351,
+        "1": 0.9552433371958285,
+        "2": 0.7848101265822784
+      }
+    },
+    {
+      "pooling_type": "smp",
+      "pooling_param": 1,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9616976499473869,
+      "val_best_acc_all": 0.9618379515959312,
+      "val_opt_acc_task": {
+        "0": 0.981759340982642,
+        "1": 0.956981460023175,
+        "2": 0.7739602169981917
+      }
+    },
+    {
+      "pooling_type": "lse",
+      "pooling_param": 1,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.961346895826026,
+      "val_best_acc_all": 0.961346895826026,
+      "val_opt_acc_task": {
+        "0": 0.9820535451603413,
+        "1": 0.9571263035921205,
+        "2": 0.759493670886076
+      }
+    },
+    {
+      "pooling_type": "auto",
+      "pooling_param": null,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9596632760434936,
+      "val_best_acc_all": 0.9596632760434936,
+      "val_opt_acc_task": {
+        "0": 0.9811709326272433,
+        "1": 0.9568366164542295,
+        "2": 0.7305605786618445
+      }
+    },
+    {
+      "pooling_type": "mix",
+      "pooling_param": 0.75,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9595229743949492,
+      "val_best_acc_all": 0.9602946334619432,
+      "val_opt_acc_task": {
+        "0": 0.981318034716093,
+        "1": 0.953215527230591,
+        "2": 0.7703435804701627
+      }
+    },
+    {
+      "pooling_type": "smp",
+      "pooling_param": 2,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9593826727464048,
+      "val_best_acc_all": 0.9611364433532094,
+      "val_opt_acc_task": {
+        "0": 0.9835245660488379,
+        "1": 0.9510428736964078,
+        "2": 0.7667269439421338
+      }
+    },
+    {
+      "pooling_type": "mix",
+      "pooling_param": 0.5,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9588214661522273,
+      "val_best_acc_all": 0.9608558400561207,
+      "val_opt_acc_task": {
+        "0": 0.9838187702265372,
+        "1": 0.9487253765932793,
+        "2": 0.7775768535262206
+      }
+    },
+    {
+      "pooling_type": "gated",
+      "pooling_param": 16,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9551736232900736,
+      "val_best_acc_all": 0.9551736232900736,
+      "val_opt_acc_task": {
+        "0": 0.982200647249191,
+        "1": 0.9432213209733488,
+        "2": 0.7721518987341772
+      }
+    },
+    {
+      "pooling_type": "weighted",
+      "pooling_param": 16,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9544019642230797,
+      "val_best_acc_all": 0.9544019642230797,
+      "val_opt_acc_task": {
+        "0": 0.9783759929390997,
+        "1": 0.9472769409038239,
+        "2": 0.7486437613019892
+      }
+    },
+    {
+      "pooling_type": "mean",
+      "pooling_param": null,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.950754121360926,
+      "val_best_acc_all": 0.9579095054366888,
+      "val_opt_acc_task": {
+        "0": 0.9780817887614004,
+        "1": 0.938441483198146,
+        "2": 0.7685352622061483
+      }
+    },
+    {
+      "pooling_type": "lnp",
+      "pooling_param": 4,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9503332164152929,
+      "val_best_acc_all": 0.9522272886706419,
+      "val_opt_acc_task": {
+        "0": 0.9830832597822889,
+        "1": 0.9326477404403245,
+        "2": 0.7685352622061483
+      }
+    },
+    {
+      "pooling_type": "lnp",
+      "pooling_param": 8,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9501929147667485,
+      "val_best_acc_all": 0.9501929147667485,
+      "val_opt_acc_task": {
+        "0": 0.9838187702265372,
+        "1": 0.930909617612978,
+        "2": 0.7775768535262206
+      }
+    },
+    {
+      "pooling_type": "lnp",
+      "pooling_param": 16,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9499824622939319,
+      "val_best_acc_all": 0.9499824622939319,
+      "val_opt_acc_task": {
+        "0": 0.9829361576934392,
+        "1": 0.9307647740440325,
+        "2": 0.7848101265822784
+      }
+    },
+    {
+      "pooling_type": "sap",
+      "pooling_param": 512,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9284461592423711,
+      "val_best_acc_all": 0.9284461592423711,
+      "val_opt_acc_task": {
+        "0": 0.9749926448955575,
+        "1": 0.8970162224797219,
+        "2": 0.7486437613019892
+      }
+    },
+    {
+      "pooling_type": "lse",
+      "pooling_param": 5,
+      "num_layers": 16,
+      "stage": "screen",
+      "val_opt_acc_all": 0.03107681515257804,
+      "val_best_acc_all": 0.03107681515257804,
+      "val_opt_acc_task": {
+        "0": 0.038393645189761696,
+        "1": 0.0014484356894553883,
+        "2": 0.31103074141048825
+      }
+    }
+  ],
+  "confirm": [
+    {
+      "pooling_type": "smp",
+      "pooling_param": 0.5,
+      "num_layers": 16,
+      "stage": "confirm",
+      "val_opt_acc_all": 0.9717292178183093,
+      "val_best_acc_all": 0.9717292178183093,
+      "val_opt_acc_task": {
+        "0": 0.9842600764930862,
+        "1": 0.9714658169177288,
+        "2": 0.8209764918625678
+      },
+      "test_opt_acc_all": 0.9724406931389475,
+      "test_opt_acc_task": {
+        "ks": 0.9841989758595464,
+        "si": 0.9764876984607926,
+        "er": 0.7667269439421338
+      },
+      "mlflow_run_id": "3157550d6e0143668e1f97d28a43edf6"
+    },
+    {
+      "pooling_type": "mix",
+      "pooling_param": 0.25,
+      "num_layers": 16,
+      "stage": "confirm",
+      "val_opt_acc_all": 0.9690634864959663,
+      "val_best_acc_all": 0.9690634864959663,
+      "val_opt_acc_task": {
+        "0": 0.9841129744042365,
+        "1": 0.9678447276940904,
+        "2": 0.7992766726943942
+      },
+      "test_opt_acc_all": 0.9682844171622227,
+      "test_opt_acc_task": {
+        "ks": 0.9847841989758596,
+        "si": 0.9678826808871652,
+        "er": 0.7703435804701627
+      },
+      "mlflow_run_id": "6889539741e2426c9ef11dc8d97fc2ab"
+    },
+    {
+      "pooling_type": "max",
+      "pooling_param": null,
+      "num_layers": 16,
+      "stage": "confirm",
+      "val_opt_acc_all": 0.9690634864959663,
+      "val_best_acc_all": 0.9690634864959663,
+      "val_opt_acc_task": {
+        "0": 0.9851426890261842,
+        "1": 0.9659617612977984,
+        "2": 0.810126582278481
+      },
+      "test_opt_acc_all": 0.9691156723575676,
+      "test_opt_acc_task": {
+        "ks": 0.9822970007315289,
+        "si": 0.9709126166525269,
+        "er": 0.779385171790235
+      },
+      "mlflow_run_id": "49655c6c45c74ce08f42646617145a2f"
+    }
+  ]
+}

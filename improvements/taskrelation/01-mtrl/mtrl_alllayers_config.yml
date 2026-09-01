@@ -1,0 +1,91 @@
+# wavCSE-MTRL with ALL 25 WavLM-Large layers (vs. the hand-picked 16-layer
+# subset in mtrl_config.yml).
+#
+# Copy of mtrl_config.yml -- starts from the iteration-5 winning settings
+# from the 16-layer campaign (mtrl_lambda=0.01, normalize_w=true) -- with:
+#   1. upstream.selected_transformer_layers: <16-layer list> -> "all".
+#      layer_pooling_param is null here because layer_pooling_type is
+#      "weighted", which run_improvements.py auto-computes to
+#      len(transformer_layer_array) = 25 at runtime -- no manual change
+#      needed.
+#   2. results/checkpoints roots renamed (*_mtrl_alllayers).
+# This is Phase A / iteration 1 of the all-25-layers campaign (see
+# improvements/taskrelation/01-mtrl/README.md's "All 25 Layers" section for
+# the full log).
+
+log_level: INFO
+
+device:
+  type: cuda
+  index: 0
+
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/embedding
+  results_root: results_mtrl_alllayers
+  checkpoints_root: checkpoints_mtrl_alllayers
+
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: weighted
+  layer_pooling_param: null
+
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+  # MTRL-specific
+  # Phase B iteration 1 (lambda=0.03) made things worse and barely moved
+  # Omega's saturation -- lambda is ruled out as the lever at 25 layers too
+  # (mirrors the 16-layer finding). Reverted to 0.01.
+  mtrl_lambda: 0.01
+  omega_epsilon: 0.0001
+  normalize_w: true
+
+training:
+  num_epochs: 30
+  batch_size: 2048
+  learning_rate: 0.0025
+  weight_decay: 0.00000005
+  saved_checkpoint_count: 1
+  shuffle_train: true
+  shuffle_val: false
+  pin_memory: true
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 4
+  patience: 5
+  factor: 0.5
+  l1_lambda: 0.0000001
+  l2_lambda: 0.00001
+
+# MTRL-specific
+# Phase B iteration 2 (warmup=10) also hurt (-0.74pp all) -- reverted to
+# Phase A defaults, the best all-layers weighted-pooling config found.
+mtrl:
+  warmup_epochs: 3
+  omega_update_frequency: 1
+
+evaluation:
+  batch_size: 2048
+  shuffle: false
+  pin_memory: true
+  drop_last: false
+  num_workers: 4
+
+# ----------------------------
+# MLflow / DagsHub tracking
+# ----------------------------
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: taskrelation-mtrl

@@ -1,10 +1,13 @@
-# =============================================================================
-# Base configuration: plain wavCSE downstream model, MLflow-tracked
+# Baseline with lnp (learned-norm) layer pooling.
 #
-# Full schema copy of downstream/configs/build_model.yml, plus an `mlflow:`
-# block. paths.results_root / paths.checkpoints_root are renamed so runs
-# don't collide with plain `downstream/main.py` runs.
-# =============================================================================
+# Copy of improvements/base/configs/base_config.yml with exactly two changes:
+#   1. pooling.layer_pooling_type: mix -> lnp (param 16) so this arm matches
+#      the MTRL+lnp arm's pooling, removing the pooling confound from the
+#      architecture comparison (see ../README.md).
+#   2. results/checkpoints roots renamed (*_base_lnp) so these runs don't mix
+#      with the canonical mix-pooling baseline runs.
+# Everything else (epochs, lr, schedule, eval settings) is identical to the
+# canonical baseline.
 
 log_level: INFO
 
@@ -15,16 +18,12 @@ device:
 paths:
   root_data_path: ~/voice_dataset
   root_emb_path: ~/dataset/embedding
-  results_root: results_base
-  checkpoints_root: checkpoints_base
+  results_root: results_base_lnp
+  checkpoints_root: checkpoints_base_lnp
 
 upstream:
   model_type: wavlm_large
-  selected_transformer_layers: all
-  # Options:
-  # - all
-  # - "6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13"
-
+  selected_transformer_layers: 6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13
 
 dataset:
   subset_percentage: 100
@@ -34,8 +33,8 @@ pooling:
   frame_pooling_type: mean
   frame_pooling_param: null
 
-  layer_pooling_type: mix
-  layer_pooling_param: 0.5
+  layer_pooling_type: lnp
+  layer_pooling_param: 16
 
 model:
   embedding_dim_shared1: 512
@@ -46,7 +45,7 @@ model:
 training:
   num_epochs: 30
   batch_size: 2048
-  learning_rate: 0.001
+  learning_rate: 0.0025
   weight_decay: 0.00000005
   saved_checkpoint_count: 1
 
@@ -57,8 +56,8 @@ training:
   drop_last_val: false
   num_workers: 4
 
-  scheduler_patience: 1
-  scheduler_factor: 0.5
+  patience: 1
+  factor: 0.5
 
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
@@ -75,4 +74,4 @@ evaluation:
 # ----------------------------
 mlflow:
   tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
-  experiment_name: wavcse-baseline
+  experiment_name: wavcse-base-lnp

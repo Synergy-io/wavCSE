@@ -1,10 +1,10 @@
-# =============================================================================
-# Base configuration: plain wavCSE downstream model, MLflow-tracked
+# wavCSE-MTRL at the winning pooling from the 25-layer grid search:
+# smp (softmax pooling), lambda=0.5 -- the best baseline number in the
+# entire project (0.9767 test_opt_acc_all), beating even the 16-layer smp
+# winner. See improvements/base/POOLING_GRID_SEARCH.md for the full grid.
 #
-# Full schema copy of downstream/configs/build_model.yml, plus an `mlflow:`
-# block. paths.results_root / paths.checkpoints_root are renamed so runs
-# don't collide with plain `downstream/main.py` runs.
-# =============================================================================
+# Copy of mtrl_poolingwinner_16L_config.yml with only
+# upstream.selected_transformer_layers changed (16-layer list -> "all").
 
 log_level: INFO
 
@@ -14,17 +14,13 @@ device:
 
 paths:
   root_data_path: ~/voice_dataset
-  root_emb_path: ~/dataset/embedding
-  results_root: results_base
-  checkpoints_root: checkpoints_base
+  root_emb_path: ~/embedding
+  results_root: results_mtrl_poolingwinner_25L
+  checkpoints_root: checkpoints_mtrl_poolingwinner_25L
 
 upstream:
   model_type: wavlm_large
   selected_transformer_layers: all
-  # Options:
-  # - all
-  # - "6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13"
-
 
 dataset:
   subset_percentage: 100
@@ -33,8 +29,7 @@ dataset:
 pooling:
   frame_pooling_type: mean
   frame_pooling_param: null
-
-  layer_pooling_type: mix
+  layer_pooling_type: smp
   layer_pooling_param: 0.5
 
 model:
@@ -42,29 +37,35 @@ model:
   embedding_dim_shared2: 2000
   dropout_prob_shared1: 0.4
   dropout_prob_shared2: 0.6
+  # MTRL-specific (established best from the 16-layer campaign)
+  mtrl_lambda: 0.01
+  omega_epsilon: 0.0001
+  normalize_w: true
 
 training:
   num_epochs: 30
   batch_size: 2048
-  learning_rate: 0.001
+  learning_rate: 0.0025
   weight_decay: 0.00000005
   saved_checkpoint_count: 1
-
   shuffle_train: true
-  shuffle_val: true
+  shuffle_val: false
   pin_memory: true
   drop_last_train: true
   drop_last_val: false
   num_workers: 4
-
-  scheduler_patience: 1
-  scheduler_factor: 0.5
-
+  patience: 5
+  factor: 0.5
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
 
+# MTRL-specific
+mtrl:
+  warmup_epochs: 3
+  omega_update_frequency: 1
+
 evaluation:
-  batch_size: 1
+  batch_size: 2048
   shuffle: false
   pin_memory: true
   drop_last: false
@@ -75,4 +76,4 @@ evaluation:
 # ----------------------------
 mlflow:
   tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
-  experiment_name: wavcse-baseline
+  experiment_name: taskrelation-mtrl
