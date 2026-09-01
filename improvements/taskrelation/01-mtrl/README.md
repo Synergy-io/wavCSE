@@ -66,9 +66,16 @@ given `W` fixed (analytic step, periodic).
 
 ```bash
 cd wavCSE   # repo root (wavCSE/wavCSE), NOT this folder
-conda activate opencv
-python improvements/run_improvements.py --model mtrl --task_type ks_si_er
+.venv/bin/python -m improvements.run_improvements --model mtrl --task_type ks_si_er
 ```
+
+Must be invoked as a module (`python -m improvements.run_improvements`, not
+`python improvements/run_improvements.py`) -- its `from improvements....`
+imports only resolve once the repo root is on `sys.path`, which `python -m`
+guarantees and a direct file invocation doesn't. The repo migrated from the
+`opencv` conda env to a `uv`-managed `.venv/` mid-way through this campaign
+(see the Iteration 3 crash-recovery notes below); every run from Iteration
+3 onward already used `.venv/bin/python`.
 
 Tracked in MLflow under experiment `taskrelation-mtrl` (same DagsHub server
 and tagging convention as every other `improvements/` run — see
