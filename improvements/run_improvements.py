@@ -64,6 +64,26 @@ MODEL_CATEGORY = {
     "gbc": "taskrelation",
     "tsm": "taskrelation",
     "pmr": "taskrelation",
+    "mtrl": "taskrelation",
+}
+
+# "01-mtrl" (and any future "0N-<name>" self-contained architecture folder)
+# is not a valid Python package path -- a leading digit and a hyphen both
+# break dotted imports (`from improvements.taskrelation.01-mtrl...` is a
+# syntax error). Load such folders' modules directly from their file path
+# instead of relying on sys.path + package-style imports.
+def _load_module_from_path(module_name: str, file_path: str):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# Config lookup for model types whose config doesn't live in the flat
+# taskrelation/configs/ dir (see CONFIG_PATH_OVERRIDES usage in main()).
+CONFIG_PATH_OVERRIDES = {
+    "mtrl": os.path.join("taskrelation", "01-mtrl", "mtrl_config.yml"),
 }
 
 
@@ -101,6 +121,17 @@ def build_model(model_type: str, cfg: dict, task_type: str, layer_pooling_param)
             **common_args,
             pmr_lambda=model_cfg.get("pmr_lambda", 0.01),
             pmr_gamma=model_cfg.get("pmr_gamma", 0.1),
+        )
+    elif model_type == "mtrl":
+        mtrl_dir = os.path.join(os.path.dirname(__file__), "taskrelation", "01-mtrl")
+        mtrl_module = _load_module_from_path(
+            "mtrl_model", os.path.join(mtrl_dir, "mtrl_model.py")
+        )
+        return mtrl_module.DownstreamMultiTaskModelMTRL(
+            **common_args,
+            mtrl_lambda=model_cfg.get("mtrl_lambda", 0.01),
+            omega_epsilon=model_cfg.get("omega_epsilon", 1e-4),
+            normalize_w=model_cfg.get("normalize_w", False),
         )
     elif model_type == "original":
         from model.downstream_model import DownstreamMultiTaskModel
@@ -147,6 +178,28 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
             validation_data=validation_data,
             ignore_index=ignore_index,
             pmr_warmup_epochs=pmr_cfg.get("warmup_epochs", 3),
+        )
+    elif model_type == "mtrl":
+        mtrl_dir = os.path.join(os.path.dirname(__file__), "taskrelation", "01-mtrl")
+        mtrl_trainer_module = _load_module_from_path(
+            "mtrl_trainer", os.path.join(mtrl_dir, "mtrl_trainer.py")
+        )
+        trainer_cls = mlflow_utils.make_live_trainer(
+            mtrl_trainer_module.MultiTasksModelTrainerMTRL
+        )
+        mtrl_cfg = cfg.get("mtrl", {})
+        return trainer_cls(
+            model=model,
+            device=device,
+            task_type=task_type,
+            training_cfg=training_cfg,
+            results_root=cfg["paths"]["results_root"],
+            checkpoints_root=cfg["paths"]["checkpoints_root"],
+            training_data=training_data,
+            validation_data=validation_data,
+            ignore_index=ignore_index,
+            mtrl_warmup_epochs=mtrl_cfg.get("warmup_epochs", 3),
+            omega_update_frequency=mtrl_cfg.get("omega_update_frequency", 1),
         )
     else:
         # GBC and original use the standard trainer
@@ -298,7 +351,7 @@ def main():
     )
     parser.add_argument(
         "--model", type=str, default="all",
-        choices=["gbc", "tsm", "pmr", "original", "all"],
+        choices=["gbc", "tsm", "pmr", "mtrl", "original", "all"],
         help="Which model variant to run"
     )
     parser.add_argument(
@@ -309,7 +362,17 @@ def main():
         "--device_index", type=int, default=None,
         help="GPU device index"
     )
+    parser.add_argument(
+        "--config", type=str, default=None,
+        help="Override the config file path (relative to the repo root or "
+             "absolute). Only valid with a single --model (not 'all'); used "
+             "e.g. by taskrelation/02-lnp/ whose configs live outside "
+             "taskrelation/configs/."
+    )
     args = parser.parse_args()
+
+    if args.config is not None and args.model == "all":
+        parser.error("--config cannot be combined with --model all")
 
     load_dotenv(os.path.join(_REPO_ROOT, ".env"))
 
@@ -318,13 +381,23 @@ def main():
     config_dir = os.path.join(os.path.dirname(__file__), "taskrelation", "configs")
 
     if args.model == "all":
-        models_to_run = ["gbc", "tsm", "pmr"]
+        models_to_run = ["gbc", "tsm", "pmr", "mtrl"]
     else:
         models_to_run = [args.model]
 
     results = {}
     for mtype in models_to_run:
-        config_path = os.path.join(config_dir, f"{mtype}_config.yml")
+        if args.config is not None:
+            # Explicit --config override (see the argparse help; used by
+            # cross-folder experiments like taskrelation/02-lnp).
+            config_path = os.path.join(_REPO_ROOT, args.config) \
+                if not os.path.isabs(args.config) else args.config
+        elif mtype in CONFIG_PATH_OVERRIDES:
+            config_path = os.path.join(
+                os.path.dirname(__file__), CONFIG_PATH_OVERRIDES[mtype]
+            )
+        else:
+            config_path = os.path.join(config_dir, f"{mtype}_config.yml")
         if not os.path.exists(config_path):
             print(f"Warning: No config found for {mtype} at {config_path}")
             continue
