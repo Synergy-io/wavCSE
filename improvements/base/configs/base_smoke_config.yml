@@ -1,16 +1,17 @@
 # =============================================================================
 # Base configuration: plain wavCSE downstream model, MLflow-tracked
 #
-# Full schema copy of downstream/configs/build_model.yml, plus an `mlflow:`
-# block. paths.results_root / paths.checkpoints_root are renamed so runs
-# don't collide with plain `downstream/main.py` runs.
+# Smoke-test variant of base_config.yml -- 3 epochs on 10% of the dataset,
+# for a fast pipeline check rather than a reportable baseline number. Same
+# schema/experiment as base_config.yml; only training.num_epochs and
+# dataset.subset_percentage differ.
 # =============================================================================
 
 log_level: INFO
 
 device:
   type: cuda
-  index: 1
+  index: 0
 
 paths:
   root_data_path: ~/voice_dataset
@@ -23,7 +24,7 @@ upstream:
   selected_transformer_layers: 6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13
 
 dataset:
-  subset_percentage: 100
+  subset_percentage: 10
   ignore_index: -1
 
 pooling:
@@ -40,7 +41,7 @@ model:
   dropout_prob_shared2: 0.6
 
 training:
-  num_epochs: 30
+  num_epochs: 3
   batch_size: 2048
   learning_rate: 0.0025
   weight_decay: 0.00000005

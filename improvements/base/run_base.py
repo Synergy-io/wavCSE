@@ -17,8 +17,8 @@ resolved relative to this file's own location, not the working directory.
 
 import os
 import sys
+import shutil
 import argparse
-from datetime import datetime
 
 from dotenv import load_dotenv
 
@@ -35,6 +35,7 @@ sys.path.insert(0, _IMPROVEMENTS_DIR)   # exposes mlflow_utils as top-level
 
 import mlflow
 import mlflow_utils
+from loading_utils import get_loader_device
 
 from dataset.load_embedding import LoadEmbedding
 from model.downstream_model import DownstreamMultiTaskModel
@@ -46,25 +47,7 @@ from utils.setup_logging import setup_logging
 from utils.parse_transformer_layers import parse_transformer_layers
 
 
-class _LiveMlflowTrainer(MultiTasksModelTrainer):
-    """MultiTasksModelTrainer, with one hook added: after each epoch's train/val
-    stats are computed, push them to MLflow immediately (instead of waiting for
-    the whole run to finish). Overrides only _epoch_report_line -- the smallest
-    point in trainer_model.py's train() loop that already receives the full
-    structured EpochStats per phase, called twice per epoch (once for "train",
-    once for "val"). Everything else is inherited unmodified from
-    downstream/trainer/trainer_model.py.
-
-    Coupling risk: relies on _epoch_report_line's private signature
-    (epoch, phase, stats) staying stable in trainer_model.py.
-    """
-
-    def _epoch_report_line(self, epoch, phase, stats):
-        learning_rate = None
-        if phase == "val":
-            learning_rate = float(self.optimizer.param_groups[0]["lr"])
-        mlflow_utils.log_epoch_stats(epoch, phase, stats, self.task_array, learning_rate=learning_rate)
-        return super()._epoch_report_line(epoch, phase, stats)
+_LiveMlflowTrainer = mlflow_utils.make_live_trainer(MultiTasksModelTrainer)
 
 
 def main():
@@ -129,13 +112,33 @@ def main():
     device = set_device(device_type=device_type, device_index=device_index)
 
     # ----------------------------
+    # Pre-run disk guard: this is a shared machine whose root disk has
+    # repeatedly hit ~0 bytes free mid-run (a checkpoint save then fails
+    # with "PytorchStreamWriter failed writing file", silently corrupting
+    # the run -- see improvements/run_improvements.py's identical guard).
+    # Abort loudly before training instead of dying mid-checkpoint.
+    # ----------------------------
+    for root in (checkpoints_root, results_root):
+        expanded_root = os.path.expanduser(root)
+        os.makedirs(expanded_root, exist_ok=True)
+        free_gb = shutil.disk_usage(expanded_root).free / (1024 ** 3)
+        if free_gb < 2.0:
+            raise RuntimeError(
+                f"Only {free_gb:.1f} GB free on the filesystem holding "
+                f"{expanded_root} -- aborting before training to avoid a "
+                f"mid-run checkpoint failure. Free space on the shared disk "
+                f"and retry (see CLAUDE.md gotchas)."
+            )
+
+    # ----------------------------
     # MLflow setup
     # ----------------------------
     mlflow_utils.setup_mlflow(cfg)
-    run_name = f"base_{task_type}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}"
+    run_name = mlflow_utils.build_run_name("base", "original", task_type)
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
+        mlflow_utils.set_standard_tags("base", "original", cfg)
         mlflow.log_param("task_type", task_type)
 
         # ----------------------------
@@ -148,7 +151,7 @@ def main():
             frame_pooling_type=frame_pooling_type,
             frame_pooling_param=frame_pooling_param,
             transformer_layer_array=transformer_layer_array,
-            device=device
+            device=get_loader_device()
         )
 
         train_data, val_data, test_data = loader.load_embedding(
