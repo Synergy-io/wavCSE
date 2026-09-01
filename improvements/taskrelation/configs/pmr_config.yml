@@ -44,10 +44,10 @@ training:
   saved_checkpoint_count: 3
   shuffle_train: true
   shuffle_val: false
-  pin_memory: false
+  pin_memory: true
   drop_last_train: true
   drop_last_val: false
-  num_workers: 0
+  num_workers: 4
   patience: 5
   factor: 0.5
   l1_lambda: 0.0000001
@@ -60,6 +60,13 @@ pmr:
 evaluation:
   batch_size: 2048
   shuffle: false
-  pin_memory: false
+  pin_memory: true
   drop_last: false
-  num_workers: 0
+  num_workers: 4
+
+# ----------------------------
+# MLflow / DagsHub tracking
+# ----------------------------
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: taskrelation-pmr
