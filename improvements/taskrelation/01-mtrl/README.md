@@ -1,5 +1,14 @@
 # wavCSE-MTRL — Multi-Task Relationship Learning
 
+**Current best config: `smp` pooling (λ=0.5), 16 layers, `mtrl_lambda=0.01`,
+`normalize_w=true` — MTRL 0.9728 vs. baseline 0.9724, the only config where
+MTRL beats its matched baseline outright. Found via a full grid search over
+all 10 pooling methods at both 16 and 25 layers — see
+`improvements/base/POOLING_GRID_SEARCH.md` for the complete search, the
+best-ever baseline number (0.9767 at `smp`+25L), and why the earlier
+"16 layers beats 25" conclusion (below) turned out to be pooling-specific,
+not general.**
+
 **Paper:** Zhang & Yeung, "A convex formulation for learning task relationships
 in multi-task learning" (UAI 2010; journal version ACM TKDD 2014). The central
 method of the Task Relation Learning approach (Zhang & Yang survey, §2.4) —
@@ -610,3 +619,4 @@ Broader input (more layers, weaker pooling adaptation) here produced a
 task-relation reading this project has produced remains
 **`weighted`-pooling at 16 layers**.
 
+<!-- ENTRIES APPENDED BELOW AS RUNS COMPLETE -->
