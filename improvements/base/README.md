@@ -20,8 +20,15 @@ DagsHub-hosted tracking server) without touching `downstream/`.
 ## Running
 
 ```bash
-cd wavCSE/wavCSE/improvements/base
+cd path-to-dir/base
+
+#Run this or:
 python run_base.py --task_type ks_si_er --config configs/base_config.yml --device_index 0
+
+#This: 3 original wavCSE tasks (ks_si_er) with bg
+nohup python run_base.py --task_type ks_si_er --config configs/base_config.yml > /tmp/run_base_ks_si_er.log 2>&1 < /dev/null &
+disown
+
 ```
 
 Can be run from any working directory -- all paths (downstream/, improvements/,

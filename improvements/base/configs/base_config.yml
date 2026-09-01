@@ -20,7 +20,11 @@ paths:
 
 upstream:
   model_type: wavlm_large
-  selected_transformer_layers: 6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13
+  selected_transformer_layers: all
+  # Options:
+  # - all
+  # - "6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13"
+
 
 dataset:
   subset_percentage: 100
@@ -42,7 +46,7 @@ model:
 training:
   num_epochs: 30
   batch_size: 2048
-  learning_rate: 0.0025
+  learning_rate: 0.001
   weight_decay: 0.00000005
   saved_checkpoint_count: 1
 
@@ -53,8 +57,8 @@ training:
   drop_last_val: false
   num_workers: 4
 
-  patience: 1
-  factor: 0.5
+  scheduler_patience: 1
+  scheduler_factor: 0.5
 
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
