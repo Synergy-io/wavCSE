@@ -356,3 +356,257 @@ Conclusions, in order of confidence:
 4. **The learned relationship reads as:** ks↔er positive, si anti-related to
    both — a quantitative, data-driven answer to "which speech tasks share
    structure", which is the thesis's core question.
+
+## All 25 Layers Campaign
+
+Everything above used a hand-curated 16-layer subset of WavLM-Large's 25
+layer outputs (`6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13`). This section
+re-runs the campaign with `selected_transformer_layers: all` (confirmed via
+investigation: the shared embedding cache already stores all 25 layers per
+utterance — no re-extraction needed, purely a downstream config change).
+New configs: `mtrl_alllayers_config.yml` (this folder),
+`improvements/base/configs/base_alllayers_config.yml`.
+
+Monitoring note: a watchdog logged `df -h`/`nvidia-smi` every 2 minutes
+during these runs (`/tmp/watchdog_phaseA.log`). GPU 1 already had another
+user's job running when Phase A launched (PID 300053, ~1.5GB, 48% util) —
+noted, did not block or meaningfully slow our run given 15GB/GPU headroom.
+A second foreign job appeared on GPU 0 (~5GB) right after our MTRL run
+finished — no impact, just recorded for the log.
+
+### Phase A — baseline and MTRL at their previous best settings, all layers
+
+| Run | Config | all | ks | si | er |
+|---|---|---|---|---|---|
+| baseline (mix), 16L | (prior campaign) | 0.9710 | 0.9854 | 0.9735 | 0.7559 |
+| **baseline (mix), 25L** | `base_alllayers_config.yml` | 0.9676 | 0.9884 | 0.9628 | **0.7812** |
+| MTRL (weighted, λ=0.01, normalize_w), 16L | iter 5 | 0.9695 | 0.9842 | 0.9699 | 0.7812 |
+| **MTRL (weighted, λ=0.01, normalize_w), 25L** | `mtrl_alllayers_config.yml` | 0.9637 | 0.9881 | 0.9570 | 0.7613 |
+
+Runs: [baseline+25L](https://dagshub.com/Ke-vin-S/wavCSE.mlflow/#/experiments/1/runs/8ff37bc435ab4d57936533d0b9c43624), [MTRL+25L](https://dagshub.com/Ke-vin-S/wavCSE.mlflow/#/experiments/6/runs/ec3da72b344d418db9c83a0ddf4e1f2c).
+
+**Why the result came out this way** (inspected the learned `weighted`-pooling
+softmax attention over the 25 layers, from the MTRL+25L checkpoint):
+
+```
+layer   0- 11: 0.045-0.067 each  (high — early/mid layers, roughly the ones
+                                  the original hand-picked 16-layer set used)
+layer  12- 14: 0.029-0.045 each  (transitional)
+layer  15- 24: 0.017-0.020 each  (suppressed, but never zero — softmax pooling
+                                  can down-weight, not eliminate, a layer)
+```
+
+The learned pooling correctly identified layers 15-24 as less useful and
+suppressed them — but 10 suppressed-not-eliminated layers still inject
+~18% cumulative weight of comparatively noisy signal into the pooled
+representation. `ks` (keyword spotting, a coarser task) is robust to this;
+`si` and `er` (which need precise acoustic detail) are not — both regressed
+on **both** arms (baseline si -1.07pp, MTRL si -1.29pp), consistent with a
+general "more layers without re-tuning dilutes the harder tasks" effect,
+not something specific to MTRL.
+
+**The one divergent result is `er`:** baseline **gained** +2.53pp (0.756→0.781)
+while MTRL **lost** -1.99pp (0.781→0.761) from adding layers. And the learned
+Ω tells us why this specific run's regularizer stopped helping: unlike every
+16-layer run, Ω did **not** saturate here (mean |off-diagonal| = 0.149, vs.
+0.333 at 16 layers with the identical `normalize_w=true` setting):
+
+```
+         ks        si        er
+ks   [+0.3027, +0.2598, +0.1023]
+si   [+0.2598, +0.3076, -0.0853]
+er   [+0.1023, -0.0853, +0.3897]
+```
+
+Reading it: ks↔si are now the strongly-related pair (+0.26); er is only
+weakly tied to ks (+0.10) and *anti*-related to si (-0.085) — a different,
+less decisive structure than either 16-layer result (ks↔er positive/si
+anti-related at `weighted`; near-uniform positive at `lnp`). With a
+partially-unsaturated Ω, the regularizer's pull on the classifier heads is
+weaker and, in this configuration, landed in a direction that cost `er`
+rather than helping it.
+
+**Decision for iteration 1 of Phase B:** the earlier finding "stronger λ
+hurts" was established when Ω was already saturated at λ=0.01 (16 layers) —
+a different regime from here, where Ω is under-saturated at the same λ. That
+finding doesn't necessarily transfer. Testing a moderate increase,
+**λ=0.03** (between the working 0.01 and the previously-ruled-out-at-16-layers
+0.05), to see whether it pushes Ω toward saturation at 25 layers and
+recovers `er`, without repeating the exact setting already ruled out.
+
+### Phase B, iteration 1 — λ=0.03 result: hypothesis rejected
+
+Run: `taskrelation_mtrl_ks_si_er_2026_08_31_12_00_33`
+([DagsHub](https://dagshub.com/Ke-vin-S/wavCSE.mlflow/#/experiments/6/runs/9fb3f037eae34022bb8c9bfd9ef27a73))
+
+| Metric | all | ks | si | er |
+|---|---|---|---|---|
+| λ=0.01 (Phase A) | 0.963681 | 0.988149 | 0.956975 | 0.761302 |
+| λ=0.03 | 0.960419 | 0.985808 | 0.952733 | 0.761302 |
+| Δ | -0.33pp | -0.23pp | -0.42pp | **0.00pp (exactly flat)** |
+
+Final Ω:
+```
+         ks        si        er
+ks   [+0.3099, +0.2094, +0.1674]
+si   [+0.2094, +0.3334, -0.1126]
+er   [+0.1674, -0.1126, +0.3567]
+```
+
+**Why:** the hypothesis was that λ=0.01 under-saturates Ω at 25 layers (mean
+|off-diag| 0.149, vs. 0.333 at 16 layers) and a moderate increase would push
+it toward saturation, recovering `er`. It didn't: off-diagonal barely moved
+(0.149→0.163 mean), the *diagonal* entries partially saturated (si 0.333, er
+0.357) while the off-diagonals shifted **direction**, not magnitude (ks↔si
+weakened 0.260→0.209, ks↔er strengthened 0.102→0.167, si↔er got more
+negative -0.085→-0.113) — and `er` didn't move at all (0.7613 both times,
+exactly). **Conclusion: λ is not the lever at 25 layers either** (mirrors the
+16-layer finding that λ tuning doesn't help, now confirmed in a second
+regime) — increasing it just perturbs Ω's structure without a clear
+beneficial direction, while consistently costing `si`/`ks`. Reverting to
+λ=0.01.
+
+**Decision for iteration 2:** if it's not λ, the remaining candidate from the
+plan is `warmup_epochs`. At 3 epochs, the very first Ω computation happens
+while `weighted` pooling's 25 position-weights are still close to their
+uniform initialization (the learned specialization seen in Phase A only
+fully emerges by epoch ~20-30) — so the regularizer may be anchoring W
+toward a structure computed from immature, still-mostly-uniform-pooling
+features. Testing `warmup_epochs: 3 → 10` (λ back to 0.01) to let both the
+classifier heads and the pooling weights stabilize more before Ω starts
+constraining them.
+
+### Phase B, iteration 2 — `warmup_epochs=10` result: also rejected
+
+Run: `taskrelation_mtrl_ks_si_er_2026_08_31_12_17_56`
+([DagsHub](https://dagshub.com/Ke-vin-S/wavCSE.mlflow/#/experiments/6/runs/41173c26aa164e8482c762a4daa4598d))
+
+| Metric | all | ks | si | er |
+|---|---|---|---|---|
+| λ=0.01, warmup=3 (Phase A, best so far) | 0.963681 | 0.988149 | 0.956975 | 0.761302 |
+| λ=0.01, **warmup=10** | 0.956327 | 0.987418 | 0.944249 | 0.752260 |
+| Δ | **-0.74pp** | -0.07pp | **-1.27pp** | -0.90pp |
+
+Final Ω:
+```
+         ks        si        er
+ks   [+0.3196, +0.2555, +0.0594]
+si   [+0.2555, +0.2946, -0.1366]
+er   [+0.0594, -0.1366, +0.3857]
+```
+
+**Why:** the hypothesis was that a longer warmup would let the pooling
+weights specialize before Ω constrains them, producing a better-informed
+regularizer. Instead it made every metric worse, `si` badly (-1.27pp). Most
+likely explanation: `warmup_epochs` doesn't just delay the *regularizer* —
+`_process_batch`'s warmup check gates the whole MTRL loss term, but nothing
+else about training changes, so the extra 7 warmup epochs are just 7 fewer
+epochs (out of a fixed 30-epoch budget) that the model trains *with* the
+eventual regularization pressure active — i.e. this accidentally re-ran the
+already-known-bad "fewer effective epochs under the real objective" failure
+mode from the 16-layer campaign's iteration 3 (more epochs hurt because the
+LR schedule plateaus early), just approached from the other direction.
+**Second rejected lever.** Two independent attempts to fix the 25-layer
+regression via MTRL's own hyperparameters (λ, warmup) both failed and both
+pointed the same way: perturbing away from the Phase A defaults costs
+accuracy on `si`/`er` without recovering anything. Reverting to
+`λ=0.01, warmup_epochs=3` (Phase A settings) as the best all-layers
+weighted-pooling MTRL config found.
+
+**Decision:** stop tuning the weighted-pooling arm here (2 of the plan's 5
+iterations spent, both negative results, consistent story) and move to
+**Phase C** — the lnp-matched pair at all layers — using the Phase A
+defaults. This was always the next planned step and is a genuinely new axis
+(pooling mechanism, not another MTRL hyperparameter), rather than a third
+attempt at a direction two independent tests have already refuted.
+
+### Phase C — lnp-matched pair, all layers: pooling/layer-count mismatch, not an MTRL problem
+
+Runs: [baseline+lnp+25L](https://dagshub.com/Ke-vin-S/wavCSE.mlflow/#/experiments/7/runs/50952f003bbf450e96c61e2923d1c14b), [MTRL+lnp+25L](https://dagshub.com/Ke-vin-S/wavCSE.mlflow/#/experiments/6/runs/173d39e263f74d348c3b95721d4fe119).
+
+| Run | all | ks | si | er |
+|---|---|---|---|---|
+| baseline+lnp, 16L | 0.9730 | 0.9867 | 0.9741 | 0.7884 |
+| **baseline+lnp, 25L** | 0.8857 | 0.9877 | **0.8095** | 0.7631 |
+| MTRL+lnp, 16L | 0.9726 | 0.9874 | 0.9733 | 0.7794 |
+| **MTRL+lnp, 25L** | 0.8884 | 0.9868 | **0.8143** | 0.7758 |
+
+**Both arms collapsed on `si` by ~16pp** (0.974→0.810 baseline, 0.973→0.814
+MTRL) — clearly a general effect of the pooling+layer-count combination, not
+an MTRL-specific failure (MTRL is actually marginally *better* than baseline
+on 3/4 metrics in this broken regime: all +0.26pp, si +0.49pp, er +1.26pp).
+
+**Why:** `lnp` pooling is `(sum(|x|^p) / n)^(1/p)` with `p=16` fixed in the
+config — a hyperparameter tuned (implicitly, by whoever chose it originally)
+for the 16-layer subset, and never re-validated for a different layer count.
+With `p=16` (a high power), the sum is dominated by whichever layer has the
+largest-magnitude activations — effectively a soft-max over layers, not a
+real average. Adding 9 more layers changes *which* layer's magnitude
+dominates that soft-max, and evidently the layers added in 15-24 (the same
+range the `weighted`-pooling run in Phase A learned to suppress) pull the
+dominant term toward something far less informative for `si` specifically —
+`ks` (coarse, robust) is unaffected, `er` degrades mildly, `si` collapses.
+
+This is the clearest evidence in the whole campaign that **the 16-layer
+subset wasn't an arbitrary choice — every pooling mechanism we've tested
+(`weighted`'s learned attention, `lnp`'s fixed power) either had to relearn
+around the extra layers (Phase A, costing `si`/`er`) or was invalidated by
+them outright (Phase C)**. Unlike `weighted` pooling (which has learnable
+parameters that can *partially* adapt, as seen in Phase A), `lnp`'s `p` is a
+fixed hyperparameter with no mechanism to adapt to a new layer count at all.
+
+**Not pursuing further tuning here** — this isn't an MTRL hyperparameter
+question (re-tuning `p` for 25 layers is a baseline/pooling-methodology
+question that would need its own sweep, and both Phase B attempts already
+showed MTRL's own knobs don't fix layer-count-driven pooling problems). This
+closes the all-25-layers campaign at 2 of the plan's 5 tuning-iteration
+budget spent (both on Phase B, both negative — a clean, consistent result).
+
+## All 25 Layers — Final Summary
+
+| Run | Layers | all | ks | si | er |
+|---|---|---|---|---|---|
+| baseline (mix) | 16 | 0.9710 | 0.9854 | 0.9735 | 0.7559 |
+| baseline (mix) | **25** | 0.9676 | 0.9884 | 0.9628 | **0.7812** |
+| MTRL (weighted, best config) | 16 | 0.9695 | 0.9842 | 0.9699 | 0.7812 |
+| MTRL (weighted, best config) | **25** | 0.9637 | 0.9881 | 0.9570 | 0.7613 |
+| baseline+lnp | 16 | 0.9730 | 0.9867 | 0.9741 | 0.7884 |
+| baseline+lnp | **25** | 0.8857 | 0.9877 | 0.8095 | 0.7631 |
+| MTRL+lnp | 16 | 0.9726 | 0.9874 | 0.9733 | 0.7794 |
+| MTRL+lnp | **25** | 0.8884 | 0.9868 | 0.8143 | 0.7758 |
+
+**Bottom line: at this training budget (30 epochs), all 25 layers did NOT
+beat the curated 16-layer subset on any arm's overall accuracy** — it won on
+`ks` everywhere (simple task, more info always helps a little) and, for the
+`mix`-pooling baseline only, on `er` (+2.53pp), but cost `si` on every arm
+(-1.07 to -16.5pp depending on pooling) and cost overall accuracy on every
+arm. The mechanism is well-evidenced, not a mystery: **more layers ≠ more
+accuracy unless the pooling mechanism can actually suppress the added noise,
+and neither `weighted` (partial, learnable but slow) nor `lnp` (a fixed
+power, no adaptation at all) fully managed that within 30 epochs.** The
+original hand-picked 16-layer selection remains the best-performing input to
+this architecture.
+
+**Task-relation-matrix (Ω) interpretation across all layer counts** — the
+learned relationship is genuinely representation-dependent, not a fixed
+property of the tasks:
+
+| Setting | ks↔si | ks↔er | si↔er | Saturated? |
+|---|---|---|---|---|
+| weighted, 16L | -0.333 | +0.333 | -0.333 | Yes (±1/3) |
+| weighted, 25L (best) | +0.260 | +0.102 | -0.085 | No (~0.15) |
+| lnp, 16L | +0.333 | +0.333 | +0.333 | Yes, uniform |
+| lnp, 25L | +0.297 | +0.120 | +0.113 | Partial |
+
+Every setting agrees `si`↔`er` is the weakest or most negative pair (speaker
+identity and emotion share the least structure) and `ks` is positively
+related to both others in 3 of 4 settings. But the *strength* and, at 16
+layers under `weighted` pooling, even the *sign* of `si`↔`er` are not
+stable across representations — reinforcing the caveat already noted from
+the 16-layer campaign: Ω describes how the tasks relate **as seen through
+the current pooled representation**, not a pooling-independent ground truth.
+Broader input (more layers, weaker pooling adaptation) here produced a
+*less* decisive Ω, not a more informative one — the cleanest, most saturated
+task-relation reading this project has produced remains
+**`weighted`-pooling at 16 layers**.
+
