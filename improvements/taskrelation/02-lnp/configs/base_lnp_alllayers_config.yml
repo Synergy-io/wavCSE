@@ -1,0 +1,73 @@
+# Baseline + lnp pooling + ALL 25 WavLM-Large layers.
+#
+# Copy of base_lnp_config.yml with selected_transformer_layers: <16-layer
+# list> -> "all", and roots renamed (*_base_lnp_alllayers). lnp's
+# layer_pooling_param (16) is the norm-power p, unrelated to layer count --
+# unchanged.
+
+log_level: INFO
+
+device:
+  type: cuda
+  index: 1
+
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/dataset/embedding
+  results_root: results_base_lnp_alllayers
+  checkpoints_root: checkpoints_base_lnp_alllayers
+
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+
+  layer_pooling_type: lnp
+  layer_pooling_param: 16
+
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+
+training:
+  num_epochs: 30
+  batch_size: 2048
+  learning_rate: 0.0025
+  weight_decay: 0.00000005
+  saved_checkpoint_count: 1
+
+  shuffle_train: true
+  shuffle_val: true
+  pin_memory: true
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 4
+
+  patience: 1
+  factor: 0.5
+
+  l1_lambda: 0.0000001
+  l2_lambda: 0.00001
+
+evaluation:
+  batch_size: 1
+  shuffle: false
+  pin_memory: true
+  drop_last: false
+  num_workers: 4
+
+# ----------------------------
+# MLflow / DagsHub tracking
+# ----------------------------
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: wavcse-base-lnp
