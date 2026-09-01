@@ -1,11 +1,3 @@
-# =============================================================================
-# Base configuration: plain wavCSE downstream model, MLflow-tracked
-#
-# Full schema copy of downstream/configs/build_model.yml, plus an `mlflow:`
-# block. paths.results_root / paths.checkpoints_root are renamed so runs
-# don't collide with plain `downstream/main.py` runs.
-# =============================================================================
-
 log_level: INFO
 
 device:
@@ -15,16 +7,12 @@ device:
 paths:
   root_data_path: ~/voice_dataset
   root_emb_path: ~/dataset/embedding
-  results_root: results_base
-  checkpoints_root: checkpoints_base
+  results_root: results_decomposition_ftn
+  checkpoints_root: checkpoints_decomposition_ftn
 
 upstream:
   model_type: wavlm_large
   selected_transformer_layers: all
-  # Options:
-  # - all
-  # - "6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13"
-
 
 dataset:
   subset_percentage: 100
@@ -33,7 +21,6 @@ dataset:
 pooling:
   frame_pooling_type: mean
   frame_pooling_param: null
-
   layer_pooling_type: mix
   layer_pooling_param: 0.5
 
@@ -42,24 +29,25 @@ model:
   embedding_dim_shared2: 2000
   dropout_prob_shared1: 0.4
   dropout_prob_shared2: 0.6
+  ftn_rank: 16
 
 training:
-  num_epochs: 20
+  # Lower LR + immediate plateau reduction stabilize the shared adapter.
+  num_epochs: 50
   batch_size: 2048
   learning_rate: 0.001
   weight_decay: 0.00000005
-  saved_checkpoint_count: 1
-
+  saved_checkpoint_count: 5
   shuffle_train: true
-  shuffle_val: true
+  shuffle_val: false
   pin_memory: false
   drop_last_train: true
   drop_last_val: false
   num_workers: 0
-
-  scheduler_patience: 1
+  scheduler_patience: 0
   scheduler_factor: 0.5
-
+  scheduler_min_lr: 0.00001
+  max_grad_norm: 1.0
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
 
@@ -70,9 +58,6 @@ evaluation:
   drop_last: false
   num_workers: 0
 
-# ----------------------------
-# MLflow / DagsHub tracking
-# ----------------------------
 mlflow:
   tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
-  experiment_name: wavcse-baseline
+  experiment_name: wavcse-decomposition-ftn
