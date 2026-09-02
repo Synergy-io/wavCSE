@@ -1,5 +1,15 @@
-# wavCSE-GBC Configuration
-# Global Bias Coupling (Zhang et al. 2010)
+# wavCSE-GBC at the winning pooling from the 16-layer grid search:
+# smp (softmax pooling), lambda=0.5 -- see improvements/base/POOLING_GRID_SEARCH.md
+# for the full grid. GBC has never been trained in this project before this
+# config was created (see README.md) -- this is a first screening run, not
+# a confirmed-good config yet.
+#
+# Copy of ../01-mtrl/mtrl_poolingwinner_16L_config.yml with the MTRL-specific
+# model fields (mtrl_lambda/omega_epsilon/normalize_w) and the `mtrl:` block
+# replaced by GBC's own (gbc_global_dim), and experiment_name changed to
+# taskrelation-gbc. Everything else (pooling, layer selection, training/eval
+# hyperparameters) is identical, for a fair comparison against baseline/MTRL
+# at the same settings.
 
 log_level: INFO
 seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
@@ -11,8 +21,8 @@ device:
 paths:
   root_data_path: ~/voice_dataset
   root_emb_path: ~/embedding
-  results_root: results_gbc
-  checkpoints_root: checkpoints_gbc
+  results_root: results_gbc_poolingwinner_16L
+  checkpoints_root: checkpoints_gbc_poolingwinner_16L
 
 upstream:
   model_type: wavlm_large
@@ -25,8 +35,8 @@ dataset:
 pooling:
   frame_pooling_type: mean
   frame_pooling_param: null
-  layer_pooling_type: weighted
-  layer_pooling_param: null  # Auto-computed from num layers
+  layer_pooling_type: smp
+  layer_pooling_param: 0.5
 
 model:
   embedding_dim_shared1: 512
@@ -37,11 +47,11 @@ model:
   gbc_global_dim: 64
 
 training:
-  num_epochs: 100
+  num_epochs: 30
   batch_size: 2048
   learning_rate: 0.0025
   weight_decay: 0.00000005
-  saved_checkpoint_count: 3
+  saved_checkpoint_count: 1
   shuffle_train: true
   shuffle_val: false
   pin_memory: true

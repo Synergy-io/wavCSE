@@ -3,7 +3,9 @@ Run script for wavCSE architectural improvements.
 
 This script benchmarks three improved wavCSE architectures against the original:
 
-1. wavCSE-GBC: Global Bias Coupling (Zhang et al. 2010)
+1. wavCSE-GBC: Global Bias Coupling (original design for this project --
+   see improvements/taskrelation/03-gbc/gbc_model.py's docstring for a
+   2026-09-01 citation correction; no named published method matches it)
    - Adds a shared global bias that couples all task heads
    - Lightest change, most similar to original
 
@@ -51,6 +53,7 @@ from utils.setup_logging import setup_logging
 from utils.parse_transformer_layers import parse_transformer_layers
 
 from improvements.loading_utils import get_loader_device
+from improvements.seed_utils import set_seed
 from improvements import mlflow_utils
 
 # "gbc"/"tsm"/"pmr" are all task-relation-learning variants (Kevin's branch).
@@ -84,6 +87,7 @@ def _load_module_from_path(module_name: str, file_path: str):
 # taskrelation/configs/ dir (see CONFIG_PATH_OVERRIDES usage in main()).
 CONFIG_PATH_OVERRIDES = {
     "mtrl": os.path.join("taskrelation", "01-mtrl", "mtrl_config.yml"),
+    "gbc": os.path.join("taskrelation", "03-gbc", "gbc_config.yml"),
 }
 
 
@@ -103,8 +107,11 @@ def build_model(model_type: str, cfg: dict, task_type: str, layer_pooling_param)
     )
 
     if model_type == "gbc":
-        from improvements.taskrelation.models.gbc_model import DownstreamMultiTaskModelGBC
-        return DownstreamMultiTaskModelGBC(
+        gbc_dir = os.path.join(os.path.dirname(__file__), "taskrelation", "03-gbc")
+        gbc_module = _load_module_from_path(
+            "gbc_model", os.path.join(gbc_dir, "gbc_model.py")
+        )
+        return gbc_module.DownstreamMultiTaskModelGBC(
             **common_args,
             gbc_global_dim=model_cfg.get("gbc_global_dim", 64),
         )
@@ -219,7 +226,7 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
 
 
 def run_single_model(model_type: str, task_type: str, config_path: str,
-                     device_index: int):
+                     device_index: int, seed: int = None):
     """Run a single model variant end-to-end."""
     print(f"\n{'='*60}")
     print(f"  Running wavCSE-{model_type.upper()}")
@@ -228,6 +235,14 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
 
     cfg = load_config(config_path)
     setup_logging(cfg.get("log_level", "INFO"))
+
+    # Resolved fresh per model, not once at the top of main() -- an
+    # `--model all` run calls this once per architecture, and each needs
+    # its own configured seed applied cleanly rather than inheriting
+    # whatever RNG state the previous architecture's training left behind.
+    resolved_seed = seed if seed is not None else cfg.get("seed", 42)
+    set_seed(resolved_seed)
+    cfg["seed"] = resolved_seed
 
     # Pre-run disk guard: this is a shared machine whose root disk has
     # repeatedly hit ~0 bytes free mid-run (a checkpoint save then fails
@@ -363,6 +378,10 @@ def main():
         help="GPU device index"
     )
     parser.add_argument(
+        "--seed", type=int, default=None,
+        help="Random seed (overrides each config's seed:, default 42 if neither set)"
+    )
+    parser.add_argument(
         "--config", type=str, default=None,
         help="Override the config file path (relative to the repo root or "
              "absolute). Only valid with a single --model (not 'all'); used "
@@ -403,7 +422,7 @@ def main():
             continue
         try:
             results[mtype] = run_single_model(
-                mtype, args.task_type, config_path, args.device_index
+                mtype, args.task_type, config_path, args.device_index, args.seed
             )
         except Exception as e:
             print(f"Error running {mtype}: {e}")

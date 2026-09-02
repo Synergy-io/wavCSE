@@ -53,10 +53,14 @@ doesn't.
 ## Numbered architecture folders (`0N-<name>/`)
 
 `taskrelation/01-mtrl/` is the first of a convention for self-contained
-architecture folders (own `<name>_model.py`/`<name>_trainer.py`/
-`<name>_config.yml`/`README.md`) -- for a "real" architecture attempt, as
-opposed to the flat `models/`/`trainers/`/`configs/` layout GBC/TSM/PMR use.
-A leading digit and a hyphen make `01-mtrl` an invalid Python package path,
+architecture folders (own `<name>_model.py`, optionally `<name>_trainer.py`
+if a custom training loop is needed, `<name>_config.yml`, `README.md`) --
+for a "real" architecture attempt, as opposed to the flat
+`models/`/`trainers/`/`configs/` layout TSM/PMR still use. `taskrelation/
+03-gbc/` is the second such folder (GBC has no custom trainer -- it uses
+the standard `MultiTasksModelTrainer`, so that folder has no
+`gbc_trainer.py`). A leading digit and a hyphen make `01-mtrl`/`03-gbc`
+invalid Python package paths,
 so `run_improvements.py`'s `build_model()`/`build_trainer()` load these
 folders' modules via `_load_module_from_path()` (an `importlib.util`
 file-path loader defined near the top of the file) instead of a dotted
