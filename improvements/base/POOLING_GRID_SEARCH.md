@@ -1,5 +1,13 @@
 # Pooling Grid Search — All Layer-Pooling Methods
 
+**2026-09-01 caveat on every `er`/`test_..._er_acc` number in this
+document**: all of them were measured on the speaker-leaky IEMOCAP split.
+A leave-one-speaker-out re-run of the `smp`+25L baseline gives a true `er`
+accuracy of 0.6391 (std 0.051) — ~15pp below the 0.7902 reported here.
+Overall `acc_all` numbers (dominated by `ks`/`si`, which aren't leaky) are
+unaffected. See `improvements/base/README.md`'s "ER 10-fold cross-
+validation → Results" section for the full LOSO writeup.
+
 Every prior campaign used one pooling method per run: `mix` (baseline
 default), `weighted` (MTRL default), `lnp` (the fair-comparison pair). This
 is a systematic search over all 10 pooling types
@@ -98,15 +106,26 @@ Run: [DagsHub](https://dagshub.com/Ke-vin-S/wavCSE.mlflow/#/experiments/6/runs/e
 | **MTRL @ smp,0.5** | **0.9728** | 0.9849 | 0.9766 | 0.7649 |
 | Δ (MTRL − baseline) | **+0.04pp** | +0.07pp | +0.01pp | -0.18pp |
 
-**This is the first result in the whole project where MTRL beats the
-baseline on the overall metric outright**, not just trading it off for an
-`er` gain — every prior comparison (weighted-pooling campaign, lnp-matched
-pair) had MTRL essentially tied-or-behind on `all` while winning on `er`
-specifically. Here it wins narrowly but cleanly on `all`, `ks`, and `si`,
-and is statistically flat on `er` (−0.18pp, inside the ~0.2pp run-to-run
-noise established earlier in this project). It's also MTRL's best-ever
-absolute number (0.9728, beating the previous best of 0.9726 from the
-16-layer `lnp` pair).
+**2026-09-01 update — retracted, this was seed noise, not a real effect.**
+A 5-seed check of both configs (seeds 0-4, everything else identical, via
+`improvements/seed_utils.py`) gives baseline `test_opt_acc_all` =
+0.97134±0.00130 (range 0.96995-0.97372) vs MTRL = 0.97124±0.00091 (range
+0.96969-0.97218) — the difference in means (+0.0001, baseline ahead) is an
+order of magnitude smaller than either side's own seed-to-seed std, and the
+*baseline's own* seed-to-seed spread (0.38pp) is ~10x wider than the
+original "+0.04pp win" being tested. The single-seed numbers above are one
+sample each from those distributions, not a real, reproducible gap.
+**MTRL does not beat baseline anywhere in this project once seed variance
+is controlled for.** Full writeup: `improvements/taskrelation/01-mtrl/README.md`'s
+top-of-file retraction note.
+
+~~This is the first result in the whole project where MTRL beats the
+baseline on the overall metric outright~~ — see retraction above. (Original
+text preserved for the record: "not just trading it off for an `er` gain —
+every prior comparison (weighted-pooling campaign, lnp-matched pair) had
+MTRL essentially tied-or-behind on `all` while winning on `er` specifically.
+Here it wins narrowly but cleanly on `all`, `ks`, and `si`... It's also
+MTRL's best-ever absolute number.")
 
 Final Ω:
 ```
@@ -123,10 +142,12 @@ mechanism running now, that si↔er is consistently the weakest/most
 negative pair in this project's results, while every other pairing's sign
 and strength shifts with the representation.
 
-**This is now the recommended config for the thesis**: `smp` pooling
-(λ=0.5), 16 layers, MTRL with λ=0.01/`normalize_w=true` — the best baseline
-number found, and the only result where MTRL wins outright rather than
-trading off.
+**Recommendation as of 2026-09-01**: `smp` pooling (λ=0.5) is still the
+right pooling choice for either architecture. The MTRL-specific
+recommendation above is retracted — MTRL at this config does not
+reproducibly beat baseline (see the 5-seed check above); there is currently
+no config anywhere in this project where MTRL demonstrates a real advantage
+over the plain baseline.
 
 ---
 
@@ -221,6 +242,20 @@ regularizer's net effect here is mildly negative rather than the more
 useful, structured pull seen at 16L (where Ω had a distinguishing pattern:
 ks strongly tied to both si and er, si↔er weak).
 
+**2026-09-01 update — 5-seed check at this config**: baseline
+`test_opt_acc_all` = 0.97476±0.00108 (range 0.97314-0.97628) vs MTRL =
+0.97419±0.00071 (range 0.97353-0.97506) — baseline ahead by 0.056pp, about
+one combined standard error (weak/borderline evidence of a real small
+edge, not a strong one). The single-run gap shown in the table above
+(0.13-2.3pp depending on metric/tag) overstates the true multi-seed gap by
+roughly 2-3x on `acc_all`. On `er`: baseline 0.7866±0.0065 vs MTRL
+0.7761±0.0093 — a 1.05pp gap that looks like a real effect on this leaky
+split alone, but **directly contradicts the LOSO (honest) result**, which
+found baseline and MTRL indistinguishable on `er` at this exact config
+(0.6391 vs 0.6380 — see `improvements/taskrelation/01-mtrl/README.md`'s
+LOSO section). Full writeup with all three checkpoint tags in that same
+README.
+
 ---
 
 ## Overall Recommendation
@@ -241,18 +276,26 @@ ks strongly tied to both si and er, si↔er weak).
    coming out of this search, it's `mix`→`smp`.
 2. **Best overall single result: baseline @ `smp` λ=0.5, all 25 layers —
    0.9767.** The best number anywhere in this project, on any architecture.
-3. **Best MTRL result, and the only case where MTRL beats its
-   matched baseline: `smp` λ=0.5, 16 layers — MTRL 0.9728 vs. baseline
-   0.9724.** Narrow, but it's the first true win, not a trade-off. At 25
-   layers MTRL is close to but slightly behind its baseline counterpart
-   (likely because Ω saturates into an undifferentiated, uninformative
-   uniform-positive pattern there — see above).
-4. **For the thesis MTRL story specifically**, `smp`+16L is the config to
-   report: it's simultaneously MTRL's best absolute number, its only
-   outright win over baseline, and it produces the most *interpretable* Ω
-   this project has seen (a differentiated pattern, not saturated to
-   uniform). **For a pure "best possible baseline" number** (e.g. as the
-   upper bound to cite), `smp`+25L is stronger.
+3. **Retracted (2026-09-01): `smp` λ=0.5, 16 layers is NOT a real MTRL win.**
+   A 5-seed check (see `01-mtrl/README.md`'s top-of-file note and
+   `POOLING_GRID_SEARCH.md`'s own section above) found baseline
+   0.97134±0.00130 vs MTRL 0.97124±0.00091 across seeds — the single-run
+   "0.9728 vs 0.9724" gap is inside normal seed-to-seed noise, not a
+   reproducible effect. **There is no config anywhere in this project
+   where MTRL demonstrably beats its matched baseline.** At 25 layers a
+   5-seed check (2026-09-01) found baseline ahead by a small, only
+   weakly-supported margin (0.97476±0.00108 vs MTRL 0.97419±0.00071 —
+   about one combined standard error, not a strong gap), well below what
+   the single-run numbers implied; likely still real given Ω saturates
+   into an undifferentiated, uninformative uniform-positive pattern there
+   (see above) rather than doing anything useful, but this is a much
+   weaker claim than "MTRL clearly loses at 25L."
+4. **For the thesis MTRL story specifically**, `smp`+16L is still the
+   config to report — it produces the most *interpretable* Ω this project
+   has seen (a differentiated pattern, not saturated to uniform) — but
+   report it as "ties baseline, does not beat it," not as an outright win.
+   **For a pure "best possible baseline" number** (e.g. as the upper bound
+   to cite), `smp`+25L is stronger.
 5. **Layer count and pooling method are not independent** — this is the
    most important methodological finding, superseding the earlier
    all-25-layers campaign's "16 beats 25" conclusion, which held only for

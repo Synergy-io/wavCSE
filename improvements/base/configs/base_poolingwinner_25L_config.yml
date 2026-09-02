@@ -1,11 +1,11 @@
-# wavCSE-MTRL at the winning pooling from the 16-layer grid search:
-# smp (softmax pooling), lambda=0.5 -- beat the mix-pooling baseline
-# (0.9724 vs 0.9710 test_opt_acc_all) and every other pooling type tried.
-# See improvements/base/POOLING_GRID_SEARCH.md for the full grid.
-#
-# Copy of mtrl_config.yml with only pooling.layer_pooling_type/param changed
-# (weighted -> smp, param=0.5) -- MTRL hyperparameters are the already-
-# established best (mtrl_lambda=0.01, normalize_w=true).
+# Baseline counterpart to taskrelation/01-mtrl/mtrl_poolingwinner_25L_config.yml
+# -- same pooling (smp, lambda=0.5), all 25 layers, same
+# training/eval hyperparameters, just the plain DownstreamMultiTaskModel
+# instead of MTRL. Exists so both sides of the "does MTRL really beat
+# baseline at smp+25L" comparison can be re-run with --seed for a
+# multi-seed significance check (see improvements/seed_utils.py) --
+# the original single-run numbers (baseline 0.9767, MTRL opt 0.9744 /
+# best 0.9754) are single-seed only.
 
 log_level: INFO
 seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
@@ -17,12 +17,12 @@ device:
 paths:
   root_data_path: ~/voice_dataset
   root_emb_path: ~/embedding
-  results_root: results_mtrl_poolingwinner_16L
-  checkpoints_root: checkpoints_mtrl_poolingwinner_16L
+  results_root: results_base_poolingwinner_25L
+  checkpoints_root: checkpoints_base_poolingwinner_25L
 
 upstream:
   model_type: wavlm_large
-  selected_transformer_layers: 6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13
+  selected_transformer_layers: all
 
 dataset:
   subset_percentage: 100
@@ -39,10 +39,6 @@ model:
   embedding_dim_shared2: 2000
   dropout_prob_shared1: 0.4
   dropout_prob_shared2: 0.6
-  # MTRL-specific (established best from the 16-layer campaign)
-  mtrl_lambda: 0.01
-  omega_epsilon: 0.0001
-  normalize_w: true
 
 training:
   num_epochs: 30
@@ -61,11 +57,6 @@ training:
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
 
-# MTRL-specific
-mtrl:
-  warmup_epochs: 3
-  omega_update_frequency: 1
-
 evaluation:
   batch_size: 2048
   shuffle: false
@@ -78,4 +69,4 @@ evaluation:
 # ----------------------------
 mlflow:
   tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
-  experiment_name: taskrelation-mtrl
+  experiment_name: wavcse-baseline

@@ -49,6 +49,7 @@ sys.path.insert(0, _IMPROVEMENTS_DIR)
 import mlflow
 import mlflow_utils
 from loading_utils import get_loader_device
+from seed_utils import set_seed
 
 from dataset.load_embedding import LoadEmbedding
 from model.downstream_model import DownstreamMultiTaskModel
@@ -107,9 +108,10 @@ def disk_guard(*roots, min_gb=2.0):
 
 
 def build_cfg(pooling_type, layer_pooling_param, num_layers, device_index,
-              num_epochs, results_root, checkpoints_root):
+              num_epochs, results_root, checkpoints_root, seed):
     return {
         "log_level": "INFO",
+        "seed": seed,
         "device": {"type": "cuda", "index": device_index},
         "paths": {
             "root_data_path": "~/voice_dataset",
@@ -158,13 +160,13 @@ def build_cfg(pooling_type, layer_pooling_param, num_layers, device_index,
 
 def run_one(pooling_type, pooling_param, num_layers, device, device_index,
             transformer_layer_array, train_data, val_data, test_data,
-            num_epochs, stage, results_root, checkpoints_root, full_eval):
+            num_epochs, stage, results_root, checkpoints_root, full_eval, seed):
     layer_pooling_param = pooling_param
     if pooling_type in ("weighted", "gated"):
         layer_pooling_param = len(transformer_layer_array)
 
     cfg = build_cfg(pooling_type, layer_pooling_param, num_layers, device_index,
-                     num_epochs, results_root, checkpoints_root)
+                     num_epochs, results_root, checkpoints_root, seed)
 
     disk_guard(results_root, checkpoints_root)
 
@@ -188,6 +190,12 @@ def run_one(pooling_type, pooling_param, num_layers, device, device_index,
             "num_layers": num_layers,
         })
         mlflow.log_param("task_type", TASK_TYPE)
+
+        # Reseed fresh for every combo -- otherwise later combos in the loop
+        # would inherit whatever RNG state the previous combo's training left
+        # behind, making the grid unfairly order-dependent instead of each
+        # combo getting the same clean seeded start.
+        set_seed(seed)
 
         model = DownstreamMultiTaskModel(
             upstream_model_type="wavlm_large",
@@ -263,6 +271,7 @@ def main():
     parser.add_argument("--screen_epochs", type=int, default=10)
     parser.add_argument("--confirm_epochs", type=int, default=30)
     parser.add_argument("--top_k", type=int, default=3)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     load_dotenv(os.path.join(_REPO_ROOT, ".env"))
@@ -301,7 +310,7 @@ def main():
                 transformer_layer_array, train_data, val_data, test_data,
                 num_epochs=args.screen_epochs, stage="screen",
                 results_root=screen_results_root, checkpoints_root=screen_ckpt_root,
-                full_eval=False,
+                full_eval=False, seed=args.seed,
             )
             screen_results.append(r)
             print(f"  -> val_opt_acc_all={r['val_opt_acc_all']:.4f}")
@@ -335,7 +344,7 @@ def main():
                 transformer_layer_array, train_data, val_data, test_data,
                 num_epochs=args.confirm_epochs, stage="confirm",
                 results_root=confirm_results_root, checkpoints_root=confirm_ckpt_root,
-                full_eval=True,
+                full_eval=True, seed=args.seed,
             )
             confirm_results.append(cr)
             print(f"  -> test_opt_acc_all={cr.get('test_opt_acc_all')}")

@@ -1,13 +1,143 @@
 # wavCSE-MTRL — Multi-Task Relationship Learning
 
-**Current best config: `smp` pooling (λ=0.5), 16 layers, `mtrl_lambda=0.01`,
-`normalize_w=true` — MTRL 0.9728 vs. baseline 0.9724, the only config where
-MTRL beats its matched baseline outright. Found via a full grid search over
-all 10 pooling methods at both 16 and 25 layers — see
-`improvements/base/POOLING_GRID_SEARCH.md` for the complete search, the
-best-ever baseline number (0.9767 at `smp`+25L), and why the earlier
-"16 layers beats 25" conclusion (below) turned out to be pooling-specific,
-not general.**
+**2026-09-01 — retracted: MTRL's one apparent win was seed noise.** The
+claim below (MTRL 0.9728 vs. baseline 0.9724 at `smp`+16L, "the only config
+where MTRL beats its matched baseline outright") does NOT survive a
+multi-seed check. Re-running both configs 5x each with seeds 0-4 (same
+`smp`+16L, 30 epochs, everything else identical, now possible via
+`improvements/seed_utils.py`):
+
+| | mean `test_opt_acc_all` | std | range |
+| --- | --- | --- | --- |
+| Baseline | 0.97134 | 0.00130 | 0.96995 – 0.97372 |
+| MTRL | 0.97124 | 0.00091 | 0.96969 – 0.97218 |
+
+The difference in means (+0.0001, baseline ahead) is an order of magnitude
+smaller than either side's own seed-to-seed standard deviation, and smaller
+than the *within-baseline* range alone (0.38pp, ~10x the original "win"
+margin). Same pattern on `best`/`epoch` tags and on `er` specifically
+(baseline 0.7689±0.0079 vs MTRL 0.7700±0.0079, `opt` tag — indistinguishable).
+**Across every config tested in this project — 16L, 25L, and now
+controlling for seed noise — MTRL shows no reproducible advantage over the
+plain baseline.** Combined with the LOSO finding below (no real MTRL effect
+on honest `er` either), this is a consistent negative result from every
+angle checked so far, not an artifact of any one evaluation protocol.
+
+**2026-09-01 — 25L multi-seed check: a small baseline edge survives, but
+much smaller than the single-run numbers suggested.** Same treatment at
+`smp`+25L (5 seeds, 0-4, everything else identical):
+
+| | mean `test_opt_acc_all` | std | range |
+| --- | --- | --- | --- |
+| Baseline | 0.97476 | 0.00108 | 0.97314 – 0.97628 |
+| MTRL | 0.97419 | 0.00071 | 0.97353 – 0.97506 |
+
+Baseline leads by +0.00056 (0.056pp) — roughly one combined standard error
+(baseline SEM ≈0.00048, MTRL SEM ≈0.00032, combined ≈0.00058), so this is
+weak/borderline evidence of a real small edge, not the ≥2-sigma kind of gap
+you'd call clearly significant, but also not the ~0-sigma "pure noise"
+result found at 16L. Same modest-baseline-ahead pattern on `best`
+(+0.048pp) and `epoch` (+0.031pp) tags. **The original single-run comparison
+(baseline 0.9767 vs MTRL best 0.9754, a 0.13pp gap) overstated the true gap
+by roughly 2-3x** — it happened to land on a good seed for baseline and a
+middling one for MTRL; the 5-seed mean gap is 0.056pp, less than half that.
+
+On `er` specifically: baseline 0.7866±0.0065 vs MTRL 0.7761±0.0093 (`opt`
+tag) — a 1.05pp gap that, taken alone, looks like a real ~2-sigma effect on
+this leaky single-split evaluation. **This directly contradicts the LOSO
+(honest, leak-free) finding above, which found baseline and MTRL
+indistinguishable on `er` at this same `smp`+25L config (0.6391 vs 0.6380,
+well inside noise).** Take the LOSO result as authoritative — this is
+another concrete demonstration that `er` numbers from the leaky split,
+even averaged over 5 seeds, are not a reliable substitute for LOSO
+evaluation.
+
+**Bottom line across both layer counts**: MTRL shows no MEANINGFUL,
+well-supported advantage over baseline anywhere in this project. At 16L
+the two are statistically indistinguishable; at 25L baseline has a small,
+weakly-supported edge on `acc_all` and a leaky-split-only apparent edge on
+`er` that the honest LOSO evaluation contradicts.
+
+**Current best pooling config (for either architecture): `smp` pooling
+(λ=0.5).** Found via a full grid search over all 10 pooling methods at both
+16 and 25 layers — see `improvements/base/POOLING_GRID_SEARCH.md` for the
+complete search, the best-ever baseline number (0.9767 at `smp`+25L), and
+why the earlier "16 layers beats 25" conclusion (below) turned out to be
+pooling-specific, not general. `smp` is still the right pooling choice for
+both baseline and MTRL — it's specifically the *MTRL-beats-baseline* claim
+that's retracted, not the pooling recommendation.
+
+**2026-09-01 update — two corrections to every `er` number in this
+document:**
+1. **Checkpoint tag.** The `smp`+25L pooling-winner run's `best` tag beats
+   `opt` on every metric (`test_acc_all` 0.9754 vs 0.9744, `test_er_acc`
+   0.7848 vs 0.7667) — a legitimate, validation-based selection, not
+   test-cherry-picking (see `improvements/er_tag_report.py` and
+   `improvements/base/README.md`'s "Checkpoint-tag rescan" section). Cite
+   `best`, not `opt`, for that run. This is *not* a general pattern —
+   across 113 logged runs, `opt` vs `best`/`epoch` on `er` is a wash (19
+   better / 32 worse / 62 tied), consistent with `er`'s small test set
+   being noisy, not with `opt` being systematically miscalibrated.
+2. **Speaker leakage.** Every `er` number below (baseline and MTRL alike)
+   was measured on `downstream/dataset/load_embedding.py`'s speaker-leaky
+   IEMOCAP split. A leave-one-speaker-out re-run of the baseline at the
+   current best config (`smp`+25L) gives a true `er` accuracy of **0.6391**
+   (std 0.051 across 10 folds) — **~15pp below** the leaky single-split
+   number (0.7902) that config reports. Full writeup:
+   `improvements/base/README.md`'s "ER 10-fold cross-validation → Results"
+   section. **MTRL now has its own LOSO number too (see below) — the
+   verdict: no real MTRL-vs-baseline `er` effect survives honest
+   evaluation.**
+
+## LOSO cross-validation for MTRL
+
+`improvements/taskrelation/01-mtrl/mtrl_er_kfold.py` (new, 2026-09-01) is
+the MTRL counterpart to `improvements/base/run_base_er_kfold.py` — same
+leave-one-speaker-out protocol, same `_LOSOLoadEmbedding`/`build_loso_fold`
+reused unmodified, same 5-epochs/fold budget, but builds
+`DownstreamMultiTaskModelMTRL` + `MultiTasksModelTrainerMTRL` instead of the
+plain model. Config: `mtrl_kfold_config.yml`, matching the `smp`+25L
+pooling-winner's hyperparameters (`mtrl_lambda=0.01`, `normalize_w=true`),
+with `mtrl.warmup_epochs` scaled from 3 (out of 30 in the single-split
+config) down to 1 (out of 5 here) to keep roughly the same warmup fraction.
+
+**Result** (`taskrelation-mtrl-er-kfold` experiment, `kfold_summary.json`):
+
+| tag | MTRL acc_mean | MTRL acc_std | baseline acc_mean (above) | Δ (MTRL − baseline) |
+| --- | --- | --- | --- | --- |
+| opt | 0.6380 | 0.0484 | 0.6391 | −0.0011 |
+| best | 0.6423 | 0.0491 | 0.6307 | +0.0116 |
+| epoch | 0.6276 | 0.0462 | 0.6278 | −0.0002 |
+
+**Verdict: no real effect.** Every tag's MTRL-vs-baseline delta is under
+1.2pp, well inside one fold's ~5pp standard deviation (~1.5pp standard
+error of the mean over 10 folds). MTRL and baseline are statistically
+indistinguishable on honest `er` evaluation. Every single-split "MTRL helps
+(or hurts) `er`" observation elsewhere in this document — the iteration-log
+deltas, the pooling-grid MTRL-vs-baseline comparisons — should now be read
+as **leakage noise measured twice**, not a genuine task-relation-learning
+effect on emotion recognition. MTRL's real, reproducible effect in this
+project remains the small `acc_all` gains on `ks`/`si` at specific pooling
+configs (see the top-of-file callout and `POOLING_GRID_SEARCH.md`), not
+anything to do with `er`.
+
+**Bonus finding — Ω itself is unstable exactly where the accuracy is.**
+Across the 10 folds' final Ω matrices, the `ks`↔`si` off-diagonal is tight
+and consistent (mean 0.286, std 0.012, range 0.259–0.305 — barely moves
+regardless of which speaker is held out). The `ks`↔`er` and `si`↔`er`
+off-diagonals are 6–9x more variable and **change sign across folds**
+(`ks`↔`er`: mean 0.098, std 0.072, range −0.079 to 0.201; `si`↔`er`: mean
+0.033, std 0.103, range −0.202 to 0.205 — the range is larger than the
+mean). This is independent, structural evidence for the same conclusion as
+the accuracy numbers: whatever relationship Ω "learns" between `er` and the
+other tasks is an artifact of which small, noisy slice of `er` data the
+model happened to see, not a stable property of how emotion recognition
+relates to keyword spotting or speaker ID. `ks`↔`si`'s relationship, by
+contrast, looks real and reproducible. This sharpens the thesis caveat
+already flagged in the "Next step" section below: Ω describes tasks *as
+seen through the current representation and training sample*, and for a
+task as data-poor as `er`, that description doesn't generalize even across
+re-splits of the same fixed dataset.
 
 **Paper:** Zhang & Yeung, "A convex formulation for learning task relationships
 in multi-task learning" (UAI 2010; journal version ACM TKDD 2014). The central
