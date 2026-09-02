@@ -7,6 +7,7 @@
 # see 01-mtrl/README.md's "All 25 Layers" section).
 
 log_level: INFO
+seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
 
 device:
   type: cuda

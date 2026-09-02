@@ -37,6 +37,7 @@ from evaluator.evaluator_model import MultiTasksModelEvaluator
 from improvements.clustering.models.ncmtl_model import DownstreamMultiTaskModelNCMTL
 from improvements.clustering.trainers.ncmtl_trainer import MultiTasksModelTrainerNCMTL
 from improvements.tensorboard_utils import tensorboard_trainer
+from improvements.seed_utils import set_seed
 from utils.load_config import load_config
 from utils.parse_transformer_layers import parse_transformer_layers
 from utils.setup_device import set_device
@@ -115,6 +116,12 @@ def main():
         default=None,
         help="GPU index to use (overrides the configuration)",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed (overrides config file's seed:, default 42 if neither set)",
+    )
     args = parser.parse_args()
 
     if args.task_type != "ks_si_er":
@@ -122,6 +129,10 @@ def main():
 
     load_dotenv(os.path.join(_REPO_ROOT, ".env"))
     cfg = load_config(args.config)
+
+    seed = args.seed if args.seed is not None else cfg.get("seed", 42)
+    set_seed(seed)
+    cfg["seed"] = seed
     setup_logging(log_level=cfg["log_level"])
 
     device_index = (

@@ -1,25 +1,19 @@
 """
 10-fold leave-one-speaker-out (LOSO) cross-validation for the ER task,
-run inside the plain wavCSE downstream model (joint ks_si_er training),
-tracked in MLflow (backed by a DagsHub-hosted tracking server).
+run inside wavCSE-MTRL (joint ks_si_er training with the task-relation
+regularizer), tracked in MLflow (backed by a DagsHub-hosted tracking server).
 
-Why: the default IEMOCAP split in downstream/dataset/load_embedding.py's
-_load_iemocap() pools all 10 speakers together and takes a fixed positional
-stride for val/test -- train and val/test almost certainly share speakers,
-so the resulting er accuracy is inflated by speaker memorization rather
-than genuine emotion generalization. LOSO cross-validation is the standard
-SER evaluation protocol on IEMOCAP specifically because it removes that
-leakage. See improvements/base/README.md for the full design rationale.
-
-Only the er/IEMOCAP split is folded -- ks (SpeechCommand) and si (VoxCeleb)
-keep their normal official splits every fold, since they're loaded via
-independent methods (_load_speechcommand/_load_voxceleb) that this script
-does not touch. downstream/ itself is never modified: _LOSOLoadEmbedding
-below reuses LoadEmbedding._load_iemocap()'s IEMOCAPEmbedding construction
-unmodified and only re-slices its output into LOSO indices.
+Sibling of improvements/base/run_base_er_kfold.py -- same LOSO protocol,
+same _LOSOLoadEmbedding/build_loso_fold reused unmodified from there, but
+builds DownstreamMultiTaskModelMTRL + MultiTasksModelTrainerMTRL instead of
+the plain model/trainer, so the MTRL-vs-baseline `er` comparison can finally
+be measured on the leakage-free split instead of downstream/'s speaker-leaky
+one. See improvements/base/README.md's "ER 10-fold cross-validation"
+section for the full design rationale (why LOSO, why only `er` is folded,
+why 5 epochs/fold) and its baseline results this run is compared against.
 
 Usage:
-    python run_base_er_kfold.py --task_type ks_si_er --config configs/base_kfold_config.yml [--num_folds 10] [--device_index 0]
+    python mtrl_er_kfold.py --task_type ks_si_er --config mtrl_kfold_config.yml [--num_folds 10] [--device_index 0]
 """
 
 import os
@@ -34,65 +28,37 @@ from dotenv import load_dotenv
 # ----------------------------
 # Path setup (robust to cwd)
 # ----------------------------
-_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-_IMPROVEMENTS_DIR = os.path.dirname(_THIS_DIR)              # .../improvements
-_REPO_ROOT = os.path.dirname(_IMPROVEMENTS_DIR)              # .../wavCSE (git repo root)
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))                       # .../taskrelation/01-mtrl
+_TASKRELATION_DIR = os.path.dirname(_THIS_DIR)                               # .../taskrelation
+_IMPROVEMENTS_DIR = os.path.dirname(_TASKRELATION_DIR)                       # .../improvements
+_REPO_ROOT = os.path.dirname(_IMPROVEMENTS_DIR)                              # .../wavCSE (git repo root)
 _DOWNSTREAM_DIR = os.path.join(_REPO_ROOT, "downstream")
+_BASE_DIR = os.path.join(_IMPROVEMENTS_DIR, "base")
 
 sys.path.insert(0, _DOWNSTREAM_DIR)     # exposes dataset/, model/, trainer/, evaluator/, utils/ as top-level
 sys.path.insert(0, _IMPROVEMENTS_DIR)   # exposes mlflow_utils as top-level
-sys.path.insert(0, _THIS_DIR)           # exposes kfold_iemocap, run_base as top-level
+sys.path.insert(0, _BASE_DIR)           # exposes kfold_iemocap, _LOSOLoadEmbedding (via run_base_er_kfold)
+sys.path.insert(0, _THIS_DIR)           # exposes mtrl_model, mtrl_trainer as top-level
 
 import mlflow
 import mlflow_utils
 from loading_utils import get_loader_device
 from seed_utils import set_seed
 
-from torch.utils.data import Subset
-
-from dataset.load_embedding import LoadEmbedding
-from model.downstream_model import DownstreamMultiTaskModel
 from evaluator.evaluator_model import MultiTasksModelEvaluator
 from utils.load_config import load_config
 from utils.setup_device import set_device
 from utils.setup_logging import setup_logging
 from utils.parse_transformer_layers import parse_transformer_layers
 
-from kfold_iemocap import build_loso_fold
-from run_base import _LiveMlflowTrainer
+# Reused unmodified from the baseline LOSO script -- same fold-assignment
+# logic and the same IEMOCAP-only re-slicing wrapper around LoadEmbedding.
+from run_base_er_kfold import _LOSOLoadEmbedding
 
+import mtrl_model
+import mtrl_trainer
 
-class _LOSOLoadEmbedding(LoadEmbedding):
-    """LoadEmbedding, with IEMOCAP's split replaced by a LOSO fold.
-
-    Reuses the parent's _load_iemocap() to build the IEMOCAPEmbedding
-    instance (same filtering/index_pattern), then discards its stride-based
-    indices and re-slices by speaker instead. ks/si loading is inherited
-    unmodified.
-    """
-
-    def __init__(self, *args, fold_index=0, num_folds=10, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fold_index = fold_index
-        self.num_folds = num_folds
-        self.held_out_test_speaker = None
-        self.held_out_val_speaker = None
-
-    def _load_iemocap(self):
-        train_subset, _val_subset, _test_subset = super()._load_iemocap()
-        iemocap_total_data = train_subset.dataset  # underlying IEMOCAPEmbedding, shared by all 3 Subsets
-
-        train_idx, val_idx, test_idx, test_spk, val_spk = build_loso_fold(
-            iemocap_total_data, self.fold_index, self.num_folds
-        )
-        self.held_out_test_speaker = test_spk
-        self.held_out_val_speaker = val_spk
-
-        return (
-            Subset(iemocap_total_data, train_idx),
-            Subset(iemocap_total_data, val_idx),
-            Subset(iemocap_total_data, test_idx),
-        )
+_LiveMlflowTrainerMTRL = mlflow_utils.make_live_trainer(mtrl_trainer.MultiTasksModelTrainerMTRL)
 
 
 def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root):
@@ -118,13 +84,15 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
         else len(transformer_layer_array)
     )
 
-    embedding_dim_shared1 = cfg["model"]["embedding_dim_shared1"]
-    embedding_dim_shared2 = cfg["model"]["embedding_dim_shared2"]
-    dropout_prob_shared1 = cfg["model"]["dropout_prob_shared1"]
-    dropout_prob_shared2 = cfg["model"]["dropout_prob_shared2"]
+    model_cfg = cfg["model"]
+    embedding_dim_shared1 = model_cfg["embedding_dim_shared1"]
+    embedding_dim_shared2 = model_cfg["embedding_dim_shared2"]
+    dropout_prob_shared1 = model_cfg["dropout_prob_shared1"]
+    dropout_prob_shared2 = model_cfg["dropout_prob_shared2"]
 
     training_cfg = cfg["training"]
     evaluation_cfg = cfg["evaluation"]
+    mtrl_cfg = cfg.get("mtrl", {})
 
     loader = _LOSOLoadEmbedding(
         root_data_path=root_data_path,
@@ -148,7 +116,7 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
         "held_out_val_speaker": loader.held_out_val_speaker,
     })
 
-    model = DownstreamMultiTaskModel(
+    model = mtrl_model.DownstreamMultiTaskModelMTRL(
         upstream_model_type=upstream_model_type,
         task_type=task_type,
         embedding_dim_shared1=embedding_dim_shared1,
@@ -156,14 +124,17 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
         layer_pooling_type=layer_pooling_type,
         layer_pooling_param=layer_pooling_param,
         dropout_prob_shared1=dropout_prob_shared1,
-        dropout_prob_shared2=dropout_prob_shared2
+        dropout_prob_shared2=dropout_prob_shared2,
+        mtrl_lambda=model_cfg.get("mtrl_lambda", 0.01),
+        omega_epsilon=model_cfg.get("omega_epsilon", 1e-4),
+        normalize_w=model_cfg.get("normalize_w", False),
     )
     model.to(device)
 
     fold_results_root = os.path.join(results_root, f"fold_{fold_index}")
     fold_checkpoints_root = os.path.join(checkpoints_root, f"fold_{fold_index}")
 
-    trainer = _LiveMlflowTrainer(
+    trainer = _LiveMlflowTrainerMTRL(
         model=model,
         device=device,
         task_type=task_type,
@@ -172,7 +143,9 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
         checkpoints_root=fold_checkpoints_root,
         training_data=train_data,
         validation_data=val_data,
-        ignore_index=ignore_index
+        ignore_index=ignore_index,
+        mtrl_warmup_epochs=mtrl_cfg.get("warmup_epochs", 3),
+        omega_update_frequency=mtrl_cfg.get("omega_update_frequency", 1),
     )
     trainer.train()
 
@@ -206,6 +179,11 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
             "loss": stats.avg_loss_task[er_idx],
         }
 
+    # Final Omega for this fold, for analysis (mirrors mtrl_trainer's own
+    # per-epoch history, which is already saved/uploaded from results_dir).
+    final_omega = model.get_omega_matrix().tolist()
+    mlflow.log_dict({"task_array": task_array, "omega": final_omega}, "omega/final_omega.json")
+
     mlflow.log_artifacts(trainer.results_dir, artifact_path="results")
 
     return {
@@ -213,17 +191,18 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
         "held_out_test_speaker": loader.held_out_test_speaker,
         "held_out_val_speaker": loader.held_out_val_speaker,
         "er_metrics": fold_er_metrics,
+        "final_omega": final_omega,
     }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="10-fold leave-one-speaker-out cross-validation for the er task"
+        description="10-fold leave-one-speaker-out cross-validation for the er task, on wavCSE-MTRL"
     )
     parser.add_argument("--task_type", type=str, default="ks_si_er",
                          help="Task string joined by underscores; must include 'er'")
     parser.add_argument("--config", type=str,
-                         default=os.path.join(_THIS_DIR, "configs", "base_kfold_config.yml"),
+                         default=os.path.join(_THIS_DIR, "mtrl_kfold_config.yml"),
                          help="Path to YAML configuration file")
     parser.add_argument("--num_folds", type=int, default=10,
                          help="Number of LOSO folds (must equal the number of IEMOCAP speakers, 10)")
@@ -241,9 +220,8 @@ def main():
 
     cfg = load_config(args.config)
 
-    # One seed for the whole 10-fold sequence (not independently reseeded
-    # per fold) -- makes a full rerun of this script reproducible end to
-    # end; see improvements/seed_utils.py.
+    # One seed for the whole 10-fold sequence -- see run_base_er_kfold.py's
+    # identical comment and improvements/seed_utils.py.
     seed = args.seed if args.seed is not None else cfg.get("seed", 42)
     set_seed(seed)
     cfg["seed"] = seed
@@ -255,15 +233,9 @@ def main():
     results_root = cfg["paths"]["results_root"]
     checkpoints_root = cfg["paths"]["checkpoints_root"]
 
-    # ----------------------------
-    # Pre-run disk guard: this is a shared machine whose root disk has
-    # repeatedly hit ~0 bytes free mid-run (a checkpoint save then fails
-    # with "PytorchStreamWriter failed writing file", silently corrupting
-    # the run -- see run_base.py's/run_improvements.py's identical guard).
-    # Abort loudly before training instead of dying mid-checkpoint. This
-    # script is the most exposed of the three -- 10 full joint trainings
-    # per invocation.
-    # ----------------------------
+    # Pre-run disk guard -- see run_base_er_kfold.py's identical guard for
+    # the rationale (shared machine, root disk has repeatedly hit ~0 bytes
+    # free mid-run).
     for root in (checkpoints_root, results_root):
         expanded_root = os.path.expanduser(root)
         os.makedirs(expanded_root, exist_ok=True)
@@ -280,13 +252,13 @@ def main():
     device = set_device(device_type=device_type, device_index=device_index)
 
     mlflow_utils.setup_mlflow(cfg)
-    run_name = mlflow_utils.build_run_name("base", "original", task_type, suffix="kfold")
+    run_name = mlflow_utils.build_run_name("taskrelation", "mtrl", task_type, suffix="kfold")
 
     fold_results = []
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
-        mlflow_utils.set_standard_tags("base", "original", cfg)
+        mlflow_utils.set_standard_tags("taskrelation", "mtrl", cfg)
         mlflow.log_param("task_type", task_type)
         mlflow.log_params({
             "kfold_protocol": "leave_one_speaker_out",

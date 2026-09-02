@@ -14,6 +14,7 @@
 # the full log).
 
 log_level: INFO
+seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
 
 device:
   type: cuda

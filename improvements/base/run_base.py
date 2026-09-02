@@ -36,6 +36,7 @@ sys.path.insert(0, _IMPROVEMENTS_DIR)   # exposes mlflow_utils as top-level
 import mlflow
 import mlflow_utils
 from loading_utils import get_loader_device
+from seed_utils import set_seed
 
 from dataset.load_embedding import LoadEmbedding
 from model.downstream_model import DownstreamMultiTaskModel
@@ -61,6 +62,8 @@ def main():
                          help="Path to YAML configuration file")
     parser.add_argument("--device_index", type=int, default=None,
                          help="GPU index to use (overrides config file)")
+    parser.add_argument("--seed", type=int, default=None,
+                         help="Random seed (overrides config file's seed:, default 42 if neither set)")
     args = parser.parse_args()
 
     load_dotenv(os.path.join(_REPO_ROOT, ".env"))
@@ -69,6 +72,10 @@ def main():
     # Load configuration
     # ----------------------------
     cfg = load_config(args.config)
+
+    seed = args.seed if args.seed is not None else cfg.get("seed", 42)
+    set_seed(seed)
+    cfg["seed"] = seed
 
     log_level = cfg["log_level"]
     task_type = args.task_type

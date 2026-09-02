@@ -24,6 +24,7 @@ for path in (_REPO_ROOT, _DOWNSTREAM_DIR, _IMPROVEMENTS_DIR):
 
 import mlflow
 import mlflow_utils
+from seed_utils import set_seed
 
 from dataset.load_embedding import LoadEmbedding
 from improvements.decomposition.models.ftn_model import DownstreamMultiTaskModelFTN
@@ -121,6 +122,10 @@ def main() -> None:
     parser.add_argument(
         "--device_index", type=int, default=None, help="Override the config GPU index"
     )
+    parser.add_argument(
+        "--seed", type=int, default=None,
+        help="Random seed (overrides config file's seed:, default 42 if neither set)",
+    )
     args = parser.parse_args()
 
     if args.task_type != DownstreamMultiTaskModelFTN.SUPPORTED_TASK_TYPE:
@@ -129,6 +134,10 @@ def main() -> None:
     load_dotenv(os.path.join(_REPO_ROOT, ".env"))
     cfg = load_config(_config_path(args.config))
     setup_logging(log_level=cfg["log_level"])
+
+    seed = args.seed if args.seed is not None else cfg.get("seed", 42)
+    set_seed(seed)
+    cfg["seed"] = seed
 
     device_index = (
         args.device_index if args.device_index is not None else cfg["device"]["index"]
