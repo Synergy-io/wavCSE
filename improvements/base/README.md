@@ -111,3 +111,77 @@ parent run (`base_ks_si_er_kfold_<timestamp>`) in the
 `results_base_kfold/kfold_summary.json` (per-fold + aggregate numbers) as an
 artifact. Per-fold local outputs land in
 `results_base_kfold/fold_<i>/`/`checkpoints_base_kfold/fold_<i>/`.
+
+### Results
+
+**Current (2026-09-01), `smp`/λ=0.5, all 25 layers** -- matches the
+project's current best baseline config (`POOLING_GRID_SEARCH.md`:
+0.9767 `test_opt_acc_all`, 0.7902 `test_opt_er_acc` on the leaky
+single-split test set):
+
+| tag | acc_mean | acc_std |
+| --- | --- | --- |
+| opt | 0.6391 | 0.0506 |
+| best | 0.6307 | 0.0448 |
+| epoch | 0.6278 | 0.0453 |
+
+**This is the honest number to cite for `er`.** The `opt` tag (per-fold
+validation-selected checkpoint) is the best of the three here, unlike some
+single-split runs where `opt` underperforms `best`/`epoch` -- across 10
+independent folds the validation-based selection is doing its job, not
+getting lucky/unlucky on one held-out set.
+
+**The leakage gap is ~15 percentage points.** The single-split baseline
+(same `smp`/25L config) reports 0.7902 `test_opt_er_acc`; the honest LOSO
+number is 0.6391 -- a **0.151 absolute drop**. Every `er` number quoted
+anywhere in this project's history (0.75-0.90 range, across baseline/MTRL/
+GBC/TSM/PMR/pooling-grid runs) was measured on the leaky split and should be
+read as "how well the model memorizes these particular 10 speakers' emotion
+patterns," not "how well it generalizes emotion recognition to a new
+speaker." The true, generalization-honest ceiling for this architecture on
+IEMOCAP is closer to **~64%**, not ~79-90%.
+
+**High per-fold variance (std ~5pp, range 0.556-0.718)** -- some held-out
+speakers are much harder to generalize to than others (a well-known
+IEMOCAP property: individual speakers differ a lot in how expressively/
+consistently they perform each emotion). This means a single random
+80/10/10 split -- leaky or not -- is a genuinely noisy way to evaluate `er`;
+LOSO's fold-to-fold spread is itself evidence for why the single-split
+number was never trustworthy to 1-2 decimal places.
+
+**Superseded**: the first LOSO run (2026-08-17) used the stale `mix`,
+λ=0.5, 16-layer config (pre-dating the pooling grid search) and got
+opt/best/epoch acc_mean = 0.6295/0.6278/0.6095. The current `smp`/25L
+numbers above are ~1pp higher on the `opt` tag, consistent with (but far
+smaller than) `smp` pooling's single-split advantage over `mix` -- most of
+`smp`'s single-split gain over `mix` looks like it was leakage-sensitive,
+not genuine generalization improvement.
+
+**Update 2026-09-01 — MTRL now has a LOSO number too**
+(`improvements/taskrelation/01-mtrl/mtrl_er_kfold.py`, same protocol, same
+`smp`+25L config as MTRL's own pooling-winner): opt/best/epoch acc_mean =
+0.6380/0.6423/0.6276 (std ~0.048-0.049), versus baseline's
+0.6391/0.6307/0.6278 above. **Every tag's difference is under 1.2pp — well
+inside one fold's ~5pp standard deviation (~1.5pp standard error over 10
+folds).** MTRL and baseline are statistically indistinguishable on honest
+`er` evaluation. This confirms the single-split "MTRL sometimes helps `er`"
+findings throughout `01-mtrl/README.md` were leakage noise, not a real
+generalization effect -- full writeup and the Omega-stability finding that
+goes with it are in that README's "LOSO cross-validation" section.
+
+### Checkpoint-tag rescan (`improvements/er_tag_report.py`)
+
+A pure-MLflow, no-retraining query across every run logged via
+`mlflow_utils.log_eval_stats()`, checking whether the "opt" checkpoint tag
+(selected by avg-of-per-task validation accuracy) leaves `er` accuracy on
+the table relative to "best"/"epoch" for that same run. Across 113 runs
+with logged `er` metrics: 19 improve under best/epoch, 32 get *worse*, 62
+tie -- **this is not a systematic bias, it's noise** from `er`'s tiny
+553-sample test set, consistent with the fold-to-fold variance found above.
+
+One legitimate exception, not test-cherry-picking: the MTRL `smp`+25L
+pooling-winner run's **`best`** tag (a real validation-based selection
+criterion, not just "whichever tag scored highest on test") beats `opt` on
+every metric -- `test_acc_all` 0.9754 vs 0.9744, `test_er_acc` 0.7848 vs
+0.7667 -- so `01-mtrl/README.md` and `POOLING_GRID_SEARCH.md` should cite
+the `best` tag for that specific run going forward.

@@ -1,20 +1,19 @@
 # =============================================================================
-# ER 10-fold (leave-one-speaker-out) cross-validation config.
+# MTRL ER 10-fold (leave-one-speaker-out) cross-validation config.
 #
-# Copy of base_config.yml, with: separate results/checkpoints roots (so folds
-# don't collide with single-split base runs), num_epochs reduced to 5 (10x
-# fold count vs. the single-split baseline -- see improvements/base/README.md
-# for the compute-budget tradeoff), and a separate mlflow experiment name.
-# All other hyperparameters (patience, factor, learning_rate, ...) are left
-# unchanged from base_config.yml -- not in scope for this experiment.
+# Copy of mtrl_poolingwinner_25L_config.yml (the current best MTRL config:
+# smp pooling lambda=0.5, all 25 layers, mtrl_lambda=0.01, normalize_w=true)
+# with the same compute-budget tradeoff improvements/base/base_kfold_config.yml
+# uses for the baseline LOSO sweep: num_epochs reduced to 5, separate
+# results/checkpoints roots, separate mlflow experiment name.
 #
-# Pooling updated 2026-09-01: smp / lambda=0.5 / all 25 layers, matching the
-# pooling-grid-search winner and the project's current best baseline
-# (improvements/base/POOLING_GRID_SEARCH.md -- 0.9767 test_opt_acc_all,
-# 0.7902 test_opt_er_acc). The first LOSO sweep (2026-08-17) ran on the
-# stale `mix`, lambda=0.5, 16-layer config that predates the grid search --
-# treat improvements/base/results_base_kfold/kfold_summary.json from that
-# date as superseded, not a citable number for the current best config.
+# mtrl.warmup_epochs is reduced from 3 (out of 30, in the single-split config)
+# to 1 (out of 5 here) to keep roughly the same warmup *fraction* of training
+# -- otherwise 3/5 epochs would be spent with the MTRL regularizer disabled,
+# far more than the single-split run's 10%.
+#
+# See improvements/base/README.md's "ER 10-fold cross-validation" section for
+# the baseline LOSO results this is meant to be compared against.
 # =============================================================================
 
 log_level: INFO
@@ -22,13 +21,13 @@ seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi
 
 device:
   type: cuda
-  index: 1
+  index: 0
 
 paths:
   root_data_path: ~/voice_dataset
-  root_emb_path: ~/dataset/embedding
-  results_root: results_base_kfold
-  checkpoints_root: checkpoints_base_kfold
+  root_emb_path: ~/embedding
+  results_root: results_mtrl_kfold
+  checkpoints_root: checkpoints_mtrl_kfold
 
 upstream:
   model_type: wavlm_large
@@ -50,6 +49,10 @@ model:
   embedding_dim_shared2: 2000
   dropout_prob_shared1: 0.4
   dropout_prob_shared2: 0.6
+  # MTRL-specific (established best from the 16/25-layer pooling-winner campaigns)
+  mtrl_lambda: 0.01
+  omega_epsilon: 0.0001
+  normalize_w: true
 
 training:
   num_epochs: 5
@@ -71,8 +74,13 @@ training:
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
 
+# MTRL-specific
+mtrl:
+  warmup_epochs: 1
+  omega_update_frequency: 1
+
 evaluation:
-  batch_size: 1
+  batch_size: 2048
   shuffle: false
   pin_memory: true
   drop_last: false
@@ -83,4 +91,4 @@ evaluation:
 # ----------------------------
 mlflow:
   tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
-  experiment_name: wavcse-baseline-er-kfold
+  experiment_name: taskrelation-mtrl-er-kfold
