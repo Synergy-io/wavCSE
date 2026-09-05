@@ -82,10 +82,19 @@ only matters when actively running experiments.
 ## Gotchas
 
 - **Python 3.9** — no `match` statements, no `X | Y` type unions.
-- **`downstream/` is never edited.** It mirrors baseline code co-authored by
-  the project's co-supervisor. New logic goes in `improvements/` as new
-  files that subclass rather than modify (precedent:
-  `taskrelation/trainers/*.py` subclasses `trainer/trainer_model.py`).
+- **`downstream/` is never edited — except the sanctioned `mtlkit` migration.**
+  It mirrors baseline code co-authored by the project's co-supervisor. New
+  logic normally goes in `improvements/` as new files that subclass rather
+  than modify (precedent: `taskrelation/trainers/*.py` subclasses
+  `trainer/trainer_model.py`). **Exception (Eng Review decision D1,
+  2026-09-06, see `docs/designs/speech-mtl-framework.md`):** this pass
+  deliberately rewrites `downstream/`'s modules into thin wrappers over the
+  new `mtlkit/` package, gated by facade-parity and numeric-parity tests
+  (`mtlkit/tests/test_facade_parity.py`) rather than left to trust. Every
+  symbol other consumers import keeps its exact signature and behavior. Any
+  FUTURE change to `downstream/` outside this migration still needs the
+  same bar: a stated, reviewed exception plus a parity test proving nothing
+  broke — not a silent one-off edit.
 - **`LoadEmbedding`'s `device=` must be CPU**, via
   `improvements/loading_utils.get_loader_device()` — not the training GPU.
   Trainers/evaluators move each batch to the training device explicitly, and

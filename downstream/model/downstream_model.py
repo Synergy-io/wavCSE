@@ -12,6 +12,33 @@ upstream embeddings. It supports:
 The model is designed to be used with upstream SSL
 representations such as WavLM.
 
+Thin compatibility wrapper (Next Step 5 / Eng Review decision D1): task_type
+parsing and output-dim resolution now delegate to `mtlkit.tasks`/
+`mtlkit.heads` (closes part of issue #8), and `Pooling` is `mtlkit.pooling`'s
+(via `downstream/pooling/pooling.py`'s re-export).
+
+Structural note: this class keeps its ORIGINAL flat `nn.Module` attribute
+layout (`projector_layer`, `dropout_shared1`, `hidden_layer`,
+`dropout_shared2`, `classifiers`, `pooling`, `layer_pooling_type`) as direct
+instance attributes rather than delegating assembly to
+`mtlkit.heads.build_trunk`/`build_heads`/`MultiTaskModel` (which nest them
+under a `trunk` submodule) -- `improvements/clustering/models/ncmtl_model.py`
+and `improvements/decomposition/models/ftn_model.py` both subclass this
+class and reach directly into that flat structure (`self.hidden_layer`,
+`self.projector_layer`, etc., not just the public constructor/forward
+API). A nested-trunk assembly silently broke both subclasses (caught by
+running `improvements/clustering/tests/test_ncmtl.py`, a pre-existing,
+untouched consumer test) before this facade-parity wrapper landed. mtlkit's
+own native model assembly (`mtlkit.heads.MultiTaskModel`) is unaffected and
+used by callers that don't need this legacy flat shape.
+
+Deliberate deviation from strict byte-for-byte parity, documented rather
+than silently carried forward: the original `get_pooling_weights` read
+`self.pooling.pooling_weights`, an attribute `Pooling` never defined (the
+real attribute is `position_weights`) -- calling this method on a
+"weighted"-pooling model always raised `AttributeError`, so no consumer
+could have been relying on that crash succeeding. This wrapper fixes it.
+
 Author: Braveenan Sritharan
 Created: 2026-01-19
 """
@@ -20,17 +47,30 @@ import logging
 from typing import Optional, Union
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn as nn
 
 from pooling.pooling import Pooling
-from utils.constant_mapping import LabelKeywordMapping, TaskDatasetMapping
+from mtlkit.heads import MultiClassifierOutput, input_dim_from_upstream  # noqa: F401
+from mtlkit.tasks import TASK_REGISTRY, dataset_array_from_task_type
 from utils.pooling_id import make_pooling_name
 
-class MultiClassifierOutput:
-    def __init__(self, logits=None, prediction=None):
-        self.logits = logits
-        self.prediction = prediction
+
+def _tasks_from_task_type(task_type: str):
+    """Ordered, de-duplicated TaskSpec list for a task_type string -- same
+    tokenization/dedup/error-message behavior as the original
+    `_build_dataset_id_from_task_type`, sourced from mtlkit.tasks so this
+    wrapper and mtlkit.tasks can never drift apart on what a token means."""
+    task_tokens = task_type.split("_")
+    seen_keys = []
+    for t in task_tokens:
+        if TASK_REGISTRY.try_get(t) is None:
+            raise ValueError(
+                f"Invalid task type token: '{t}' in task_type='{task_type}'"
+            )
+        if t not in seen_keys:
+            seen_keys.append(t)
+    return [TASK_REGISTRY.get(key) for key in seen_keys]
 
 
 class DownstreamMultiTaskModel(nn.Module):
@@ -43,12 +83,13 @@ class DownstreamMultiTaskModel(nn.Module):
         layer_pooling_type: str,
         dropout_prob_shared1: float,
         dropout_prob_shared2: float,
-        layer_pooling_param: Optional[Union[int, float]] = None
+        layer_pooling_param: Optional[Union[int, float]] = None,
     ):
         super().__init__()
-        
-        input_dim = self._input_dim_from_upstream(upstream_model_type)
-        output_dim_array = self._output_dims_from_task_type(task_type)
+
+        input_dim = input_dim_from_upstream(upstream_model_type)
+        tasks = _tasks_from_task_type(task_type)
+        output_dim_array = [task.num_classes for task in tasks]
 
         self.projector_layer = nn.Linear(input_dim, embedding_dim_shared1)
         self.dropout_shared1 = nn.Dropout(p=dropout_prob_shared1)
@@ -63,42 +104,19 @@ class DownstreamMultiTaskModel(nn.Module):
         # Pooling owns learnable parameters only when needed (weighted)
         self.layer_pooling_type = layer_pooling_type
         self.pooling = Pooling(layer_pooling_type, pooling_param=layer_pooling_param)
-        
+
         layer_pool_name = make_pooling_name(layer_pooling_type, layer_pooling_param)
         logging.info(f"Layer pooling type: {layer_pool_name}")
-        
-    def _input_dim_from_upstream(self, upstream_model_type: str) -> int:
-        upstream_model_variation = upstream_model_type.split("_")[-1].lower()
-        if upstream_model_variation == "base":
-            return 768
-        elif upstream_model_variation == "large":
-            return 1024
-        else:
-            raise ValueError(
-                f"Unknown upstream_model_variation='{upstream_model_variation}' "
-                f"from upstream_model_type='{upstream_model_type}'. Expected 'base' or 'large'."
-            )
-            
-    def _build_dataset_id_from_task_type(self, task_type: str) -> list[str]:
-        task_tokens = task_type.split("_")
-        dataset_keys = []
-        for t in task_tokens:
-            ds = TaskDatasetMapping.get_dataset_key(t)
-            if ds is None:
-                raise ValueError(f"Invalid task type token: '{t}' in task_type='{task_type}'")
-            if ds not in dataset_keys:
-                dataset_keys.append(ds)
-        return dataset_keys
 
-    def _output_dims_from_task_type(self, task_type: str) -> list[int]:
-        dataset_id_array = self._build_dataset_id_from_task_type(task_type)
+    def _build_dataset_id_from_task_type(self, task_type: str):
+        """Preserved for any external caller relying on this internal
+        method's name; delegates to mtlkit.tasks (see module docstring)."""
+        return dataset_array_from_task_type(task_type)
 
-        output_dim_array: list[int] = []
-        for ds in dataset_id_array:
-            label2index, _ = LabelKeywordMapping.get_label_mapping(ds)
-            output_dim_array.append(len(label2index))
-
-        return output_dim_array
+    def _output_dims_from_task_type(self, task_type: str):
+        """Preserved for any external caller relying on this internal
+        method's name (e.g. NCMTL's `__init__`)."""
+        return [task.num_classes for task in _tasks_from_task_type(task_type)]
 
     def forward(self, input_seq):
         # input_seq: [B, L, input_dim] e.g., [2048, 25, 1024]
@@ -112,8 +130,8 @@ class DownstreamMultiTaskModel(nn.Module):
         logits_list = []
         pred_list = []
         for head in self.classifiers:
-            logits = head(embedding_shared)           
-            pred = torch.argmax(logits, dim=1)       
+            logits = head(embedding_shared)
+            pred = torch.argmax(logits, dim=1)
             logits_list.append(logits)
             pred_list.append(pred)
 
@@ -127,9 +145,9 @@ class DownstreamMultiTaskModel(nn.Module):
         embedding_shared = self.pooling.get_vector_after_pooling(embedding_shared, dim=1)
         embedding_shared = self.hidden_layer(embedding_shared)
         return embedding_shared
-    
+
     def get_pooling_weights(self):
         if self.layer_pooling_type != "weighted":
             return None
 
-        return F.softmax(self.pooling.pooling_weights, dim=0)
+        return F.softmax(self.pooling.position_weights, dim=0)
