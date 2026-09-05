@@ -32,6 +32,8 @@ MTRL (Task Relation Learning branch) is the first proof for `combine()`: its ~85
 - **Only MTRL is actively migrated onto `mtlkit` this pass.** PMR, GBC, TSM, Low-Rank, Task Clustering (NCMTL), Decomposition (FTN), and the base/pooling-grid scripts are explicitly **out of scope** for migration — no code changes, no dedicated verification effort beyond the general wrapper-compatibility guarantee above. This constraint is orthogonal to Approach B's seam scope: building `compose()`/config-telemetry from day one doesn't mean migrating every branch onto them yet.
 - One real user right now (the author); wavCSE is the acceptance test, not a hypothetical future user.
 - Tests are in scope for this pass, not deferred: unit tests for every `mtlkit` module (including `compose()` and `experiment.py`), facade-parity tests proving the wrapped `upstream/`/`downstream/` behave identically to today, and an MTRL numeric-parity test.
+- **Sanctioned exception to CLAUDE.md's "downstream/ is never edited" rule** (Eng Review D1, decided 2026-09-06): this pass is a documented, deliberate exception — behavior-preserving refactors of `downstream/` are allowed here specifically because they're gated by the facade-parity and numeric-parity test suites (Success Criteria), not left to trust. `CLAUDE.md` must be updated (as an Implementation Task) to record this exception rather than silently overriding the stated rule.
+- **`mtlkit` ships as an installed editable package** (Eng Review cross-model tension, decided 2026-09-06): `pyproject.toml`'s `package = false` and the documented `cd downstream && python main.py` invocation mean a repo-root `mtlkit/` sibling is unreachable from `downstream/`'s `sys.path` as currently configured (confirmed: Python puts the script's own directory on `sys.path[0]`, not the repo root). Flip `package = false` to `true` (or otherwise make the project `uv pip install -e .`-able) so `import mtlkit` resolves from any entry point. This is an Implementation Task for Next Step 5, not deferred.
 
 ## Premises
 
@@ -65,12 +67,13 @@ Every axis — task/dataset registry (many-to-many), layer pooling, masked heads
 | Pooling (layer only) | `mtlkit/pooling.py` | Existing downstream layer-pooling strategies moved verbatim, registry-dispatched. Frame pooling stays upstream/frozen (see Glossary), out of scope. | Pooling dispatch-equivalence + new-strategy-run criteria |
 | Heads + masked loss + model assembly | `mtlkit/heads.py` | `masked_ce_loss`/`masked_accuracy` unified (closes #8's loss-function half); `build_heads(tasks) -> ModuleList` and `build_trunk()` own assembling the shared trunk + per-task heads into one model | 4-task parity + FSC 3-head criteria |
 | Trainer loop | `mtlkit/trainer.py` | Thin loop hosting the `combine()` and `compose()` hooks; not itself a seam | 4-task parity |
-| Loss-combination | `mtlkit/combine.py` | Hook (closes #10). Per-step contract: receives per-task masked losses, per-task boolean masks, and each classifier head's weight/bias tensors; returns one scalar combined loss. Strategy objects are stateful and get epoch-lifecycle hooks (`on_epoch_begin`/`on_epoch_end`) — needed because MTRL's real mechanism has a warmup period, an epoch-scheduled analytic refresh of a stateful `Omega` buffer, and its own per-epoch logging. Default `uniform_average` strategy reproduces the original inlined 1/num_tasks arithmetic exactly. | MTRL migration, per-step losses matching pre-migration on pinned batches, full-epoch schedule (warmup + Omega refresh) replayed identically |
-| Parameter-sharing composition | `mtlkit/compose.py` | Deterministic declared-order mechanism: strategies apply in a stated order; outputs combine additively or sequentially per the registry entry. v1 validated only by a synthetic fixture strategy (a trivial second strategy wrapping the shared trunk) — no real method (MTRL, Low-Rank, or otherwise) validates it yet; see Reviewer Concerns. | Composition wiring criterion (fixture only) |
+| Loss-combination | `mtlkit/combine.py` | Hook (closes #10). Per-step contract: receives per-task masked losses, per-task boolean masks, and each classifier head's **live, autograd-connected** weight/bias tensors (not detached copies — required for backprop); returns one scalar combined loss. Any task-specific repacking of those raw tensors (e.g. MTRL's parameter-matrix transform) is the strategy's own responsibility, not the seam's. Strategy objects are stateful and get epoch-lifecycle hooks (`on_epoch_begin`/`on_epoch_end`) — needed because MTRL's real mechanism has a warmup period, an epoch-scheduled analytic refresh of a stateful `Omega`/`Omega^-1` buffer (owned by the strategy, not the model), and its own per-epoch logging. Default `uniform_average` strategy reproduces the original inlined 1/num_tasks arithmetic exactly (4-task case; see Success Criteria's FSC weighting note for the 6-task case). *(Contract tightened, Eng Review cross-model tension, 2026-09-06.)* | MTRL migration, per-step losses matching pre-migration on pinned batches, full-epoch schedule (warmup + Omega refresh) replayed identically |
+| Parameter-sharing composition | `mtlkit/compose.py` | Deterministic declared-order mechanism: strategies apply in a stated order; outputs combine additively or sequentially per the registry entry. v1 validated only by a synthetic fixture strategy (a trivial second strategy wrapping the shared trunk) — no real method (MTRL, Low-Rank, or otherwise) validates it yet; see Reviewer Concerns. Scope reaffirmed as-is after Eng Review cross-model tension (2026-09-06): output-space combination only, not broadened to weight-space/objective-space composition speculatively. | Composition wiring criterion (fixture only) |
 | Imbalance handling | `mtlkit/imbalance.py` | Per-task class reweighting (e.g. inverse-frequency) inside the masked loss | Imbalance success criterion |
-| Config + telemetry + override | `mtlkit/experiment.py` | Loads a YAML spec into a typed config object; an optional Python script imports and mutates that object before it reaches the trainer entry point; every run logs to the existing MLflow integration under the run-naming convention `improvements/` already uses | Config-driven-run success criterion |
+| Config + telemetry + override | `mtlkit/experiment.py` | **Revised (Eng Review decision 1B, 2026-09-06):** Hydra owns YAML composition, CLI/script overrides, and structured-config validation; `mtlkit/experiment.py` becomes a thin adapter mapping the resolved Hydra config into the typed object the trainer consumes, plus the MLflow-wrapped telemetry (no off-the-shelf equivalent tied to the existing run-naming convention) | Config-driven-run success criterion + config error-path test |
 | Frozen-embedding seam | *(none — pre-existing)* | wavCSE's `.pt` contract, consumed as-is | N/A — out of scope, not new work |
 | `upstream/`/`downstream/` compatibility wrapper | existing files, rewritten internals only | Every symbol in the Constraints import-surface list keeps its exact signature and behavior | Facade-parity test suite (below) |
+| Shared strategy registry | `mtlkit/registry.py` | **New (Eng Review decision 3B, 2026-09-06):** one generic `Registry[T]` (register/get/list, `KeyError` with valid-keys list on miss), used by all four registry-backed seams (tasks, pooling, combine, compose) instead of four independent implementations | Registry unit tests (Next Step 1) |
 
 ## Recommended Approach
 
@@ -86,31 +89,33 @@ Approach B, restored as chosen. `mtlkit` holds every seam — including `compose
 ## Success Criteria
 
 - wavCSE's current 4-task (KS/SI/ER/IC) run reproduces its existing per-task dev accuracies through the new core, seed and data order pinned, within a documented small tolerance (e.g. ±0.1pp) to account for floating-point reordering from the refactor.
-- FSC-as-3-heads trains jointly with KS/SI/ER (a 6-task run) and reports per-head accuracy plus a joint exact-match metric, compared against the 4-task flattened-IC baseline under an identical upstream encoder, trunk, and optimizer.
+- FSC-as-3-heads trains jointly with KS/SI/ER (a 6-task run) and reports per-head accuracy plus a joint exact-match metric, compared against the 4-task flattened-IC baseline under an identical upstream encoder, trunk, and optimizer. **Known limitation (Eng Review D2, decided 2026-09-06, accepted as-is):** the default `combine()` weighting is uniform `1/num_tasks` per task-slot, not per valid-task-per-sample — an FSC sample contributes 3× the per-sample gradient weight of a KS/SI/ER sample (3/6 vs 1/6) that an IC sample didn't get in the 4-task baseline (1/4). This is a real confound in the 6-task-vs-4-task comparison, documented here rather than fixed this pass.
 - Pooling seam: dispatch equivalence (today's strategy through the registry reproduces parity) and a new-strategy run (trains end-to-end, no parity expectation).
-- Imbalance seam, mechanical gate: class-reweighted masked loss reproduces a hand-computed reference value on a pinned batch, and gradients demonstrably shift toward under-represented classes.
+- Imbalance seam, mechanical gate: class-reweighted masked loss reproduces a hand-computed reference value on a pinned batch, **and** — pinned per Eng Review decision 4B (2026-09-06) — on that same batch, the under-represented class's head gradient norm (or loss contribution) with reweighting is ≥1.5× its value without reweighting. Replaces the previously qualitative "gradients demonstrably shift" with a single deterministic inequality.
 - **Composition seam (wiring only)**: the fixture second strategy stacks with the existing shared trunk via declared-order composition and trains without shape/gradient errors on the 4-task setup — proves the mechanism is wired correctly, not that any real method benefits from it.
 - **Config-driven run**: a full experiment runs end-to-end from a YAML config file alone, with a run automatically appearing in the existing MLflow tracking under the run-naming convention `improvements/` already uses; the Python-override escape hatch successfully overrides at least one YAML-expressed field in a test.
 - **Facade parity**: for every symbol in the Constraints import-surface list, a test constructs it through the wrapped `upstream`/`downstream` path and asserts identical behavior to a reference captured from today's pre-refactor code (same inputs → same outputs, same attribute names, same exceptions on bad input).
 - **PMR, GBC, TSM, NCMTL, and FTN's existing entrypoints run without modification** against the wrapped `downstream/`/`upstream/` — verified by importing and instantiating each branch's model/trainer subclass against the new wrapper and confirming no import error, no signature mismatch, and (where a synthetic-data smoke run is feasible without real audio) a successful forward+backward pass.
 - MTRL migrates to the `combine()` seam and its per-task losses numerically match its pre-migration results on a set of pinned batches, before its duplicated `_process_batch` method is deleted (not kept as a fallback).
 - Test suite passes: `mtlkit` unit tests (every module, including `compose()` and `experiment.py`), facade-parity tests, and the MTRL migration test, all runnable via `python -m unittest` following the existing `improvements/clustering/tests/test_ncmtl.py` convention (no new test-runner dependency).
+- **Config error path**: a malformed config or an override that doesn't resolve to a real key raises a clear, actionable error before training starts, not a stack trace deep inside the trainer (Eng Review decision 5A, 2026-09-06) — one negative-path test in `mtlkit/experiment.py`'s suite.
 - Issues #8, #9, #10, #11 close as a direct consequence of this build.
 
 ## Distribution Plan
 
-Not a distributed artifact — `mtlkit/` lives inside the wavCSE monorepo as a new top-level package, sibling to `upstream/`, `downstream/`, `improvements/`, matching the project's existing non-packaged, path-based import convention. No PyPI publication, no versioned release.
+`mtlkit/` lives inside the wavCSE monorepo as a new top-level package, sibling to `upstream/`, `downstream/`, `improvements/`. **Revised (Eng Review cross-model tension, decided 2026-09-06):** the project flips `pyproject.toml`'s `package = false` to an installed editable package (`uv pip install -e .`) so `mtlkit` is importable regardless of invocation cwd — see Constraints. Still no PyPI publication, no versioned release; this is purely to fix in-repo import reachability, not to prepare external distribution.
 
 ## Next Steps
 
-1. Stand up `mtlkit/tasks.py` (task/dataset registry + per-(sample, task) boolean masks) and `mtlkit`'s consolidated mappings/config utilities, validated by re-deriving the current 4-task `index_pattern` masking behavior exactly. Write unit tests for the registry alongside it.
+1. Stand up `mtlkit/registry.py` (generic `Registry[T]`, Eng Review decision 3B) and `mtlkit/tasks.py` (task/dataset registry + per-(sample, task) boolean masks, built on `registry.py`) and `mtlkit`'s consolidated mappings/config utilities, validated by re-deriving the current 4-task `index_pattern` masking behavior exactly. Write unit tests for the registry and the task/dataset registry alongside it.
 2. Build `mtlkit/pooling.py` and `mtlkit/heads.py` (masked loss + `build_heads`/`build_trunk`), moved verbatim from existing downstream code where possible. Write unit tests.
 3. Build `mtlkit/trainer.py` + `mtlkit/combine.py` (contract: per-task losses + masks + head weights in, one scalar out, with epoch-lifecycle hooks) and pass the 4-task parity gate.
-4. Build `mtlkit/compose.py` (deterministic declared-order mechanism + synthetic fixture strategy) and `mtlkit/experiment.py` (YAML load + Python-override + MLflow telemetry), resolving the Python-override interface Open Question as part of this step. Write unit tests for both.
-5. Rewrite `upstream/`'s and `downstream/`'s existing modules as thin wrappers over `mtlkit`, preserving every symbol in the Constraints import-surface list exactly. Write the facade-parity test suite against this step.
+4. Build `mtlkit/compose.py` (deterministic declared-order mechanism + synthetic fixture strategy) and `mtlkit/experiment.py` as a thin Hydra adapter (YAML composition + CLI/script overrides via Hydra, MLflow telemetry custom — Eng Review decision 1B), resolving the Python-override interface Open Question as a Hydra-compatible override mechanism (e.g. `OmegaConf.merge`) as part of this step. Write unit tests for both, including one negative-path config test (Eng Review decision 5A).
+5. **Before touching any file in the import-surface list:** capture a facade-parity reference snapshot — exercise every symbol in the Constraints import-surface list against today's pre-refactor code, record outputs/exceptions/attribute names (Eng Review cross-model tension, decided 2026-09-06 — mirrors the existing pinned-seed-first fix for the numeric parity gate in Reviewer Concerns). Then rewrite `upstream/`'s and `downstream/`'s existing modules as thin wrappers over `mtlkit`, preserving every symbol in the Constraints import-surface list exactly, and flip `pyproject.toml`'s `package = false` to an installed editable package so `mtlkit` resolves regardless of invocation cwd (Eng Review cross-model tension). Write the facade-parity test suite against the captured reference.
 6. Rewrite MTRL's model and trainer to import `mtlkit` directly (drop the `sys.path.insert` hack) and migrate onto `combine()`, deleting its forked trainer method. Write the MTRL numeric-parity test.
 7. Verify PMR, GBC, TSM, NCMTL, and FTN still import and instantiate cleanly against the rewritten wrapper (Success Criteria's unmodified-consumer check) — no code changes to any of them.
 8. FSC-as-3-heads and `mtlkit/imbalance.py` (VoxCeleb validation) — the two remaining Success Criteria items not yet covered by steps 1-7.
+9. Bump `downstream/evaluator/evaluator_model.py`'s eval config defaults (`batch_size`, `num_workers`) via the new Hydra-based config (Eng Review decision 6A) — closes issue #11, which no other step addresses. Verify no regression in eval metrics or wall-clock timing.
 
 ## Reviewer Concerns
 
@@ -123,3 +128,132 @@ Carried forward from prior review rounds (Approach B scored 6/10, 6/10 in its fi
 - **FSC label-provenance mechanics are real but left to implementation**: FSC's per-field (action/object/location) class sets, including the "none" sentinel already used by the flattened label today, need to be derived from the same FSC metadata `load_embedding.py` already reads. Doesn't block this build; resolved during Next Step 8.
 - **Full smoke-run verification for PMR/GBC/TSM/NCMTL/FTN may be limited by available test fixtures** — without real audio/embedding data, verification is import + instantiation + synthetic-data forward/backward pass (matching `test_ncmtl.py`'s existing approach), not a full training run reproducing real numbers. Accepted as sufficient since none of these branches are being modified.
 - **Config schema and Python-override interface aren't pinned yet** — both need a short design pass at Next Step 4, not discovered mid-implementation.
+
+## Eng Review: NOT in Scope
+
+- **compose()'s shape broadened to weight-space/objective-space composition** — considered (T1), rejected: ship output-space-only v1, revisit if a real migration needs a different shape. Rationale: Premise 4 already accepts fixture-only validation; broadening speculatively before any real consumer is a bigger bet, not a smaller one.
+- **Rescoping this pass to defer the `downstream/` wrapper rewrite to a separate pass** — considered (D1 option C), rejected in favor of relaxing the CLAUDE.md constraint instead (D1 option A). Rationale: user's explicit call; the parity-test suite already gates the risk the constraint protects against.
+- **Redirecting this pass's effort toward one of the 5 frozen benchmark branches instead of mtlkit** — considered (cross-model tension on strategic ROI), rejected. Rationale: user's explicit call — "architectures matter to ACL, but let us build this before, it will help on the long run."
+
+## Eng Review: What Already Exists
+
+- `downstream/trainer/trainer_utils.py`'s `masked_ce_loss`/`masked_accuracy` and `downstream/evaluator/evaluator_utils.py`'s near-identical duplicates — already the target of issue #8; the plan reuses/unifies them in `mtlkit/heads.py` rather than rebuilding from scratch. Confirmed duplicated (verified both files).
+- `downstream/pooling/pooling.py`'s `Pooling` class already implements every current layer-pooling strategy via an instance-level dispatch dict — the plan moves this verbatim into `mtlkit/pooling.py` rather than reimplementing pooling math, per the seam table.
+- `downstream/utils/load_config.py` — a 4-line `yaml.safe_load()` wrapper, not a hierarchical config system. The plan correctly does NOT try to extend this; it adopts Hydra instead (decision 1B) rather than growing this file into something it was never designed to be.
+- `downstream/dataset/custom_emb_dataloader.py`'s `CustomEmbDataLoader` already supports arbitrary `batch_size`/`num_workers` (plain `torch.stack` collate, no padding needed) — issue #11's fix (Next Step 9) is a config change, not new dataloader code.
+- `improvements/*/README.md` files and `CLAUDE.md`'s team-branch table already document per-owner branch conventions the design's Constraints section restates — no duplication, just consistent cross-referencing.
+
+## Eng Review: Diagrams Recommended
+
+The design doc currently has zero ASCII diagrams. Given the stated preference for diagrams on data flow/state machines/pipelines, recommend adding, as Implementation Tasks (not blocking this review):
+- A batch data-flow diagram through the seam pipeline: `LoadEmbedding → pooling.py → heads.py (masked losses) → combine.py → compose.py → trainer.py step`, in `mtlkit/trainer.py`'s module docstring.
+- A sequence diagram for `compose()`'s declared-order wiring (strategy order → additive/sequential combine), in `mtlkit/compose.py`'s docstring — this is the hardest-to-visualize new mechanism in the whole design.
+- A state diagram for `combine()` strategy epoch-lifecycle hooks (`on_epoch_begin` → per-step calls → `on_epoch_end`), in `mtlkit/combine.py`'s docstring, directly modeling MTRL's warmup → Omega-refresh cycle.
+
+## Eng Review: Failure Modes
+
+| Codepath | Realistic failure | Tested? | Handled? | Silent? |
+|---|---|---|---|---|
+| `combine()` receiving head weight/bias tensors | Strategy detaches/clones tensors, silently breaking backprop to those heads | Indirectly — MTRL numeric-parity gate (Next Step 6) would diverge from pre-migration reference over multiple steps | Contract now states "live, autograd-connected" explicitly (this review) | No — parity gate catches it, not silent |
+| `Registry[T].get()` on an unknown key (bad YAML task/pooling/strategy name) | User typo in config | New negative-path test (decision 5A) | `KeyError` with valid-keys list (decision 3B) | No |
+| Hydra config composition/override | Malformed YAML or override key that doesn't resolve | New negative-path test (Next Step 4, decision 5A) | Hydra's own schema validation + mtlkit adapter propagates the error | No |
+| Facade-parity rewrite (Next Step 5) | Reference snapshot captured after some files already rewritten, silently invalidating "today's pre-refactor" comparison | Sequencing now explicit: capture before touching any file (this review) | Explicit prerequisite ordering | No — was a real gap, now closed |
+| FSC 6-task uniform weighting | 6-task run's comparison against 4-task baseline is confounded by 3× gradient weight for FSC samples | Not tested — documented as a known limitation (decision 2C) | Not handled, deliberately | **Yes — accepted, documented, not fixed this pass** |
+
+No untested-AND-unhandled-AND-silent failure modes remain except the FSC weighting confound, which the user explicitly chose to accept and document (2C) rather than fix — a **critical gap by definition, but a knowingly accepted one**, not an oversight.
+
+## Eng Review: Worktree Parallelization Strategy
+
+| Step | Modules touched | Depends on |
+|---|---|---|
+| 1 (registry + tasks) | `mtlkit/` | — |
+| 2 (pooling + heads) | `mtlkit/` | 1 |
+| 3 (trainer + combine) | `mtlkit/` | 1, 2 |
+| 4a (compose) | `mtlkit/` | 1, 2, 3 |
+| 4b (experiment/Hydra adapter) | `mtlkit/` | 3 (needs trainer's config shape) |
+| 5 (downstream/ wrapper + packaging) | `downstream/`, `pyproject.toml` | 1, 2, 3, 4a, 4b |
+| 6 (MTRL migration) | `improvements/taskrelation/01-mtrl/` | 1, 3 (does not need 5) |
+| 7 (verify PMR/GBC/TSM/NCMTL/FTN) | `improvements/{taskrelation,lowrank,clustering,decomposition}/` (read-only) | 5 |
+| 8 (FSC-3-heads + imbalance) | `mtlkit/tasks.py`, `downstream/dataset/` | 1, 5 (FSC label derivation touches `load_embedding.py`) |
+| 9 (eval perf config bump) | `downstream/evaluator/`, config | 4b, 5 |
+
+**Lanes:**
+- Lane A (sequential): Step 1 → Step 2 → Step 3 → Step 4a
+- Lane B (parallel with 4a once Step 3 lands): Step 4b
+- Merge A+B, then Lane C (sequential): Step 5 → Step 7, Step 9
+- Lane D (parallel with Lane C, starts once Step 3 lands): Step 6 — does not depend on Step 5
+- Step 8 waits on both Lane C's Step 5 and Lane A's Step 1
+
+**Execution order:** Launch Lane A alone first (1→2→3, genuinely sequential — same `mtlkit/` files). Once 3 lands, launch Lane B (4b) and Lane D (Step 6/MTRL) in parallel worktrees alongside Lane A's continuation (4a). Merge everything, then Step 5 (solo — touches `downstream/` and `pyproject.toml`, nothing else does). Then Step 7 and Step 9 can run in parallel (disjoint modules). Step 8 last.
+
+**Conflict flag:** none of steps 1-4 can genuinely parallelize against each other — all touch `mtlkit/` files with real dependencies (tasks→pooling/heads→trainer/combine→compose). The only real parallel opportunity is Step 6 (MTRL) against Steps 4b/5, since MTRL imports `mtlkit` directly and never touches `downstream/`.
+
+## Implementation Tasks
+Synthesized from this review's findings. Each task derives from a specific finding above. Run with Claude Code or Codex; checkbox as you ship.
+
+- [ ] **T1 (P1, human: ~10min / CC: ~5min)** — repo governance — Update `CLAUDE.md`'s "downstream/ is never edited" gotcha to record the sanctioned exception for this migration (facade-parity + numeric-parity gated)
+  - Surfaced by: Step 0 STOP (D1, option A)
+  - Files: `CLAUDE.md`
+  - Verify: gotcha section names the exception and the tests that gate it
+- [ ] **T2 (P1, human: ~1-2h / CC: ~15min)** — packaging — Flip `pyproject.toml`'s `package = false` to an installed editable package
+  - Surfaced by: Cross-model tension 2 (import reachability)
+  - Files: `pyproject.toml`, `uv.lock`
+  - Verify: `import mtlkit` succeeds when invoked as `cd downstream && python main.py`
+  - `gstack-shortcut` not applicable — this is the complete fix, not a shortcut.
+- [ ] **T3 (P1, human: ~1h / CC: ~10min)** — mtlkit — Build `mtlkit/registry.py` (generic `Registry[T]`), reused by tasks/pooling/combine/compose
+  - Surfaced by: Code Quality finding 3 (registry DRY)
+  - Files: `mtlkit/registry.py` (new), `mtlkit/tasks.py`, `mtlkit/pooling.py`, `mtlkit/combine.py`, `mtlkit/compose.py`
+  - Verify: unit tests for `Registry[T].register/get/list` including unknown-key `KeyError`
+- [ ] **T4 (P1, human: ~1 day / CC: ~30-45min)** — mtlkit — Adopt Hydra for `mtlkit/experiment.py`'s YAML+override layer
+  - Surfaced by: Architecture finding 1
+  - Files: `mtlkit/experiment.py`, new `conf/` directory, `pyproject.toml`
+  - Verify: config-driven-run success criterion + negative-path config test (T7)
+- [ ] **T5 (P2, human: ~15min / CC: ~5min)** — combine.py — Pin the imbalance seam's gradient-ratio assertion (≥1.5×) instead of the qualitative "demonstrably shift"
+  - Surfaced by: Test Review finding 4
+  - Files: `mtlkit/imbalance.py` tests
+  - Verify: test asserts the fixed inequality on the pinned batch
+- [ ] **T6 (P1, human: ~1-2h / CC: ~15min)** — evaluator — Bump eval `batch_size`/`num_workers` defaults via Hydra config, closing issue #11
+  - Surfaced by: Performance finding 6
+  - Files: `downstream/evaluator/evaluator_model.py` config, new Hydra conf
+  - Verify: eval wall-clock improves, metrics unchanged vs. current defaults
+- [ ] **T7 (P2, human: ~20min / CC: ~5min)** — mtlkit — Add a negative-path config test (malformed YAML / bad override key raises a clear pre-training error)
+  - Surfaced by: Test Review finding 5
+  - Files: `mtlkit/experiment.py` tests
+  - Verify: test asserts a clear exception type/message, not a deep stack trace
+- [ ] **T8 (P1, human: ~1-2h / CC: ~15min)** — facade parity — Capture a pre-refactor reference snapshot for every import-surface symbol BEFORE Next Step 5 touches any `downstream/` file
+  - Surfaced by: Cross-model tension 5
+  - Files: new capture script, reference snapshot artifact
+  - Verify: snapshot exists and is committed before any `downstream/` file changes in this pass
+
+_No new tasks from Performance beyond T6._
+
+## Completion Summary
+
+- Step 0: Scope Challenge — scope accepted as-is after D1 (relax CLAUDE.md constraint); complexity trigger fired, resolved via D1 rather than a size reduction
+- Architecture Review: 2 issues found (config-vs-Hydra, FSC weighting confound), both resolved
+- Code Quality Review: 1 issue found (registry DRY), resolved
+- Test Review: coverage diagram produced, 2 gaps identified (imbalance assertion, config error-path), both resolved
+- Performance Review: 1 issue found (issue #11 unimplemented), resolved
+- Outside Voice: ran (Claude subagent, Codex not authenticated) — 8 findings, 5 substantive cross-model tensions raised and resolved, 1 (Premise 3/mask mechanics) assessed as already covered by Glossary + Next Step 1, 2 (downstream/ conflict, issue #11) duplicated this review's own findings
+- NOT in scope: written
+- What already exists: written
+- TODOS.md updates: 0 items — every finding this review either resolved into the plan or was explicitly deferred with rationale (NOT in Scope section); nothing warranted a standalone backlog item
+- Failure modes: 1 critical gap flagged (FSC weighting confound — knowingly accepted, not an oversight)
+- Outside voice: ran (Claude subagent)
+- Parallelization: 2 lanes converge into 1, then 2 lanes diverge again (Steps 6 vs 4b/5) — mostly sequential given `mtlkit/`'s internal dependency chain
+- Lake Score: 9/11 decisions chose the complete option (D1=A, 1B, 3B, 4B, 5A, 6A, T2=import-reachability-B, T5=A); 2/11 chose a documented-limitation shortcut (2C, T3/strategic-ROI=keep-as-is) — both explicit user calls with stated rationale, not silent scope-narrowing
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | not run |
+| Codex Review | `/codex review` | Independent 2nd opinion | 0 | not_authed | fell back to Claude subagent outside voice |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR | 6 section findings + 5 cross-model tensions, all resolved |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | not applicable (no UI) |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | not run |
+
+**CROSS-MODEL:** Outside voice (Claude subagent, Codex unavailable) raised 8 findings; 2 duplicated this review's own (downstream/ conflict, issue #11 gap), 5 were substantive new tensions (compose() category-error framing, import reachability, combine() contract precision, strategic ROI, facade-parity capture sequencing) — all presented to and resolved by the user, 1 (mask/sentinel mechanics) assessed as already covered by the existing design and not re-raised.
+**VERDICT:** ENG CLEARED — ready to implement.
+
+NO UNRESOLVED DECISIONS
