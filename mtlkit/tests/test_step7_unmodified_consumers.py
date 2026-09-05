@@ -101,11 +101,26 @@ class MTRLUnmodifiedConsumerTests(unittest.TestCase):
         model = mtrl_module.DownstreamMultiTaskModelMTRL(**_common_args())
         outputs = _smoke_forward_backward(model)
         self.assertEqual(len(outputs.logits), 3)
-        self.assertIsNotNone(model.projector_layer.weight.grad)
+        # Migrated onto mtlkit.heads.MultiTaskModel -- trunk is nested, not flat.
+        self.assertIsNotNone(model.trunk.projector_layer.weight.grad)
 
-        # MTRL-specific: analytic Omega update and regularizer loss both work
-        model.update_omega()
-        reg_loss = model.get_mtrl_regularizer_loss()
+    def test_mtrl_combine_strategy_omega_update_and_regularizer(self):
+        mtrl_dir = os.path.join(REPO_ROOT, "improvements", "taskrelation", "01-mtrl")
+        if mtrl_dir not in sys.path:
+            sys.path.insert(0, mtrl_dir)
+        import mtrl_combine as mtrl_combine_module
+
+        strategy = mtrl_combine_module.MTRLCombineStrategy(num_tasks=3, mtrl_warmup_epochs=0)
+        weights = [torch.nn.Linear(16, n) for n in (12, 1251, 4)]
+        head_params = [(w.weight, w.bias) for w in weights]
+        strategy._last_head_params = head_params
+        strategy.on_epoch_begin(1)
+        strategy._update_omega()
+        reg_loss = strategy(
+            per_task_losses=[torch.tensor(1.0), torch.tensor(2.0), torch.tensor(3.0)],
+            per_task_masks=[torch.tensor([True])] * 3,
+            head_params=head_params,
+        )
         self.assertEqual(reg_loss.dim(), 0)
 
 
