@@ -12,6 +12,13 @@ and managers used during model training, including:
 These utilities are used by the downstream training pipeline
 to ensure consistent training behavior and evaluation tracking.
 
+`masked_ce_loss`/`masked_accuracy` are re-exported from `mtlkit.heads`
+(Next Step 5 / Eng Review decision D1 -- closes issue #8's loss-function
+half; canonical copy now lives in mtlkit, unified with the identical
+functions that used to be independently duplicated in
+`evaluator/evaluator_utils.py`). See mtlkit/tests/test_facade_parity.py
+for the parity proof.
+
 Author: Braveenan Sritharan
 Created: 2026-01-19
 """
@@ -19,7 +26,7 @@ Created: 2026-01-19
 import os
 import json
 from dataclasses import dataclass
-from typing import Dict, Optional, Any, Tuple
+from typing import Dict, Any
 
 import torch
 import torch.nn as nn
@@ -76,36 +83,9 @@ class EpochStats:
 
 
 # ---------------------------
-# masked loss + accuracy
+# masked loss + accuracy — re-exported from mtlkit.heads, see module docstring
 # ---------------------------
-def masked_ce_loss(
-    logits: torch.Tensor,
-    labels: torch.Tensor,
-    loss_fn: nn.Module,
-    ignore_index: int = -1
-) -> Tuple[Optional[torch.Tensor], int]:
-    mask = labels != ignore_index
-    labels_masked = labels[mask]
-    if labels_masked.numel() == 0:
-        return None, 0
-    logits_masked = logits[mask, :]
-    loss = loss_fn(logits_masked, labels_masked)
-    return loss, int(labels_masked.size(0))
-
-
-def masked_accuracy(
-    pred: torch.Tensor,
-    labels: torch.Tensor,
-    ignore_index: int = -1
-) -> Tuple[int, int]:
-    mask = labels != ignore_index
-    labels_masked = labels[mask]
-    if labels_masked.numel() == 0:
-        return 0, 0
-    pred_masked = pred[mask]
-    correct = int((pred_masked == labels_masked).sum().item())
-    total = int(labels_masked.size(0))
-    return correct, total
+from mtlkit.heads import masked_ce_loss, masked_accuracy  # noqa: E402, F401
 
 
 # ---------------------------

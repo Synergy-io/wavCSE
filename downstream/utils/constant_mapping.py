@@ -1,81 +1,33 @@
-"""
-Label, task, and dataset keyword mappings.
+"""Label, task, and dataset keyword mappings.
 
-This module defines centralized mappings used across both
-upstream and downstream pipelines, including:
-- Label to index and index to label mappings for supported datasets
-- Task keyword to human readable task name mappings
-- Task keyword to dataset identifier mappings
-
-These mappings ensure consistent label handling and task
-resolution across training, evaluation, and embedding pipelines.
+Thin compatibility wrapper (Next Step 5 / Eng Review decision D1): the
+canonical mappings moved to `mtlkit/tasks.py` (closes issue #8's mapping
+half). This module rebuilds the exact same `LabelKeywordMapping`,
+`TaskKeywordMapping`, and `TaskDatasetMapping` classes — same attribute
+names, same classmethods, same values — sourced from `mtlkit.tasks`'s
+`TASK_REGISTRY` and label dicts, so every existing consumer
+(`from utils.constant_mapping import ...`) keeps working unmodified. See
+`mtlkit/tests/test_facade_parity.py` for the parity proof.
 
 Author: Braveenan Sritharan
 Created: 2026-01-19
 """
 
-from enum import Enum
+import mtlkit.tasks as _mtlkit_tasks
+
 
 class LabelKeywordMapping:
-    LABEL2INDEX_SPEECHCOMMANDv1 = {
-        '_silence_': 11,
-        '_unknown_': 10,
-        'down': 3,
-        'go': 9,
-        'left': 4,
-        'no': 1,
-        'off': 7,
-        'on': 6,
-        'right': 5,
-        'stop': 8,
-        'up': 2,
-        'yes': 0
-    }
-    INDEX2LABEL_SPEECHCOMMANDv1 = {v: k for k, v in LABEL2INDEX_SPEECHCOMMANDv1.items()}
-    
-    LABEL2INDEX_VOXCELEB1 = {str(i): i-1 for i in range(1, 1252)}
-    INDEX2LABEL_VOXCELEB1 = {v: k for k, v in LABEL2INDEX_VOXCELEB1.items()}
-    
-    LABEL2INDEX_IEMOCAP = {'ang': 2, 'hap': 1, 'neu': 0, 'sad': 3}
-    INDEX2LABEL_IEMOCAP = {v: k for k, v in LABEL2INDEX_IEMOCAP.items()}
-    
-    LABEL2INDEX_FLUENTSPEECHCOMMAND = {
-        'activate_lamp': 0,
-        'activate_lights': 1,
-        'activate_lights_bedroom': 2,
-        'activate_lights_kitchen': 3,
-        'activate_lights_washroom': 4,
-        'activate_music': 5,
-        'deactivate_lamp': 6,
-        'deactivate_lights': 7,
-        'deactivate_lights_bedroom': 8,
-        'deactivate_lights_kitchen': 9,
-        'deactivate_lights_washroom': 10,
-        'deactivate_music': 11,
-        'bring_juice': 12,
-        'bring_newspaper': 13,
-        'bring_shoes': 14,
-        'bring_socks': 15,
-        'increase_heat': 16,
-        'increase_heat_bedroom': 17,
-        'increase_heat_kitchen': 18,
-        'increase_heat_washroom': 19,
-        'increase_volume': 20,
-        'decrease_heat': 21,
-        'decrease_heat_bedroom': 22,
-        'decrease_heat_kitchen': 23,
-        'decrease_heat_washroom': 24,
-        'decrease_volume': 25,
-        'change_language': 26,
-        'change_language_chinese': 27,
-        'change_language_english': 28,
-        'change_language_german': 29,
-        'change_language_korean': 30,
-    }
+    LABEL2INDEX_SPEECHCOMMANDv1 = _mtlkit_tasks.LABEL2INDEX_SPEECHCOMMAND
+    INDEX2LABEL_SPEECHCOMMANDv1 = _mtlkit_tasks.INDEX2LABEL_SPEECHCOMMAND
 
-    INDEX2LABEL_FLUENTSPEECHCOMMAND = {
-        v: k for k, v in LABEL2INDEX_FLUENTSPEECHCOMMAND.items()
-    }
+    LABEL2INDEX_VOXCELEB1 = _mtlkit_tasks.LABEL2INDEX_VOXCELEB
+    INDEX2LABEL_VOXCELEB1 = _mtlkit_tasks.INDEX2LABEL_VOXCELEB
+
+    LABEL2INDEX_IEMOCAP = _mtlkit_tasks.LABEL2INDEX_IEMOCAP
+    INDEX2LABEL_IEMOCAP = _mtlkit_tasks.INDEX2LABEL_IEMOCAP
+
+    LABEL2INDEX_FLUENTSPEECHCOMMAND = _mtlkit_tasks.LABEL2INDEX_FLUENTSPEECHCOMMAND
+    INDEX2LABEL_FLUENTSPEECHCOMMAND = _mtlkit_tasks.INDEX2LABEL_FLUENTSPEECHCOMMAND
 
     # Group the mappings into a tuple
     speechcommand = (LABEL2INDEX_SPEECHCOMMANDv1, INDEX2LABEL_SPEECHCOMMANDv1)
@@ -86,17 +38,19 @@ class LabelKeywordMapping:
     @classmethod
     def get_label_mapping(cls, key):
         return getattr(cls, key)
-    
+
+
 class TaskKeywordMapping:
     ks = "Keyword Spotting"
     si = "Speaker Identification"
     er = "Emotion Recognition"
     ic = "Intent Classification"
-    
+
     @classmethod
     def get_task_name(cls, key):
         return getattr(cls, key, None)
-    
+
+
 class TaskDatasetMapping:
     ks = "speechcommand"
     si = "voxceleb"
@@ -106,5 +60,3 @@ class TaskDatasetMapping:
     @classmethod
     def get_dataset_key(cls, key):
         return getattr(cls, key, None)
-
-    
