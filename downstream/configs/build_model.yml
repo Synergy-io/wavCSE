@@ -134,9 +134,23 @@ training:
 # ----------------------------
 # Evaluation configuration
 # ----------------------------
+# Eng Review Next Step 9 (issue #11, 2026-09-06): batch_size=1/num_workers=0
+# left eval processing one utterance at a time with no parallel loading.
+# Matches the batch_size=2048/pin_memory=true/num_workers=4 pattern already
+# established and running in improvements/taskrelation/01-mtrl/mtrl_config.yml,
+# improvements/taskrelation/03-gbc/gbc_config.yml, and
+# improvements/clustering/configs/ncmtl_config.yml -- not a new value.
+# CustomEmbDataLoader already supports arbitrary batch_size/num_workers
+# (plain torch.stack collate over fixed-size pooled embeddings, no padding
+# needed -- verified in mtlkit/tests/test_pooling.py's parity fixtures) and
+# LoadEmbedding's device is already forced to CPU (CLAUDE.md gotcha), which
+# is the documented prerequisite for num_workers > 0 being safe. Not yet
+# verified against real embeddings/wall-clock timing in this environment
+# (no DVC data pulled) -- re-check eval metrics are unchanged and timing
+# improves on the first real run with this config.
 evaluation:
-  batch_size: 1
+  batch_size: 2048
   shuffle: false
-  pin_memory: false
+  pin_memory: true
   drop_last: false
-  num_workers: 0
+  num_workers: 4
