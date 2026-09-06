@@ -18,3 +18,7 @@ CLAUDE.local.md
 # /office-hours design docs: local-only by convention, never committed.
 # See CLAUDE.local.md for the office-hours convention note.
 docs/designs/
+
+# pdoc-generated API docs: build artifact, regenerate with
+# `uv run pdoc --output-directory docs/api mtlkit`.
+docs/api/
