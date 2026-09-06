@@ -134,12 +134,7 @@ def build_model(model_type: str, cfg: dict, task_type: str, layer_pooling_param)
         mtrl_module = _load_module_from_path(
             "mtrl_model", os.path.join(mtrl_dir, "mtrl_model.py")
         )
-        return mtrl_module.DownstreamMultiTaskModelMTRL(
-            **common_args,
-            mtrl_lambda=model_cfg.get("mtrl_lambda", 0.01),
-            omega_epsilon=model_cfg.get("omega_epsilon", 1e-4),
-            normalize_w=model_cfg.get("normalize_w", False),
-        )
+        return mtrl_module.DownstreamMultiTaskModelMTRL(**common_args)
     elif model_type == "original":
         from model.downstream_model import DownstreamMultiTaskModel
         return DownstreamMultiTaskModel(**common_args)
@@ -195,6 +190,7 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
             mtrl_trainer_module.MultiTasksModelTrainerMTRL
         )
         mtrl_cfg = cfg.get("mtrl", {})
+        model_cfg = cfg.get("model", {})
         return trainer_cls(
             model=model,
             device=device,
@@ -207,6 +203,13 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
             ignore_index=ignore_index,
             mtrl_warmup_epochs=mtrl_cfg.get("warmup_epochs", 3),
             omega_update_frequency=mtrl_cfg.get("omega_update_frequency", 1),
+            # MTRL-specific model hyperparameters live under the `model:`
+            # section in every real mtrl_*_config.yml (moved here from
+            # build_model's mtrl branch now that Omega state lives on the
+            # combine strategy, not the model -- see mtrl_combine.py).
+            mtrl_lambda=model_cfg.get("mtrl_lambda", 0.01),
+            omega_epsilon=model_cfg.get("omega_epsilon", 1e-4),
+            normalize_w=model_cfg.get("normalize_w", False),
         )
     else:
         # GBC and original use the standard trainer

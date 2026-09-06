@@ -40,6 +40,12 @@ wheels = [
 ]
 
 [[package]]
+name = "antlr4-python3-runtime"
+version = "4.9.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/38/7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/antlr4-python3-runtime-4.9.3.tar.gz", hash = "sha256:f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b", size = 117034, upload-time = "2021-11-06T17:52:23.524Z" }
+
+[[package]]
 name = "anyio"
 version = "4.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -538,6 +544,20 @@ wheels = [
 ]
 
 [[package]]
+name = "hydra-core"
+version = "1.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "antlr4-python3-runtime" },
+    { name = "omegaconf" },
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6d/8e/07e42bc434a847154083b315779b0a81d567154504624e181caf2c71cd98/hydra-core-1.3.2.tar.gz", hash = "sha256:8a878ed67216997c3e9d88a8e72e7b4767e81af37afb4ea3334b269a4390a824", size = 3263494, upload-time = "2023-02-23T18:33:43.03Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c6/50/e0edd38dcd63fb26a8547f13d28f7a008bc4a3fd4eb4ff030673f22ad41a/hydra_core-1.3.2-py3-none-any.whl", hash = "sha256:fa0238a9e31df3373b35b0bfb672c34cc92718d21f81311d8996a16de1141d8b", size = 154547, upload-time = "2023-02-23T18:33:40.801Z" },
+]
+
+[[package]]
 name = "idna"
 version = "3.19"
 source = { registry = "https://pypi.org/simple" }
@@ -912,6 +932,19 @@ wheels = [
 ]
 
 [[package]]
+name = "omegaconf"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "antlr4-python3-runtime" },
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/09/48/6388f1bb9da707110532cb70ec4d2822858ddfb44f1cdf1233c20a80ea4b/omegaconf-2.3.0.tar.gz", hash = "sha256:d5d4b6d29955cc50ad50c46dc269bcd92c6e00f5f90d23ab5fee7bfca4ba4cc7", size = 3298120, upload-time = "2022-12-08T20:59:22.753Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e3/94/1843518e420fa3ed6919835845df698c7e27e183cb997394e4a670973a65/omegaconf-2.3.0-py3-none-any.whl", hash = "sha256:7b4df175cdb08ba400f45cae3bdcae7ba8365db4d165fc65fd04b050ab63b46b", size = 79500, upload-time = "2022-12-08T20:59:19.686Z" },
+]
+
+[[package]]
 name = "opentelemetry-api"
 version = "1.41.1"
 source = { registry = "https://pypi.org/simple" }
@@ -978,6 +1011,20 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5e/ed/5c9cdaa5d48c7194bef4335eab3cdc2f8afa868a5546027e018ea9deb4c3/pandas-1.5.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:344021ed3e639e017b452aa8f5f6bf38a8806f5852e217a7594417fb9bbfa00e", size = 12165930, upload-time = "2022-11-23T05:52:12.151Z" },
     { url = "https://files.pythonhosted.org/packages/44/d3/e9df2f568692647fe5c3b02506610829d004a00b3ba5c7fd92d382f8d511/pandas-1.5.2-cp39-cp39-win32.whl", hash = "sha256:e7469271497960b6a781eaa930cba8af400dd59b62ec9ca2f4d31a19f2f91090", size = 9727138, upload-time = "2022-11-23T05:52:17.742Z" },
     { url = "https://files.pythonhosted.org/packages/76/4f/a59a029fd3000e2a5e5075eca9d6a8022aec23f60088df79f0a989d00702/pandas-1.5.2-cp39-cp39-win_amd64.whl", hash = "sha256:c218796d59d5abd8780170c937b812c9637e84c32f8271bbf9845970f8c1351f", size = 10928517, upload-time = "2022-11-23T05:52:23.726Z" },
+]
+
+[[package]]
+name = "pdoc"
+version = "15.0.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "markupsafe" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/91/5c/e94c1ab4aa2f8a9cc29d81e1c513c6216946cb3a90957ef7115b12e9363d/pdoc-15.0.4.tar.gz", hash = "sha256:cf9680f10f5b4863381f44ef084b1903f8f356acb0d4cc6b64576ba9fb712c82", size = 155678, upload-time = "2025-06-04T17:05:49.639Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/2c/87250ac73ca8730b2c4e0185b573585f0b42e09562132e6c29d00b3a9bb9/pdoc-15.0.4-py3-none-any.whl", hash = "sha256:f9028e85e7bb8475b054e69bde1f6d26fc4693d25d9fa1b1ce9009bec7f7a5c4", size = 145978, upload-time = "2025-06-04T17:05:48.473Z" },
 ]
 
 [[package]]
@@ -1108,6 +1155,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cd/14/fe3fbf6e845bf2080dc2f282d75085ddf79d037b35634ecde68f33c217b4/pydantic_core-2.46.4-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:91a06d2e259ecfbd8c901d70c3c507900458498142b3026a296b7de4d1322cc9", size = 2363318, upload-time = "2026-05-06T13:38:53.039Z" },
     { url = "https://files.pythonhosted.org/packages/62/88/60b110889507a426eecf626f7536566cb290ada71147eff49b6e2724ca62/pydantic_core-2.46.4-cp39-cp39-win32.whl", hash = "sha256:d80ee3d731373b24cebbc10d689ca4ee1875caf0d5703a245db18efd4dd37fc1", size = 1988880, upload-time = "2026-05-06T13:39:16.572Z" },
     { url = "https://files.pythonhosted.org/packages/0b/d6/8ede2f98f17e1e4e127d37be0eced4eee931a511c62cd68af50e1b25bfa9/pydantic_core-2.46.4-cp39-cp39-win_amd64.whl", hash = "sha256:3be77f45df024d789a672ae34f8b06fb346c4f9f46ea714956660ea4862e89ac", size = 2079257, upload-time = "2026-05-06T13:39:38.498Z" },
+]
+
+[[package]]
+name = "pygments"
+version = "2.21.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/49/2e/ced460408999b33da6b31b0021b0f37d329e202d4169aeb164493778f25b/pygments-2.21.0.tar.gz", hash = "sha256:610ca751c9bc2492b38eb9a38a7fbc93edbbb2d7182edaf34e66ae493dee5c8c", size = 5005329, upload-time = "2026-08-17T08:02:48.824Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/46/17f022dd3e953bf20a04a028a21ec746d942f8d2af30fa0f124fa0e6a684/pygments-2.21.0-py3-none-any.whl", hash = "sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9", size = 1250147, upload-time = "2026-08-17T08:02:44.912Z" },
 ]
 
 [[package]]
@@ -1451,11 +1507,13 @@ wheels = [
 [[package]]
 name = "wavcse"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
+    { name = "hydra-core" },
     { name = "matplotlib" },
     { name = "mlflow" },
     { name = "numpy" },
+    { name = "omegaconf" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
@@ -1467,13 +1525,16 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "deptry" },
+    { name = "pdoc" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "hydra-core", specifier = "==1.3.2" },
     { name = "matplotlib", specifier = "==3.7.1" },
     { name = "mlflow", specifier = "==3.1.4" },
     { name = "numpy", specifier = "==1.24.4" },
+    { name = "omegaconf", specifier = "==2.3.0" },
     { name = "python-dotenv", specifier = "==1.0.1" },
     { name = "pyyaml", specifier = "==6.0.1" },
     { name = "scikit-learn", specifier = "==1.2.0" },
@@ -1483,7 +1544,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "deptry", specifier = ">=0.23.1" }]
+dev = [
+    { name = "deptry", specifier = ">=0.23.1" },
+    { name = "pdoc", specifier = ">=15.0.4" },
+]
 
 [[package]]
 name = "werkzeug"

@@ -12,6 +12,16 @@ and writers used during downstream model evaluation, including:
 These utilities are used by the downstream evaluator to ensure
 consistent evaluation reporting and reproducible outputs.
 
+`masked_ce_loss`/`masked_accuracy` are re-exported from `mtlkit.heads`
+(Next Step 5 / Eng Review decision D1 -- closes issue #8's loss-function
+half, unifying this copy with the identical functions that used to be
+independently duplicated in `trainer/trainer_utils.py`). mtlkit's version
+indexes `logits[mask, :]`; this file's original also handled a `[B, L, C]`
+shape via `logits[mask]`, but every actual call site in this codebase
+passes 2D `[B, num_classes]` per-task logits (verified against
+`evaluator_model.py`'s only call site), where the two are equivalent. See
+mtlkit/tests/test_facade_parity.py for the parity proof.
+
 Author: Braveenan Sritharan
 Created: 2026-01-19
 """
@@ -19,7 +29,7 @@ Created: 2026-01-19
 import os
 import csv
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Any
 
 import torch
 import torch.nn as nn
@@ -65,43 +75,8 @@ def create_file_path(key: str, folder_path: str, file_format: str) -> str:
     return os.path.join(folder_path, f"{key}{file_format}")
 
 
-def masked_ce_loss(
-    logits: torch.Tensor,
-    labels: torch.Tensor,
-    loss_fn: nn.Module,
-    ignore_index: int = -1
-) -> Tuple[Optional[torch.Tensor], int]:
-    """
-    Returns:
-      loss: Tensor or None if no valid labels
-      valid_count: number of valid label positions
-    """
-    mask = labels != ignore_index
-    labels_masked = labels[mask]
-    valid = int(labels_masked.numel())
-
-    if valid == 0:
-        return None, 0
-
-    # logits shape can be [B, C] or [B, L, C]
-    # prediction is typically [B] or [B, L]
-    logits_masked = logits[mask]
-    loss = loss_fn(logits_masked, labels_masked)
-    return loss, valid
-
-
-def masked_accuracy(
-    prediction: torch.Tensor,
-    labels: torch.Tensor,
-    ignore_index: int = -1
-) -> Tuple[int, int]:
-    mask = labels != ignore_index
-    labels_masked = labels[mask]
-    pred_masked = prediction[mask]
-    correct = int((pred_masked == labels_masked).sum().item())
-    samples = int(labels_masked.numel())
-    return correct, samples
-
+# masked loss + accuracy — re-exported from mtlkit.heads, see module docstring
+from mtlkit.heads import masked_ce_loss, masked_accuracy  # noqa: E402, F401
 
 class MetricsWriter:
     def __init__(self, metrics_path_all: str):
