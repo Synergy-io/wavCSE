@@ -14,3 +14,7 @@ CLAUDE.local.md
 **/results_*/
 **/checkpoints/
 **/checkpoints_*/
+
+# /office-hours design docs: local-only by convention, never committed.
+# See CLAUDE.local.md for the office-hours convention note.
+docs/designs/
