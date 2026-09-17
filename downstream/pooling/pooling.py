@@ -18,6 +18,8 @@ Author: Braveenan Sritharan
 Created: 2026-01-19
 """
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -93,9 +95,24 @@ class Pooling(nn.Module):
         self._last_aux = {}
         if self.pooling_param is None:
             raise ValueError("lnp pooling requires pooling_param = p")
-        p = int(self.pooling_param)
+        p = float(self.pooling_param)
+        if not math.isfinite(p) or p < 1.0:
+            raise ValueError(f"lnp pooling requires a finite p >= 1, got {p}")
+
         n = x.size(d)
-        return torch.pow(torch.sum(torch.abs(x) ** p, dim=d) / n, 1.0 / p)
+        work_x = x.float() if x.dtype in (torch.float16, torch.bfloat16) else x
+        abs_x = work_x.abs()
+
+        # Scaling by the largest magnitude makes every powered value <= 1,
+        # avoiding overflow for large activations or large p. Detaching the
+        # scale is valid by homogeneity and avoids unstable max derivatives.
+        scale = abs_x.amax(dim=d, keepdim=True).detach()
+        safe_scale = scale.clamp_min(torch.finfo(work_x.dtype).tiny)
+        normalized = abs_x / safe_scale
+        mean_power = normalized.pow(p).mean(dim=d)
+        mean_power = mean_power.clamp_min(torch.finfo(work_x.dtype).tiny)
+        out = scale.squeeze(d) * mean_power.pow(1.0 / p)
+        return out.to(x.dtype) if out.dtype != x.dtype else out
 
     def softmax_pooling(self, x, d):
         self._last_aux = {}
@@ -110,8 +127,31 @@ class Pooling(nn.Module):
         if self.pooling_param is None:
             raise ValueError("lse pooling requires pooling_param = r")
         r = float(self.pooling_param)
+        if not math.isfinite(r):
+            raise ValueError(f"lse pooling requires a finite r, got {r}")
+
         n = x.size(d)
-        return (1.0 / r) * torch.log(torch.sum(torch.exp(r * x), dim=d) / n)
+        work_x = x.float() if x.dtype in (torch.float16, torch.bfloat16) else x
+
+        # The normalized LSE tends to the arithmetic mean as r -> 0. This
+        # branch also avoids division by zero and cancellation for tiny r.
+        if abs(r) < 1e-6:
+            out = work_x.mean(dim=d)
+            return out.to(x.dtype) if out.dtype != x.dtype else out
+
+        # Shift toward the extremum selected by r before multiplication. The
+        # scaled differences are non-positive, so neither multiplication nor
+        # exponentiation creates a large positive intermediate value.
+        reference = (
+            work_x.amax(dim=d, keepdim=True)
+            if r > 0
+            else work_x.amin(dim=d, keepdim=True)
+        )
+        scaled = r * (work_x - reference)
+        out = reference.squeeze(d) + (
+            torch.logsumexp(scaled, dim=d) - math.log(n)
+        ) / r
+        return out.to(x.dtype) if out.dtype != x.dtype else out
 
     # ---------------- weighted ----------------
     def weighted_pooling(self, x, d):
@@ -147,10 +187,13 @@ class Pooling(nn.Module):
     def auto_pooling(self, x, d):
         self._last_aux = {}
 
-        exp_alpha_x = torch.exp(self.alpha * x)
-        out = torch.sum(x * exp_alpha_x, dim=d) / (torch.sum(exp_alpha_x, dim=d) + 1e-12)
+        # softmax(alpha * x) is mathematically equivalent to normalizing
+        # exp(alpha * x), but avoids overflow for larger alpha/activations.
+        weights = torch.softmax(self.alpha * x, dim=d)
+        out = torch.sum(x * weights, dim=d)
 
         self._last_aux["alpha"] = self.alpha.detach()
+        self._last_aux["auto_weights"] = weights.detach()
 
         return out
 
@@ -178,7 +221,7 @@ class Pooling(nn.Module):
         Call after forward() to inspect:
           - weighted: position_weights, weighted_weights
           - gated: gate, position_weights
-          - auto: alpha
+          - auto: alpha, auto_weights
           - sap: sap_weights, attn_scores
         """
         return self._last_aux
