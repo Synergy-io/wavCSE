@@ -1,0 +1,301 @@
+{
+  "num_layers": 25,
+  "screen": [
+    {
+      "pooling_type": "smp",
+      "pooling_param": 1,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9667485092949842,
+      "val_best_acc_all": 0.9667485092949842,
+      "val_opt_acc_task": {
+        "0": 0.9839658723153869,
+        "1": 0.9634994206257242,
+        "2": 0.7956600361663653
+      }
+    },
+    {
+      "pooling_type": "smp",
+      "pooling_param": 0.5,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9654857944580849,
+      "val_best_acc_all": 0.9654857944580849,
+      "val_opt_acc_task": {
+        "0": 0.982200647249191,
+        "1": 0.9627752027809965,
+        "2": 0.7938517179023508
+      }
+    },
+    {
+      "pooling_type": "smp",
+      "pooling_param": 2,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.96211855489302,
+      "val_best_acc_all": 0.96211855489302,
+      "val_opt_acc_task": {
+        "0": 0.981318034716093,
+        "1": 0.956981460023175,
+        "2": 0.7902350813743219
+      }
+    },
+    {
+      "pooling_type": "auto",
+      "pooling_param": null,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9574184496667836,
+      "val_best_acc_all": 0.9574184496667836,
+      "val_opt_acc_task": {
+        "0": 0.9829361576934392,
+        "1": 0.9474217844727694,
+        "2": 0.7685352622061483
+      }
+    },
+    {
+      "pooling_type": "mix",
+      "pooling_param": 0.5,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9571378463696948,
+      "val_best_acc_all": 0.9571378463696948,
+      "val_opt_acc_task": {
+        "0": 0.9829361576934392,
+        "1": 0.9471320973348784,
+        "2": 0.7649186256781193
+      }
+    },
+    {
+      "pooling_type": "max",
+      "pooling_param": null,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9566467905997895,
+      "val_best_acc_all": 0.9566467905997895,
+      "val_opt_acc_task": {
+        "0": 0.9827890556045896,
+        "1": 0.9462630359212051,
+        "2": 0.7649186256781193
+      }
+    },
+    {
+      "pooling_type": "mix",
+      "pooling_param": 0.75,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9555945282357068,
+      "val_best_acc_all": 0.9555945282357068,
+      "val_opt_acc_task": {
+        "0": 0.980435422182995,
+        "1": 0.9461181923522596,
+        "2": 0.7685352622061483
+      }
+    },
+    {
+      "pooling_type": "weighted",
+      "pooling_param": 25,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9485092949842161,
+      "val_best_acc_all": 0.9485092949842161,
+      "val_opt_acc_task": {
+        "0": 0.9824948514268903,
+        "1": 0.9294611819235226,
+        "2": 0.7685352622061483
+      }
+    },
+    {
+      "pooling_type": "mix",
+      "pooling_param": 0.25,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.939389687828832,
+      "val_best_acc_all": 0.939389687828832,
+      "val_opt_acc_task": {
+        "0": 0.9833774639599883,
+        "1": 0.9090382387022016,
+        "2": 0.7775768535262206
+      }
+    },
+    {
+      "pooling_type": "sap",
+      "pooling_param": 512,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9381269729919327,
+      "val_best_acc_all": 0.9381269729919327,
+      "val_opt_acc_task": {
+        "0": 0.9764636657840541,
+        "1": 0.9164252607184241,
+        "2": 0.7377938517179023
+      }
+    },
+    {
+      "pooling_type": "mean",
+      "pooling_param": null,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9241669589617678,
+      "val_best_acc_all": 0.9258505787443002,
+      "val_opt_acc_task": {
+        "0": 0.9816122388937923,
+        "1": 0.8820973348783314,
+        "2": 0.7432188065099458
+      }
+    },
+    {
+      "pooling_type": "gated",
+      "pooling_param": 25,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.9175026306559102,
+      "val_best_acc_all": 0.9175026306559102,
+      "val_opt_acc_task": {
+        "0": 0.9838187702265372,
+        "1": 0.8673232908458864,
+        "2": 0.72875226039783
+      }
+    },
+    {
+      "pooling_type": "lnp",
+      "pooling_param": 8,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.8202735882146616,
+      "val_best_acc_all": 0.8202735882146616,
+      "val_opt_acc_task": {
+        "0": 0.9820535451603413,
+        "1": 0.6672943221320974,
+        "2": 0.7414104882459313
+      }
+    },
+    {
+      "pooling_type": "lnp",
+      "pooling_param": 4,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.8197825324447562,
+      "val_best_acc_all": 0.8225885654156436,
+      "val_opt_acc_task": {
+        "0": 0.9769049720506031,
+        "1": 0.671494785631518,
+        "2": 0.7396021699819169
+      }
+    },
+    {
+      "pooling_type": "lnp",
+      "pooling_param": 16,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.8013328656611716,
+      "val_best_acc_all": 0.8104524728165556,
+      "val_opt_acc_task": {
+        "0": 0.9796999117387467,
+        "1": 0.6310834298957126,
+        "2": 0.7341772151898734
+      }
+    },
+    {
+      "pooling_type": "lse",
+      "pooling_param": 1,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.03107681515257804,
+      "val_best_acc_all": 0.03107681515257804,
+      "val_opt_acc_task": {
+        "0": 0.038393645189761696,
+        "1": 0.0014484356894553883,
+        "2": 0.31103074141048825
+      }
+    },
+    {
+      "pooling_type": "lse",
+      "pooling_param": 2,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.03107681515257804,
+      "val_best_acc_all": 0.03107681515257804,
+      "val_opt_acc_task": {
+        "0": 0.038393645189761696,
+        "1": 0.0014484356894553883,
+        "2": 0.31103074141048825
+      }
+    },
+    {
+      "pooling_type": "lse",
+      "pooling_param": 5,
+      "num_layers": 25,
+      "stage": "screen",
+      "val_opt_acc_all": 0.03107681515257804,
+      "val_best_acc_all": 0.03107681515257804,
+      "val_opt_acc_task": {
+        "0": 0.038393645189761696,
+        "1": 0.0014484356894553883,
+        "2": 0.31103074141048825
+      }
+    }
+  ],
+  "confirm": [
+    {
+      "pooling_type": "smp",
+      "pooling_param": 1,
+      "num_layers": 25,
+      "stage": "confirm",
+      "val_opt_acc_all": 0.9699754472115047,
+      "val_best_acc_all": 0.970045598035777,
+      "val_opt_acc_task": {
+        "0": 0.982200647249191,
+        "1": 0.9700173812282734,
+        "2": 0.8191681735985533
+      },
+      "test_opt_acc_all": 0.9716733806509368,
+      "test_opt_acc_task": {
+        "ks": 0.9859546452084857,
+        "si": 0.9728517755423585,
+        "er": 0.7775768535262206
+      },
+      "mlflow_run_id": "1a09fb9f6e5948f48e9b5991b38cb8fc"
+    },
+    {
+      "pooling_type": "smp",
+      "pooling_param": 0.5,
+      "num_layers": 25,
+      "stage": "confirm",
+      "val_opt_acc_all": 0.9729217818309365,
+      "val_best_acc_all": 0.9729217818309365,
+      "val_opt_acc_task": {
+        "0": 0.9847013827596351,
+        "1": 0.9733487833140209,
+        "2": 0.8227848101265823
+      },
+      "test_opt_acc_all": 0.9767248545303409,
+      "test_opt_acc_task": {
+        "ks": 0.9863935625457205,
+        "si": 0.981214398254757,
+        "er": 0.7902350813743219
+      },
+      "mlflow_run_id": "8224180eec9949fd89862aeeb94648b6"
+    },
+    {
+      "pooling_type": "smp",
+      "pooling_param": 2,
+      "num_layers": 25,
+      "stage": "confirm",
+      "val_opt_acc_all": 0.9687127323746054,
+      "val_best_acc_all": 0.9687828831988776,
+      "val_opt_acc_task": {
+        "0": 0.9832303618711385,
+        "1": 0.9665411355735806,
+        "2": 0.8173598553345389
+      },
+      "test_opt_acc_all": 0.9691156723575676,
+      "test_opt_acc_task": {
+        "ks": 0.9840526700804682,
+        "si": 0.96909465519331,
+        "er": 0.7848101265822784
+      },
+      "mlflow_run_id": "104753f5c0aa4f8abd6b439e19f4c8fa"
+    }
+  ]
+}

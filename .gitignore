@@ -7,6 +7,8 @@
 **/*.DS_Store
 .env
 .venv/
+.idea/
+CLAUDE.local.md
 /embedding.tar.gz
 **/results/
 **/results_*/

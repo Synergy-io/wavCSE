@@ -1,6 +1,7 @@
 # NCMTL v1 configuration for KS, speaker ID, and emotion recognition.
 
 log_level: INFO
+seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
 
 device:
   type: cuda
