@@ -23,7 +23,11 @@ from improvements.clustering.utils.ncmtl_clustering import (
 )
 
 
-def build_model(task_type="ks_si_er", identical_candidate_initialization=False):
+def build_model(
+    task_type="ks_si_er",
+    identical_candidate_initialization=False,
+    shared_activation="none",
+):
     return DownstreamMultiTaskModelNCMTL(
         upstream_model_type="wavlm_base",
         task_type=task_type,
@@ -33,6 +37,7 @@ def build_model(task_type="ks_si_er", identical_candidate_initialization=False):
         layer_pooling_param=None,
         dropout_prob_shared1=0.0,
         dropout_prob_shared2=0.0,
+        shared_activation=shared_activation,
         identical_candidate_initialization=identical_candidate_initialization,
     )
 
@@ -130,6 +135,32 @@ class NCMTLModelTests(unittest.TestCase):
             model.candidate_layers[0].weight,
             model.candidate_layers[1].weight,
         ))
+
+    def test_configurable_shared_activation_runs_after_fc1_and_fc2(self):
+        expected_types = {
+            "none": torch.nn.Identity,
+            "relu": torch.nn.ReLU,
+            "gelu": torch.nn.GELU,
+        }
+        inputs = torch.randn(2, 3, 768)
+        for name, expected_type in expected_types.items():
+            with self.subTest(activation=name):
+                model = build_model(shared_activation=name)
+                calls = []
+                handle = model.shared_activation.register_forward_hook(
+                    lambda module, args, output: calls.append(tuple(output.shape))
+                )
+                outputs = model(inputs)
+                handle.remove()
+
+                self.assertIsInstance(model.shared_activation, expected_type)
+                self.assertEqual(model.shared_activation_name, name)
+                self.assertEqual(calls, [(2, 3, 16), (2, 8)])
+                self.assertEqual(tuple(outputs.logits[0].shape), (2, 12))
+
+    def test_invalid_shared_activation_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "none, relu, gelu"):
+            build_model(shared_activation="tanh")
 
     def test_production_candidate_and_classifier_dimensions(self):
         model = DownstreamMultiTaskModelNCMTL(

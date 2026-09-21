@@ -1,17 +1,16 @@
-# NCMTL v1 configuration for KS, speaker ID, and emotion recognition.
+# NCMTL pooling experiment: L-p norm pooling with p=16 on GPU 0.
 
 log_level: INFO
-seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
 
 device:
   type: cuda
-  index: 1
+  index: 0
 
 paths:
   root_data_path: ~/voice_dataset
   root_emb_path: ~/dataset/embedding
-  results_root: results_ncmtl
-  checkpoints_root: checkpoints_ncmtl
+  results_root: results_ncmtl_lnp_p2
+  checkpoints_root: checkpoints_ncmtl_lnp_p2
 
 upstream:
   model_type: wavlm_large
@@ -25,7 +24,7 @@ pooling:
   frame_pooling_type: mean
   frame_pooling_param: null
   layer_pooling_type: lnp
-  layer_pooling_param: 16
+  layer_pooling_param: 2
 
 model:
   embedding_dim_shared1: 512
@@ -86,4 +85,4 @@ evaluation:
 
 mlflow:
   tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
-  experiment_name: wavcse-ncmtl
+  experiment_name: wavcse-ncmtl-lnp-p2

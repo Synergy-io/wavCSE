@@ -182,6 +182,7 @@ def main():
             layer_pooling_param=layer_pooling_param,
             dropout_prob_shared1=cfg["model"]["dropout_prob_shared1"],
             dropout_prob_shared2=cfg["model"]["dropout_prob_shared2"],
+            shared_activation=cfg["model"].get("shared_activation", "none"),
             identical_candidate_initialization=cfg["ncmtl"].get(
                 "identical_candidate_initialization", True
             ),

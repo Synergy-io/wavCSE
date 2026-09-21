@@ -1,7 +1,7 @@
-# NCMTL v1 configuration for KS, speaker ID, and emotion recognition.
+# NCMTL evaluation using the wavCSE settings supplied in ftnWithWavCSE.yml.
+# wavCSE settings are preserved; only the NCMTL-specific block is added.
 
 log_level: INFO
-seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
 
 device:
   type: cuda
@@ -10,12 +10,12 @@ device:
 paths:
   root_data_path: ~/voice_dataset
   root_emb_path: ~/dataset/embedding
-  results_root: results_ncmtl
-  checkpoints_root: checkpoints_ncmtl
+  results_root: results_ncmtl_wavcse_paper
+  checkpoints_root: checkpoints_ncmtl_wavcse_paper
 
 upstream:
   model_type: wavlm_large
-  selected_transformer_layers: all
+  selected_transformer_layers: 6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13
 
 dataset:
   subset_percentage: 100
@@ -33,6 +33,7 @@ model:
   dropout_prob_shared1: 0.4
   dropout_prob_shared2: 0.6
 
+# NCMTL-only settings; these have no counterpart in the supplied wavCSE config.
 ncmtl:
   num_clusters: 2
   alpha: 0.001
@@ -54,10 +55,13 @@ training:
   num_epochs: 30
   batch_size: 2048
   learning_rate: 0.0025
-  label_smoothing: 0.1
-  gradient_clip_norm: 1.0
+
+  # Disabled for fidelity: neither option is active in ftnWithWavCSE.yml.
+  label_smoothing: 0.0
+  gradient_clip_norm: null
+
   weight_decay: 0.00000005
-  saved_checkpoint_count: 3
+  saved_checkpoint_count: 1
 
   shuffle_train: true
   shuffle_val: false
@@ -66,7 +70,7 @@ training:
   drop_last_val: false
   num_workers: 0
 
-  scheduler_patience: 3
+  scheduler_patience: 1
   scheduler_factor: 0.5
 
   l1_lambda: 0.0000001
@@ -78,7 +82,7 @@ tensorboard:
   histogram_epoch_interval: 1
 
 evaluation:
-  batch_size: 2048
+  batch_size: 1
   shuffle: false
   pin_memory: false
   drop_last: false
@@ -86,4 +90,4 @@ evaluation:
 
 mlflow:
   tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
-  experiment_name: wavcse-ncmtl
+  experiment_name: wavcse-ncmtl-paper-config
