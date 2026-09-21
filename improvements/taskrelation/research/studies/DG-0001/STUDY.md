@@ -90,10 +90,45 @@ Before full training:
 
 - all cells near zero: symmetric/dense representation is not the primary issue; prioritize saturation or optimization diagnostics;
 - symmetric dense transfer: Ω is representationally adequate; test whether it estimates and uses the structure;
-- candidate asymmetry: confirm only the implicated directions over seeds 0–4, with LOSO for ER;
+- candidate asymmetry: confirm only the implicated directions; ER-targeted
+  directions require matched LOSO before any claim, and sub-1pp effects require
+  seeds 0–4;
 - candidate selective transfer: compare the pattern with existing MTRL Ω, then run only the minimum DG-0003 arm needed to locate estimation versus regularization failure.
 
 No new architecture or literature-derived mechanism is selected in this Study.
+
+## Stage A outcome and Stage C trigger
+
+Stage A completed at commit `4c0f08a57b2c63931fce75ecc4d7d7a2efe0eef9`.
+Fixed-epoch directed cells:
+
+| Target <- auxiliary | Δ accuracy |
+| --- | ---: |
+| KS <- SI | −0.00059 |
+| SI <- KS | −0.00170 |
+| KS <- ER | +0.00015 |
+| ER <- KS | +0.05787 |
+| SI <- ER | −0.00885 |
+| ER <- SI | +0.02893 |
+
+The pre-registered screen classifies this as candidate asymmetry: KS and SI
+show no material benefit from ER, while leaky-split ER gains 5.79 points from
+KS and 2.89 points from SI. This is Level C only. The positive directions have
+ER as target, so speaker leakage blocks interpretation.
+
+Stage C therefore runs only `er`, `ks_er` and `si_er` under the existing
+10-speaker LOSO protocol, five epochs per fold, seed 42. Primary estimates are
+paired fixed-epoch ER differences within each held-out speaker:
+
+`T_LOSO(ER <- auxiliary, fold) = pair ER accuracy - single ER accuracy`.
+
+Report the mean, fold standard deviation, two-sided paired t interval, sign
+consistency and per-speaker range. KS/SI reverse-direction metrics from the
+pairwise folds are sensitivity evidence against their Stage-A single-task
+references; they do not replace multi-seed confirmation.
+
+Stage C tests whether the apparent directional benefit survives removal of
+speaker leakage. It does not test a new architecture.
 
 ## Deliverables
 

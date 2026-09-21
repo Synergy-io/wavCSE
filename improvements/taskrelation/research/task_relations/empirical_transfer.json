@@ -1,0 +1,97 @@
+{
+  "study_id": "DG-0001",
+  "stage": "stage_a_screen",
+  "status": "screening_complete",
+  "generated_at": "2026-09-21T19:16:31.476231+00:00",
+  "seed": 42,
+  "git_commit": "4c0f08a57b2c63931fce75ecc4d7d7a2efe0eef9",
+  "primary_checkpoint": "epoch",
+  "definition": "T(target <- auxiliary) = accuracy(target jointly trained with auxiliary) - accuracy(target trained alone)",
+  "matrix": {
+    "ks": {
+      "ks": null,
+      "si": -0.0005852231163131494,
+      "er": 0.0001463057790782596
+    },
+    "si": {
+      "ks": -0.0016967640286025265,
+      "si": null,
+      "er": -0.008847412434856317
+    },
+    "er": {
+      "ks": 0.05786618444846292,
+      "si": 0.02893309222423146,
+      "er": null
+    }
+  },
+  "cells": {
+    "ks<-si": -0.0005852231163131494,
+    "si<-ks": -0.0016967640286025265,
+    "ks<-er": 0.0001463057790782596,
+    "er<-ks": 0.05786618444846292,
+    "si<-er": -0.008847412434856317,
+    "er<-si": 0.02893309222423146
+  },
+  "checkpoint_sensitivity": {
+    "opt": {
+      "ks<-si": -0.0001463057790782596,
+      "si<-ks": -0.0018179614592169768,
+      "ks<-er": -0.0019019751280175967,
+      "er<-ks": 0.054249547920434016,
+      "si<-er": -0.009211004726699779,
+      "er<-si": 0.05967450271247743
+    },
+    "best": {
+      "ks<-si": -0.0001463057790782596,
+      "si<-ks": -0.0018179614592169768,
+      "ks<-er": -0.0008778346744696686,
+      "er<-ks": 0.05786618444846292,
+      "si<-er": -0.009211004726699779,
+      "er<-si": 0.05967450271247743
+    }
+  },
+  "screening_decision": {
+    "classification": "candidate_asymmetry",
+    "near_zero_cells_lt_0.002": [
+      "ks<-er",
+      "ks<-si",
+      "si<-ks"
+    ],
+    "material_cells_ge_0.010": [
+      "er<-ks",
+      "er<-si"
+    ],
+    "candidate_asymmetries": [
+      {
+        "directions": [
+          "ks<-er",
+          "er<-ks"
+        ],
+        "absolute_gap": 0.05771987866938466
+      },
+      {
+        "directions": [
+          "si<-er",
+          "er<-si"
+        ],
+        "absolute_gap": 0.03778050465908778
+      }
+    ],
+    "evidence_level": "single-seed screening"
+  },
+  "caveats": [
+    "Single-seed screening evidence; no effect is confirmed.",
+    "ER cells use the speaker-leaky historical split and require LOSO for claims.",
+    "Pairwise arms contain more optimizer updates than single-task arms.",
+    "Loss scaling and scheduler trajectories depend on task count."
+  ],
+  "runs": {
+    "ks_si_er": "664a8547a75e44498e3a3f657be9b7fb",
+    "si_er": "0689124e201742caad8123998656929e",
+    "ks_si": "c0d7b89c79bc438ab1f1b72c8e354406",
+    "ks_er": "35f51b3184964315a4f3bfb027d31e9e",
+    "er": "dfd664a17df84420bcfc49a05fa6216b",
+    "si": "11994169b91941b0ab60c558c3f668e8",
+    "ks": "09463c8587974411b81cb4b917493b8a"
+  }
+}

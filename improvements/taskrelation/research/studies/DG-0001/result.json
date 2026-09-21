@@ -1,30 +1,253 @@
 {
   "study_id": "DG-0001",
   "title": "Empirical directed task-transfer matrix",
-  "status": "active",
-  "stage": "stage_a_preparation",
+  "status": "stage_c_loso_preparation",
+  "stage": "stage_c_loso",
   "started_at": "2026-09-21",
   "hypothesis": "Useful KS/SI/ER transfer is directional or pair-selective, so one symmetric dense Omega cannot represent it.",
   "method": "wavcse_baseline",
   "seed": 42,
   "primary_checkpoint": "epoch",
   "config": "configs/stage_a.yml",
-  "git_commit": null,
+  "git_commit": "4c0f08a57b2c63931fce75ecc4d7d7a2efe0eef9",
   "arms": {
-    "ks": {"status": "pending"},
-    "si": {"status": "pending"},
-    "er": {"status": "pending"},
-    "ks_si": {"status": "pending"},
-    "ks_er": {"status": "pending"},
-    "si_er": {"status": "pending"},
-    "ks_si_er": {"status": "pending"}
+    "ks_si_er": {
+      "status": "finished",
+      "run_id": "664a8547a75e44498e3a3f657be9b7fb",
+      "run_name": "base_original_ks_si_er_2026_09_21_18_59_35_DG-0001_stage_a_screen",
+      "seed": 42,
+      "git_commit": "4c0f08a57b2c63931fce75ecc4d7d7a2efe0eef9",
+      "metrics": {
+        "epoch": {
+          "ks": 0.9862472567666423,
+          "si": 0.9796388316567689,
+          "er": 0.779385171790235
+        },
+        "opt": {
+          "ks": 0.985515727871251,
+          "si": 0.972730578111744,
+          "er": 0.7775768535262206
+        },
+        "best": {
+          "ks": 0.9862472567666423,
+          "si": 0.9796388316567689,
+          "er": 0.779385171790235
+        }
+      }
+    },
+    "si_er": {
+      "status": "finished",
+      "run_id": "0689124e201742caad8123998656929e",
+      "run_name": "base_original_si_er_2026_09_21_18_47_54_DG-0001_stage_a_screen",
+      "seed": 42,
+      "git_commit": "4c0f08a57b2c63931fce75ecc4d7d7a2efe0eef9",
+      "metrics": {
+        "epoch": {
+          "si": 0.977093685613865,
+          "er": 0.7649186256781193
+        },
+        "opt": {
+          "si": 0.9767300933220215,
+          "er": 0.7956600361663653
+        },
+        "best": {
+          "si": 0.9767300933220215,
+          "er": 0.7956600361663653
+        }
+      }
+    },
+    "ks_si": {
+      "status": "finished",
+      "run_id": "c0d7b89c79bc438ab1f1b72c8e354406",
+      "run_name": "base_original_ks_si_2026_09_21_18_42_52_DG-0001_stage_a_screen",
+      "seed": 42,
+      "git_commit": "4c0f08a57b2c63931fce75ecc4d7d7a2efe0eef9",
+      "metrics": {
+        "epoch": {
+          "ks": 0.9853694220921726,
+          "si": 0.9842443340201188
+        },
+        "opt": {
+          "ks": 0.9868324798829554,
+          "si": 0.9841231365895043
+        },
+        "best": {
+          "ks": 0.9868324798829554,
+          "si": 0.9841231365895043
+        }
+      }
+    },
+    "ks_er": {
+      "status": "finished",
+      "run_id": "35f51b3184964315a4f3bfb027d31e9e",
+      "run_name": "base_original_ks_er_2026_09_21_18_40_29_DG-0001_stage_a_screen",
+      "seed": 42,
+      "git_commit": "4c0f08a57b2c63931fce75ecc4d7d7a2efe0eef9",
+      "metrics": {
+        "epoch": {
+          "ks": 0.986100950987564,
+          "er": 0.7938517179023508
+        },
+        "opt": {
+          "ks": 0.9850768105340161,
+          "er": 0.7902350813743219
+        },
+        "best": {
+          "ks": 0.986100950987564,
+          "er": 0.7938517179023508
+        }
+      }
+    },
+    "er": {
+      "status": "finished",
+      "run_id": "dfd664a17df84420bcfc49a05fa6216b",
+      "run_name": "base_original_er_2026_09_21_18_37_26_DG-0001_stage_a_screen",
+      "seed": 42,
+      "git_commit": "4c0f08a57b2c63931fce75ecc4d7d7a2efe0eef9",
+      "metrics": {
+        "epoch": {
+          "er": 0.7359855334538878
+        },
+        "opt": {
+          "er": 0.7359855334538878
+        },
+        "best": {
+          "er": 0.7359855334538878
+        }
+      }
+    },
+    "si": {
+      "status": "finished",
+      "run_id": "11994169b91941b0ab60c558c3f668e8",
+      "run_name": "base_original_si_2026_09_21_18_30_40_DG-0001_stage_a_screen",
+      "seed": 42,
+      "git_commit": "4c0f08a57b2c63931fce75ecc4d7d7a2efe0eef9",
+      "metrics": {
+        "epoch": {
+          "si": 0.9859410980487213
+        },
+        "opt": {
+          "si": 0.9859410980487213
+        },
+        "best": {
+          "si": 0.9859410980487213
+        }
+      }
+    },
+    "ks": {
+      "status": "finished",
+      "run_id": "09463c8587974411b81cb4b917493b8a",
+      "run_name": "base_original_ks_2026_09_21_18_30_34_DG-0001_stage_a_screen",
+      "seed": 42,
+      "git_commit": "4c0f08a57b2c63931fce75ecc4d7d7a2efe0eef9",
+      "metrics": {
+        "epoch": {
+          "ks": 0.9859546452084857
+        },
+        "opt": {
+          "ks": 0.9869787856620337
+        },
+        "best": {
+          "ks": 0.9869787856620337
+        }
+      }
+    }
   },
-  "directed_transfer": null,
-  "decision": null,
+  "directed_transfer": {
+    "primary_checkpoint": "epoch",
+    "matrix": {
+      "ks": {
+        "ks": null,
+        "si": -0.0005852231163131494,
+        "er": 0.0001463057790782596
+      },
+      "si": {
+        "ks": -0.0016967640286025265,
+        "si": null,
+        "er": -0.008847412434856317
+      },
+      "er": {
+        "ks": 0.05786618444846292,
+        "si": 0.02893309222423146,
+        "er": null
+      }
+    },
+    "cells": {
+      "ks<-si": -0.0005852231163131494,
+      "si<-ks": -0.0016967640286025265,
+      "ks<-er": 0.0001463057790782596,
+      "er<-ks": 0.05786618444846292,
+      "si<-er": -0.008847412434856317,
+      "er<-si": 0.02893309222423146
+    },
+    "checkpoint_sensitivity": {
+      "opt": {
+        "ks<-si": -0.0001463057790782596,
+        "si<-ks": -0.0018179614592169768,
+        "ks<-er": -0.0019019751280175967,
+        "er<-ks": 0.054249547920434016,
+        "si<-er": -0.009211004726699779,
+        "er<-si": 0.05967450271247743
+      },
+      "best": {
+        "ks<-si": -0.0001463057790782596,
+        "si<-ks": -0.0018179614592169768,
+        "ks<-er": -0.0008778346744696686,
+        "er<-ks": 0.05786618444846292,
+        "si<-er": -0.009211004726699779,
+        "er<-si": 0.05967450271247743
+      }
+    }
+  },
+  "decision": {
+    "classification": "candidate_asymmetry",
+    "near_zero_cells_lt_0.002": [
+      "ks<-er",
+      "ks<-si",
+      "si<-ks"
+    ],
+    "material_cells_ge_0.010": [
+      "er<-ks",
+      "er<-si"
+    ],
+    "candidate_asymmetries": [
+      {
+        "directions": [
+          "ks<-er",
+          "er<-ks"
+        ],
+        "absolute_gap": 0.05771987866938466
+      },
+      {
+        "directions": [
+          "si<-er",
+          "er<-si"
+        ],
+        "absolute_gap": 0.03778050465908778
+      }
+    ],
+    "evidence_level": "single-seed screening"
+  },
+  "stage_c_loso": {
+    "status": "pending",
+    "config": "configs/loso.yml",
+    "seed": 42,
+    "folds": 10,
+    "epochs_per_fold": 5,
+    "arms": {
+      "er": {"status": "pending"},
+      "ks_er": {"status": "pending"},
+      "si_er": {"status": "pending"}
+    },
+    "primary_checkpoint": "epoch",
+    "primary_estimands": ["er<-ks", "er<-si"],
+    "reason": "Stage A candidate asymmetry is ER-targeted and must be tested without speaker leakage."
+  },
   "caveats": [
     "Stage A is single-seed screening evidence.",
     "ER uses the speaker-leaky historical split and cannot support a generalization claim.",
     "Pairwise arms have more optimizer updates than single-task arms at the same epoch count.",
     "Loss scaling and scheduler trajectories depend on the number of tasks."
-  ]
+  ],
+  "completed_at": "2026-09-21T19:16:31.476231+00:00"
 }
