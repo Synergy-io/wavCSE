@@ -1,6 +1,6 @@
 # DG-0001 — Empirical directed task-transfer matrix
 
-Status: ACTIVE — Stage A preparation
+Status: COMPLETE — primary asymmetry hypothesis weakened; optimizer-exposure confound established
 Started: 2026-09-21
 Research family: Task Relation Learning
 Method under diagnosis: classical MTRL
