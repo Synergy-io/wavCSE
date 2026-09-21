@@ -130,6 +130,32 @@ references; they do not replace multi-seed confirmation.
 Stage C tests whether the apparent directional benefit survives removal of
 speaker leakage. It does not test a new architecture.
 
+## Stage D optimization-exposure controls
+
+Stage C shows large operational ER gains from both auxiliaries across LOSO
+folds, but the training trace exposes a major alternative explanation. With
+batch size 2048, ER-only training performs only about two optimizer updates per
+epoch; pairwise training spreads the same ER examples across approximately 27
+KS+ER or 69 SI+ER batches. The comparison therefore changes auxiliary
+information, effective ER minibatch size and optimizer-step count together.
+
+Before interpreting directionality:
+
+1. run five-epoch single-task KS and SI controls so reverse-direction
+   sensitivities use the same epoch budget;
+2. run ER-only LOSO at batch size 160 (approximately 26–28 steps/fold/epoch,
+   matching KS+ER's 27);
+3. run ER-only LOSO at batch size 64 (approximately 67–70 steps/fold/epoch,
+   matching SI+ER's 69).
+
+For each auxiliary, compare pairwise ER against both the original batch-2048
+ER control and its step-matched ER-only control. If the pairwise advantage
+largely disappears under step matching, classify the apparent transfer as an
+optimization-exposure confound rather than evidence that task semantics require
+an asymmetric relation model. If a material paired residual remains across
+folds, retain candidate directed transfer with the residual—not the raw
+pair-versus-undertrained-single difference—as the estimate.
+
 ## Deliverables
 
 - `result.json` — run IDs, metrics, directed cells and decision;
