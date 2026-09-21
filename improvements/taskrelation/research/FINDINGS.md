@@ -213,9 +213,9 @@ stability ranking.
 magnitude as a transfer proxy. Every relation claim must name pooling, layers,
 seed/fold axis and saturation state.
 
-**Required follow-up.** DG-0001 must measure directed empirical transfer.
-DG-0003 must then test whether Ω tracks it; only that correspondence can show
-whether a stable edge is useful.
+**Required follow-up.** DG-0001 found that raw directed-transfer estimates are
+dominated by optimizer exposure (F8), so Ω correspondence remains unresolved.
+DG-0002 must measure gradient interaction under an exposure-controlled sampler.
 
 Provenance: `01-mtrl/results_mtrl_kfold/*/omega_history.json`; MLflow
 experiment `taskrelation-mtrl`, five-seed `smp` 16L/25L runs at commit
@@ -241,34 +241,78 @@ interpretability"); per-epoch Ω summaries in the `01-mtrl` iteration log and
 
 ---
 
+## F8 — Same-epoch pairwise transfer is confounded by optimizer exposure  (ESTABLISHED)
+
+**Observation.** Under the current concatenated-dataset trainer, adding a large
+auxiliary task changes the number of optimizer updates and the effective
+minibatch size of the target task. Raw pair-minus-single accuracy therefore
+does not isolate task-semantic transfer.
+
+**Evidence.** DG-0001 first observed large speaker-independent LOSO gains over
+an ER-only batch-2048 control: ER<-KS +0.3411 and ER<-SI +0.2794, each positive
+in 10/10 folds. ER-only controls with approximately matched update counts
+reproduced those gains without auxiliary data:
+
+| Comparison, fixed epoch | Mean Δ | Paired 95% CI | Fold signs |
+| --- | ---: | --- | --- |
+| KS+ER − ER-only batch 160 | +0.0053 | [−0.0289, +0.0394] | 5 positive / 5 negative |
+| SI+ER − ER-only batch 64 | −0.0589 | [−0.0883, −0.0295] | 0 positive / 10 negative |
+
+The exposure controls explain +0.3358 of the raw +0.3411 KS-associated gain and
++0.3383 of the raw +0.2794 SI-associated gain. Five-epoch reverse sensitivities
+were KS<-ER −0.0038 and SI<-ER −0.0231.
+
+**Interpretation.** DG-0001 does not establish beneficial asymmetric transfer.
+KS adds no resolved ER benefit after approximate step matching; SI and ER
+interfere in both directions. The raw directed matrix measured optimization
+opportunity more than task relationship.
+
+**Alternative explanations.** Batch 160/64 only approximate the pair arms'
+update counts and also change gradient noise. Reverse directions use one
+single-task seed-42 reference rather than ten refits. These limitations prevent
+precise semantic-effect estimation, but they cannot support the rejected raw
+28–34 point transfer interpretation.
+
+**Confidence.** Strong that the original raw ER gains are dominated by
+optimizer exposure; moderate that SI/ER transfer is genuinely negative;
+preliminary for KS/SI and exact reverse magnitudes.
+
+**Implications.** Any empirical transfer study must match or explicitly model
+optimizer steps, effective per-task batch size, loss scaling, epoch budget and
+checkpoint policy. DG-0001 cannot justify an asymmetric replacement method.
+Ω/transfer correspondence must use a controlled transfer target.
+
+**Required follow-up.** DG-0002 is next: measure per-task gradient norms,
+cosines and conflict frequency under exposure-controlled sampling. No
+next-method literature search is justified from DG-0001.
+
+Provenance: `research/studies/DG-0001/{STUDY.md,analysis.md,result.json}`;
+`research/task_relations/{empirical_transfer.json,loso_transfer.json,optimization_control.json}`;
+MLflow experiment `taskrelation-diagnostics`.
+
+---
+
 ## Record-level observations
 
-### R1 — Every training run in the project is 3-task  (RECORD, 2026-09-21)
+### R1 — DG-0001 created the first single-task and pairwise runs  (RECORD, UPDATED 2026-09-21)
 
-A read-only MLflow inventory of all experiments shows the only `task_type`
-values ever logged are `ks_si_er` (all 300+ runs) and `ks_si_er_ic`
-(3 runs, `wavcse-baseline`). Per-experiment: `taskrelation-mtrl` 24,
-`taskrelation-mtrl-er-kfold` 11, `taskrelation-gbc` 2, `wavcse-base-lnp` 2,
-`wavcse-base-poolingsweep` 60, `wavcse-baseline` 37 (34 + 3 four-task).
-
-No single-task (`ks`, `si`, `er`) or pairwise (`ks_si`, `ks_er`, `si_er`) run
-has ever been trained.
+Before DG-0001, all 300+ project runs used `ks_si_er` or `ks_si_er_ic`.
+DG-0001 then exercised `ks`, `si`, `er`, `ks_si`, `ks_er` and `si_er`, including
+matched LOSO and optimization-exposure controls.
 
 Consequences:
 
-* the empirical directed transfer matrix (DG-0001) is entirely new data, not a
-  re-analysis of anything on DagsHub;
-* the project's benchmark #2 ("beat single-task models") currently has no
-  single-task baseline number attached to it;
-* the single-task / pairwise code path (generic `task_type` token splitting in
-  `downstream/dataset/load_embedding.py`) has never been exercised and must be
-  smoke-tested before GPU hours are committed to it.
+* the dynamic task path is now behaviorally exercised for one-, two- and
+  three-task settings;
+* single-task baselines now exist, but only DG-0001's seed/budget/protocol may
+  be compared directly;
+* the first raw transfer matrix is not a semantic relation target because F8
+  shows task-count-dependent optimizer exposure dominates it.
 
 ### R2 — Historical runs predate Study-ID tagging  (RECORD, 2026-09-21)
 
 The runs behind F1–F7 (`taskrelation-mtrl*`, `taskrelation-gbc`,
-`wavcse-base-lnp`, `wavcse-base-poolingsweep`, the ER k-folds) were logged
-before the Study ID convention existed — `research/STUDIES.jsonl` is empty.
-They are retained as legacy evidence and referenced by MLflow experiment name.
-No backfill of tags is required; every **new** run must carry a Study ID, stage,
-and the git commit SHA (see `DECISIONS.md` DEC-0006).
+`wavcse-base-lnp`, `wavcse-base-poolingsweep`, the historical ER k-folds) were
+logged before the Study ID convention and remain legacy evidence. DG-0001 is
+the first registered Study in `research/STUDIES.jsonl`; all of its runs carry
+Study ID, stage, seed, task set, pooling/layers, git SHA and DagsHub run notes.

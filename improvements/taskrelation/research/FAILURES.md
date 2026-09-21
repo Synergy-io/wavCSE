@@ -36,7 +36,8 @@ on speaker-independent ER.
 does not establish whether the cause is symmetric/dense relation
 parameterization, relation estimation, parameter summarization or optimization.
 
-**Consequence:** No generic MTRL tuning. DG-0001 remains the first diagnostic.
+**Consequence:** No generic MTRL tuning. DG-0001 rejected raw asymmetry as an
+optimizer-exposure artifact (F8); DG-0002 is next.
 
 Provenance: FINDINGS.md F1–F4; `01-mtrl/README.md`; MLflow experiments
 `taskrelation-mtrl`, `wavcse-baseline`, `taskrelation-mtrl-er-kfold`,
@@ -89,6 +90,15 @@ The historical ordinary split shares speakers between train and test. It
 inflates ER by about 15 points and even produces a five-seed 25L MTRL regression
 that does not appear under LOSO. Leaky ER remains screening evidence only.
 
+### Task-count-dependent optimizer exposure
+
+DG-0001's raw ER transfer appeared enormous under both standard-split and LOSO
+evaluation. Approximate update-matched ER-only controls reproduced the gain:
+KS+ER left only +0.53pp residual (CI spans zero), while SI+ER was 5.89pp worse
+than its matched ER control. Same-epoch pair-minus-single comparisons are
+invalid semantic-transfer evidence when task sets change the number and
+composition of optimizer steps.
+
 ### Aggregate task-size masking
 
 SI’s larger test set dominates the sample-weighted aggregate. Aggregate
@@ -103,9 +113,12 @@ still resolves ER to no effect.
 Do not classify the MTRL result as any of the following until the named
 diagnostic exists:
 
-* negative or asymmetric transfer — requires DG-0001;
+* beneficial asymmetric transfer — DG-0001's raw signal was rejected after
+  optimizer-exposure controls (F8); replication under a fully controlled sampler
+  would be required to reopen it;
 * gradient conflict or norm dominance — requires DG-0002;
-* Ω/transfer mismatch — requires DG-0001 plus DG-0003 analysis;
+* causal Ω/transfer mismatch — DG-0001 shows a moderate discrepancy, but the
+  triple-task Ω and pairwise controlled-transfer protocols are not identical;
 * ER data-size causation — requires DG-0005;
 * confidence-aware, dynamic, layer-specific or sparse mechanism failure — no
   such mechanism has been tested.

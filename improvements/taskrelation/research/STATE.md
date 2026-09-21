@@ -309,9 +309,14 @@ without a material KS or SI gain. See the revised F6 and the formal synthesis.
   non-relational explanation for MTRL ≤ baseline at `smp`+25L. Not yet shown to
   be a cause — a diagnostic question.
 
-* **R1 — every run in the project is 3-task.** No single-task or pairwise run
-  exists in the MLflow record (R1, 2026-09-21): DG-0001 is entirely new data and
-  the single-task/pairwise code path is unexercised — smoke-test it first.
+* **F8 — raw pairwise transfer is confounded by optimizer exposure.** DG-0001's
+  large ER-directed gains disappeared or reversed after approximate update
+  matching. Equal epochs do not imply equal optimization opportunity when task
+  sets change concatenated dataset size and effective task minibatches.
+
+* **R1 — DG-0001 created the first single/pairwise runs.** The dynamic task path
+  is exercised; its raw matrix is preserved but is not a semantic transfer
+  target because of F8.
 
 ---
 
@@ -338,10 +343,11 @@ Candidate explanations to test include:
 8. parameter summaries used to construct the relation matrix may inadequately
    represent task behaviour.
 
-Existing evidence supports representation-, seed/fold- and epoch-conditional Ω
-behaviour, but it does not identify the causal MTRL failure. Asymmetry,
-pair-selective transfer, gradient conflict, data-size causation, negative
-transfer and summary inadequacy remain untested until their diagnostics run.
+DG-0001 weakens the asymmetry explanation: its raw directed matrix was dominated
+by task-count-dependent optimizer exposure (F8), and no positive semantic
+transfer residual survived step matching. It also shows moderate Ω/transfer
+disagreement, but not yet its cause. Gradient conflict, data-size causation and
+parameter-summary inadequacy remain untested.
 
 Each candidate is only admissible as motivation for a mechanism after a
 diagnostic study (`DG-xxxx`) has produced evidence for it, and the mechanism must
@@ -352,20 +358,20 @@ gating rules.
 
 # Next Research Action
 
-Diagnostics only. Mechanism selection is deferred until the diagnostic evidence
-exists — there is no ranked method list to work from, by design (DEC-0005).
+Diagnostics only. DG-0001 is complete and does **not** justify an asymmetric or
+sparse replacement method. Its raw ER-directed asymmetry disappeared after
+optimizer-exposure controls; SI/ER instead showed negative residual interaction.
 
-The first recommended study is **DG-0001 — empirical directed transfer structure
-of KS/SI/ER, and whether MTRL's learned Ω corresponds to it** (`BACKLOG.md`).
-Its full design, controls, falsification criteria and cost are recorded there;
-it is not started yet.
+The next recommended study is **DG-0002 — gradient compatibility baseline**.
+Measure per-task gradient norms, pairwise cosine and conflict frequency under an
+exposure-controlled sampling protocol. The purpose is to determine whether
+optimization interaction explains MTRL's null result and the SI/ER negative
+residual before interpreting Ω as a failed relation representation.
 
-DG-0001 Stage A is the minimum next experiment. Compare its directed transfer
-matrix immediately against the existing five-seed triple-task Ω evidence; run
-only the DG-0003 arms needed to resolve the observed branch. DG-0002 becomes
-next when transfer is absent or Ω tracks transfer but performance stays neutral.
-DG-0005/DG-0006 remain ER-specific controls; a leaky-split ER cell is screening,
-not a claim (F3).
+DG-0003 remains incomplete: existing Ω and controlled transfer disagree
+moderately, but triple-task MTRL Ω and pairwise baseline transfer are not the
+same protocol. Do not enter next-method literature mode until DG-0002 or a
+protocol-matched Ω/transfer study identifies the concrete mechanism failure.
 
 ---
 
@@ -509,25 +515,20 @@ The same important result should be traceable between both.
 
 # Current Pending Work
 
-No mechanism work. The diagnostic infrastructure the programme needs before any
-TR-xxxx study can be justified:
+No mechanism work. Completed and pending diagnostics:
 
-* empirical pairwise transfer — DG-0001, the first recommended study, and
-  entirely new data (R1);
-* whether MTRL's learned Ω corresponds to that empirical transfer — DG-0003;
-* task-specific gradient norms, pairwise gradient cosine and
-  negative-conflict frequency — DG-0002;
-* relation stability already measured retrospectively across seed, pooling,
-  LOSO fold, five LOSO epochs and 16L/25L configurations — DG-0004 now needs
-  prospective replication or outcome prediction, not another generic sweep;
-* ER-specific controls under a matched data regime and across LOSO folds —
-  DG-0005, DG-0006.
+* DG-0001 — complete. The first raw directed matrix is preserved, but F8 shows
+  optimizer exposure dominates it; it cannot justify asymmetry;
+* DG-0002 — **next recommended study**. Measure gradient norms/cosines/conflict
+  with exposure-controlled task sampling;
+* DG-0003 — partial Ω/transfer discrepancy only; causal interpretation remains
+  blocked by protocol mismatch;
+* DG-0004 — retrospective stability complete; prospective prediction remains;
+* DG-0005/DG-0006 — ER data-regime and cross-diagnostic fold controls remain.
 
-Prerequisite, not a study: smoke-test the single-task / pairwise `task_type`
-code path (generic token splitting in `downstream/dataset/load_embedding.py`)
-before committing GPU hours to DG-0001.
-
-Then follow `BACKLOG.md` in priority order, honouring its gating rules.
+The single-task/pairwise code path is now exercised by DG-0001. Every future
+transfer diagnostic must control optimizer steps, effective per-task batch size,
+loss scaling, epoch budget and checkpoint policy (F8).
 
 ---
 
@@ -551,24 +552,26 @@ Update this section after every completed research cycle.
 
 Last completed study:
 
-`NONE — research-scope reset (2026-09-21; documentation only, no training run)`
+`DG-0001 — empirical directed task-transfer matrix` (2026-09-21).
+Result: raw ER-directed asymmetry was dominated by optimizer exposure; no
+positive semantic transfer residual was resolved. See
+`research/studies/DG-0001/analysis.md` and F8.
 
 Last formal analysis:
 
-`2026-09-21 — classical MTRL diagnostic synthesis; no training run`
-(`research/task_relations/MTRL_DIAGNOSTIC_SYNTHESIS.md`). It narrows F6,
-completes the retrospective part of DG-0004, and leaves DG-0001 first.
+`2026-09-21 — classical MTRL diagnostic synthesis`
+(`research/task_relations/MTRL_DIAGNOSTIC_SYNTHESIS.md`), now extended by
+DG-0001.
 
 Current active study:
 
-`DG-0001 — Stage A preparation` (`research/studies/DG-0001/`).
+`NONE`
 
-Next action:
+Next recommended action:
 
-Commit the registered protocol, diagnostic configs and metadata-only runner
-instrumentation; smoke-test `ks` and `ks_si`; then check `nvidia-smi` and
-`df -h /` before the matched Stage-A screen. Every run uses seed 42 and records
-the commit SHA, Study ID, stage and DagsHub note.
+`DG-0002 — gradient compatibility baseline`, designed with
+exposure-controlled task sampling so gradient diagnostics do not reproduce
+DG-0001's optimizer-step confound.
 
 Current consecutive unsuccessful mechanism studies:
 

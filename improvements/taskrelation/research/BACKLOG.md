@@ -45,13 +45,13 @@ The formal progression is binding (DEC-0005). In practice, for every entry here:
 
 ## DG-0001 — Empirical directed task-transfer matrix
 
-**Status:** ACTIVE — Stage A preparation
+**Status:** DONE — completed 2026-09-21
 
 ### Study record
 
-`research/studies/DG-0001/` holds the committed protocol/configs and live
-`result.json`; the derived matrix will be written to
-`research/task_relations/empirical_transfer.json`.
+`research/studies/DG-0001/` holds the protocol, configs, run registry,
+`result.json` and `analysis.md`. Machine-readable outputs:
+`task_relations/{empirical_transfer,loso_transfer,optimization_control}.json`.
 
 ### Primary hypothesis
 
@@ -114,33 +114,38 @@ jobs. Measure one run's wall-clock first.
 
 ### Known risks
 
-* the single-task / pairwise `task_type` path has never been exercised (R1) —
-  smoke-test with `base_smoke_config.yml` (1 epoch, small subset) before
-  committing GPU hours;
-* single-task runs change loss normalization and shared-backbone load —
-  document any protocol difference from the triple-task runs;
-* `er` entries from the standard split are leaky (F3): screening only.
+* single-task and pairwise paths passed smoke tests and all registered arms;
+* changing task count changed loss scaling, shared-backbone update count and
+  effective per-task minibatch size; Stage D showed this dominated raw ER
+  transfer (F8);
+* leaky-split ER was treated as screening only and followed by ten-fold LOSO.
 
-### Deliverable
+### Outcome
 
-Directed transfer matrix, each cell
-`T(A <- B) = metric(A trained with B) - metric(A trained alone)`:
+The raw seed-42 matrix suggested ER-directed asymmetry, including ER<-KS
++5.79pp and ER<-SI +2.89pp on the leaky split. Ten-fold LOSO amplified the raw
+gains, but optimization-exposure controls rejected the semantic interpretation:
 
-| Target \ Auxiliary | KS | SI | ER |
-| ------------------ | -: | -: | -: |
-| KS                 |  — |  ? |  ? |
-| SI                 |  ? |  — |  ? |
-| ER                 |  ? |  ? |  — |
+| Controlled residual, fixed epoch | Mean Δ | Paired 95% CI |
+| --- | ---: | --- |
+| KS+ER − step-matched ER | +0.0053 | [−0.0289, +0.0394] |
+| SI+ER − step-matched ER | −0.0589 | [−0.0883, −0.0295] |
 
-Written to `research/task_relations/empirical_transfer.json`, together with the
-Stage-B comparison of each cell against MTRL's learned Ω for the same task set,
-and interpreted in `FINDINGS.md`.
+Same-epoch pairwise training changes the number and composition of optimizer
+steps. The primary asymmetry hypothesis is weakened, not supported. No
+asymmetric or sparse mechanism is justified. See F8 and the Study analysis.
+
+### Deliverables
+
+The raw matrix remains in `task_relations/empirical_transfer.json` with its
+caveats. Controlled decomposition and Ω comparison are in
+`task_relations/optimization_control.json` and the Study `analysis.md`.
 
 ---
 
 ## DG-0002 — Gradient compatibility baseline
 
-**Status:** READY
+**Status:** READY — RECOMMENDED NEXT STUDY
 
 ### Question
 
@@ -156,6 +161,14 @@ For shared parameters:
 * mean/median cosine;
 * distribution across training;
 * optional layer-wise measurements where computationally feasible.
+
+### Sampling constraint from DG-0001
+
+Hold optimizer exposure constant: define how task examples are batched, match
+or model the number of shared-parameter updates, and report effective per-task
+batch sizes. Otherwise gradient frequency and task semantics are confounded
+(F8). Use the same exposure-controlled sampler for the baseline and any MTRL
+comparison.
 
 Pairs:
 
@@ -177,7 +190,7 @@ A static task-relation matrix may fail if optimization relationships are dynamic
 
 ## DG-0003 — Compare learned Ω with empirical transfer
 
-**Status:** BLOCKED on DG-0001
+**Status:** PARTIALLY ESTABLISHED — DG-0001 shows moderate disagreement, but causal interpretation is blocked by triple-task Ω versus pairwise-transfer protocol mismatch
 
 ### Question
 

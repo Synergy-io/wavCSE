@@ -108,14 +108,17 @@ At 16L the aggregate difference is −0.010 points; at 25L it is −0.056 points
 
 | Object | Available evidence | What can be concluded |
 | --- | --- | --- |
-| Empirical directed transfer `T(A <- B)` | none; every recorded run trains all three tasks | Unknown. Symmetry, sign and pair selectivity cannot be assessed. |
-| Gradient interaction | no per-task gradient cosine, conflict rate or norm history | Unknown. Optimization conflict cannot explain the negative outcome yet. |
-| Learned relation Ω | final values across five seeds at 16L/25L; full epoch histories across ten LOSO folds; legacy pooling variants | Ω is symmetric, representation-sensitive and conditionally unstable. It is not yet validated against transfer. |
-| Downstream outcome | matched five-seed aggregate/task metrics and ten-fold ER LOSO | MTRL has no reproducible meaningful advantage. |
+| Empirical directed transfer `T(A <- B)` | DG-0001 single/pairwise screen, ten-fold ER LOSO and optimizer-exposure controls | The raw matrix is not a semantic transfer target: update count and effective task batch size dominate it. Controlled KS/ER residual is unresolved; SI/ER is negative in both directions. |
+| Gradient interaction | no per-task gradient cosine, conflict rate or norm history | Unknown. DG-0002 is now the highest-priority diagnostic. |
+| Learned relation Ω | five-seed/fold/epoch diagnostics plus DG-0001 controlled transfer | Ω is symmetric, representation-sensitive and conditionally unstable. Its signs/magnitudes show moderate disagreement with controlled transfer, but protocols are not identical. |
+| Downstream outcome | matched five-seed aggregate/task metrics, ER LOSO and DG-0001 controls | MTRL has no reproducible meaningful advantage; raw transfer asymmetry is an optimizer-exposure artifact. |
 
-No available case can yet demonstrate “high learned similarity but negative empirical transfer” because empirical transfer has never been measured. The 25L setting does show a related discrepancy: KS↔SI is almost uniformly +1/3 while SI accuracy is neutral, so a stable strong learned relation is not sufficient for an observed performance benefit. This is an outcome discrepancy, not proof of negative transfer.
-
-Ω is symmetric by construction, so any future asymmetric empirical transfer would immediately falsify its representational adequacy. That asymmetry has not yet been observed.
+DG-0001 now supplies cases where learned similarity is not useful transfer.
+25L KS↔SI stays near +1/3 while the one-seed 30-epoch directed cells are near
+zero. Across LOSO folds, SI↔ER Ω is positive in 7/10 while step-controlled
+transfer is negative in both directions. This weakens Ω as a utility proxy, but
+does not yet prove whether its estimation or downstream regularization causes
+MTRL's performance null.
 
 ## Relation stability
 
@@ -158,24 +161,27 @@ KS↔SI strengthens consistently and largely stabilizes by epochs 4–5. ER-edge
 3. **Mechanism collapse to uninformative coupling.** Several normalized-W settings produce rank-near-one, ±1/3 saturation. Uniform saturation removes pair-specific discrimination; causality for accuracy remains untested.
 4. **Parameter-summary sensitivity.** Unit normalization moves Ω from weak norm-dominated coupling to saturation; mean-pooled heads are a lossy substitute for the classical comparable task-parameter columns. Whether this is the failure source is unknown.
 5. **Excessive regularization.** Increasing λ from 0.01 to 0.05 worsened all tasks and did not produce more informative Ω, weakening the “coupling is merely too weak” hypothesis.
-6. **Protocol confounding.** Unmatched pooling, seed noise, checkpoint-policy changes and speaker-leaky ER each produced apparent improvements that did not survive stronger controls.
-7. **Aggregate masking.** SI’s larger test set dominates aggregate movement; task-wise trade-offs must be checked even when aggregate differences are small.
+6. **Protocol confounding.** Unmatched pooling, seed noise, checkpoint policy, ER leakage and task-count-dependent optimizer exposure each produced false architecture/relation narratives.
+7. **Optimizer-exposure dominance.** DG-0001's raw ER gains of 28–34 points were reproduced by ER-only step controls; KS left no resolved residual and SI became negative.
+8. **Aggregate masking.** SI’s larger test set dominates aggregate movement; task-wise trade-offs must be checked even when aggregate differences are small.
 
-There is no evidence yet for gradient conflict, directed negative transfer, useful sparsity or data-size causation. Those must not be used as failure labels until measured.
+There is still no gradient-conflict evidence or supported beneficial asymmetry.
+SI/ER negative interaction is moderate evidence under approximate step matching;
+useful sparsity and data-size causation remain untested.
 
 ## Active hypothesis assessment
 
 | Hypothesis | Status | Evidence for | Evidence against / missing |
 | --- | --- | --- | --- |
 | MTRL meaningfully beats wavCSE | contradicted | isolated single-run/checkpoint gains | matched five-seed and LOSO results show no reproducible advantage |
-| Useful transfer is asymmetric | insufficient evidence | Ω cannot represent it; asymmetry is plausible in principle | no single-task or pairwise runs exist |
-| Useful relations are sparse/selective | insufficient evidence | some Ω edges are weak or unstable | weak Ω is not zero empirical transfer; no directed transfer matrix |
+| Useful transfer is asymmetric | weakened / not supported | raw ER-directed outcomes were asymmetric | F8 shows optimizer exposure explained them; no positive controlled residual remained |
+| Useful relations are sparse/selective | insufficient evidence | controlled KS/ER is neutral and SI/ER negative | KS/SI is one seed; no replicated beneficial edge pattern |
 | Relation confidence should be distinct from magnitude | supported as a diagnostic principle; mechanism value unknown | stable saturated KS↔SI coexists with no gain; ER-edge variance is high | no confidence-aware intervention has been tested |
 | ER instability is caused by smaller/noisier data | insufficient evidence | ER edges vary across LOSO folds and ER accuracy has high fold variance | no matched-data/bootstrap control |
 | Relations vary by representation depth | supported descriptively, not causally | matched `smp` 16L and 25L final Ω stability patterns differ | layer selection also changes represented information; no layer-wise diagnostic |
 | Relations change during training | supported descriptively, predictive value unknown | LOSO Ω trajectories differ by pair | no gradient alignment or prospective outcome prediction |
-| One global structure creates negative transfer | insufficient evidence | no MTRL advantage; 25L leaky ER is lower | no empirical pairwise transfer or ablation isolating each edge |
-| Current task summaries are inadequate | plausible but unproven | normalization radically changes Ω; saturation is common | no validated external relation target, class-count-invariant summary comparison or transfer correspondence |
+| One global structure creates negative transfer | insufficient / moderate for SI↔ER | step-controlled SI/ER residual is negative in both directions | batch-size matching is approximate and MTRL edge ablation is absent |
+| Current task summaries are inadequate | plausible, strengthened but unproven | Ω sign/magnitude disagrees with controlled transfer; normalization changes Ω radically | triple-task Ω and pairwise transfer protocols differ |
 | Ω saturation causes MTRL failure | insufficient evidence | saturation co-occurs with neutral/below-baseline outcomes | no intervention that changes saturation while holding the rest fixed; direction of causality unknown |
 | Stronger λ fixes under-coupling | weakened / contradicted for tested setting | initial weak-Ω run motivated it | λ=0.05 worsened KS, SI and ER and reduced off-diagonal magnitude |
 
@@ -200,46 +206,54 @@ This is an evidence boundary, not a completed method-selection framework.
 ### What we know strongly
 
 - Classical MTRL provides no meaningful reproducible advantage under matched five-seed aggregate evaluation or speaker-independent ER LOSO.
-- Ordinary-split ER, single seeds and unmatched pooling can each create false architecture narratives.
+- Ordinary-split ER, single seeds, unmatched pooling and unmatched optimizer exposure can each create false architecture narratives.
 - Learned Ω is not task-intrinsic: its strength and stability depend on representation and perturbation axis.
-- Within 25L LOSO, KS↔SI is fold-stable while ER edges are fold-sensitive; this ordering does not generalize to all seed/layer settings.
+- DG-0001's same-epoch raw transfer matrix is dominated by task-count-dependent optimizer exposure (F8).
 
 ### What appears likely but remains uncertain
 
-- The mean-pooled, normalized task-head summary is contributing to Ω saturation and instability.
-- Stable Ω can encode parameter geometry without encoding useful transfer.
-- ER’s sample regime contributes to relation uncertainty.
+- Ω encodes head-parameter geometry rather than useful transfer.
+- SI and ER interfere under approximate exposure matching.
+- Parameter summarization or optimization interaction—not symmetry alone—contributes to MTRL's null result.
 
 ### What is contradicted
 
 - MTRL has a confirmed performance win.
 - Stronger λ simply amplifies a useful relation.
-- A single learned Ω can be interpreted as a pooling-, layer-, seed- and split-independent truth about KS, SI and ER.
+- Raw pair-minus-single accuracy at equal epochs is a valid transfer matrix when task count changes batching.
+- DG-0001 justifies an asymmetric replacement method.
 
 ### Single highest-information experiment
 
-**DG-0001 Stage A: a matched single-task/pairwise baseline matrix at one explicit screening seed, with a matching triple-task control.** It directly measures all six directed cells `T(A <- B)` and tests the central unresolved assumption—whether useful transfer is symmetric and dense—without introducing another architecture. Run three single-task, three pairwise and, unless an exact Study-tagged/current-commit triple arm exists, one triple-task control. ER cells remain screening-only until decisive entries are repeated under LOSO.
+**DG-0002 — exposure-controlled gradient compatibility.** Measure shared-parameter
+gradient norm per task, pairwise cosine and negative-conflict frequency early,
+middle and late in training while holding the task sampler/update schedule
+explicit. Compare ordinary wavCSE and MTRL only under the same exposure
+protocol.
 
-This has higher information gain per GPU-hour than more MTRL tuning because every possible next explanation branches on its result:
+This separates three remaining explanations:
 
-- all cells near zero → investigate saturation/regularization rather than relation representation;
-- symmetric dense transfer → symmetric Ω is representationally adequate; diagnose learning/optimization;
-- asymmetric or selective transfer → classical Ω is structurally inadequate and targeted literature research becomes justified;
-- transfer exists but Ω disagrees → validate the parameter-summary/update path before selecting a replacement.
+- persistent conflict/norm dominance → optimization interaction is implicated;
+- compatible gradients but Ω/transfer disagreement → relation estimation or
+  task-head summaries are implicated;
+- neither → revisit saturation and regularizer application rather than relation
+  directionality.
 
 ### Minimum diagnostic sequence before searching for the next method
 
-1. **Prerequisite smoke test, not a Study result:** exercise single-task and pairwise `task_type` paths on tiny data.
-2. **DG-0001 Stage A:** measure the directed empirical transfer matrix under exact matched controls.
-3. **Immediate analysis against existing five-seed triple-task Ω.** Do not automatically run all pairwise MTRL arms. If transfer is asymmetric, symmetry is already falsified mathematically. If transfer is selective or symmetric, run only the minimum DG-0003 arms needed to determine whether Ω fails to represent it.
-4. **DG-0002 only on the unresolved branch:** measure task-specific gradient norms/cosines/conflict when Stage A shows no useful transfer or when Ω tracks transfer but performance remains neutral.
-5. **Targeted literature search only after one branch establishes a concrete limitation.** Search terms must name that measured limitation.
+1. **DG-0002:** controlled gradient diagnostics.
+2. **Protocol-matched DG-0003 only if needed:** compare Ω with a controlled
+   transfer/gradient target under the same task set and budget.
+3. **Targeted literature search:** only after one of those establishes the
+   concrete MTRL limitation.
 
-No new method search is justified yet. Existing evidence proves conditionality and no performance gain, but not whether the decisive failure is symmetry, density, parameter summarization or optimization.
+No new method search is justified yet. DG-0001 rejects asymmetry as the current
+literature-search target; optimization remains the highest-value unresolved
+branch.
 
 ## Concise synthesis
 
-1. **Strongest conclusion:** classical MTRL is outcome-neutral and its Ω is a condition-dependent parameter-geometry artifact, not yet a validated transfer map.
-2. **Most important uncertainty:** the project has never measured directed empirical transfer or task-gradient interaction, so it cannot identify which MTRL assumption fails.
-3. **Next scientific question:** is KS/SI/ER transfer symmetric and dense, and does existing Ω agree with the six directed transfer cells?
-4. **Literature:** a search for the next method is premature; it becomes mandatory once DG-0001/DG-0003 or the conditional DG-0002 identifies the concrete failure mode.
+1. **Strongest conclusion:** MTRL is outcome-neutral, and raw directed transfer is dominated by optimizer exposure rather than task semantics.
+2. **Most important uncertainty:** whether task-gradient conflict/norm dominance or Ω estimation explains the MTRL null.
+3. **Next scientific question:** under exposure-controlled sampling, do KS/SI/ER gradients conflict, and does Ω agree with that interaction?
+4. **Literature:** premature until DG-0002 or protocol-matched DG-0003 identifies the mechanism-level failure.
