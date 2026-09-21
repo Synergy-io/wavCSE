@@ -13,6 +13,10 @@ import torch.nn as nn
 from trainer.trainer_model import MultiTasksModelTrainer
 from trainer.trainer_utils import BatchStats, masked_accuracy, masked_ce_loss
 from improvements.clustering.utils.ncmtl_clustering import cluster_candidate_weights
+from improvements.clustering.utils.candidate_row_distances import (
+    CandidateRowDistanceLogger,
+)
+from improvements.clustering.utils.row_task_sharing import RowTaskSharing
 
 
 class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
@@ -44,6 +48,11 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             raise ValueError("gradient_clip_norm must be positive and finite or null")
 
         self.alpha = float(ncmtl_cfg.get("alpha", 0.001))
+        self.sharing_granularity = str(
+            ncmtl_cfg.get("sharing_granularity", "matrix")
+        ).strip().lower()
+        if self.sharing_granularity not in {"matrix", "row"}:
+            raise ValueError("sharing_granularity must be 'matrix' or 'row'")
         self.num_clusters = int(ncmtl_cfg.get("num_clusters", 2))
         self.cluster_every_n_batches = int(
             ncmtl_cfg.get("cluster_every_n_batches", 1)
@@ -59,6 +68,9 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         )
         max_epochs = ncmtl_cfg.get("max_recluster_epochs", 4)
         self.max_recluster_epochs = None if max_epochs is None else int(max_epochs)
+        self.log_candidate_row_distances = bool(
+            ncmtl_cfg.get("log_candidate_row_distances", False)
+        )
 
         if not 1 <= self.num_clusters <= 3:
             raise ValueError("num_clusters must satisfy 1 <= K <= 3")
@@ -84,10 +96,24 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                 ["epoch", "batch", "task", "cluster", "frozen", "cluster_loss"]
             )
 
+        self._expected_training_batches = None
+        self._latest_row_distance_snapshot = None
+        self.row_distance_logger = (
+            CandidateRowDistanceLogger(self.results_dir, self.task_array)
+            if self.log_candidate_row_distances
+            else None
+        )
+        self.row_task_sharing = (
+            RowTaskSharing(self.results_dir, self.task_array)
+            if self.sharing_granularity == "row"
+            else None
+        )
+
         logging.info(
             "ncmtl_start | candidate_dim=%d | identical_candidate_initialization=%s | "
             "clusters=%d | alpha=%g | interval=%d | warmup_epochs=%d | "
-            "kmeans_n_init=%d | label_smoothing=%g | gradient_clip_norm=%s",
+            "kmeans_n_init=%d | label_smoothing=%g | gradient_clip_norm=%s | "
+            "row_distance_diagnostics=%s | sharing_granularity=%s",
             self.model.candidate_dim,
             self.model.identical_candidate_initialization,
             self.num_clusters,
@@ -97,17 +123,49 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             self.kmeans_n_init,
             self.label_smoothing,
             self.gradient_clip_norm,
+            self.log_candidate_row_distances,
+            self.sharing_granularity,
         )
 
     def _process_data_loader(self, data_loader, train_mode: bool):
         if train_mode:
             self.current_epoch += 1
             self.current_batch = 0
+            self._latest_row_distance_snapshot = None
+            try:
+                self._expected_training_batches = len(data_loader)
+            except TypeError:
+                self._expected_training_batches = None
+            if (
+                self.sharing_granularity == "row"
+                and self.current_epoch > self.warmup_epochs
+                and not self.row_task_sharing.initialized
+            ):
+                self.row_task_sharing.initialize(
+                    self.model.get_candidate_weight_tensors(),
+                    epoch=self.warmup_epochs,
+                )
+                self.row_task_sharing.share(
+                    self.model.get_candidate_weight_tensors()
+                )
+                logging.info(
+                    "ncmtl_row_assignments_frozen | epoch=%d | counts=%s",
+                    self.warmup_epochs,
+                    self.row_task_sharing.assignment_counts(),
+                )
         stats = super()._process_data_loader(data_loader, train_mode=train_mode)
+        if train_mode and self._latest_row_distance_snapshot is not None:
+            self.row_distance_logger.write(self._latest_row_distance_snapshot)
+            if self.row_task_sharing is not None:
+                self.row_task_sharing.record_observed_stability(
+                    self.current_epoch,
+                    self._latest_row_distance_snapshot["values"],
+                )
         # The epoch cap means reclustering remains active through the configured
         # epoch, then the learned assignment is fixed for following epochs.
         if (
             train_mode
+            and self.sharing_granularity == "matrix"
             and self.max_recluster_epochs is not None
             and self.current_epoch >= self.max_recluster_epochs
             and self.model.has_valid_cluster_assignments()
@@ -130,6 +188,8 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
 
     def _should_recluster(self) -> bool:
         return (
+            self.sharing_granularity == "matrix"
+            and
             not bool(self.model.cluster_frozen.item())
             and self.current_epoch > self.warmup_epochs
             and self.current_batch % self.cluster_every_n_batches == 0
@@ -215,7 +275,12 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             loss_task[task_index] = float(task_loss.item()) if raw_loss is not None else 0.0
             batch_task[task_index] = int(present)
 
-        cluster_loss = self.model.get_cluster_loss()
+        if self.sharing_granularity == "row":
+            cluster_loss = self.row_task_sharing.cluster_loss(
+                self.model.get_candidate_weight_tensors()
+            )
+        else:
+            cluster_loss = self.model.get_cluster_loss()
         loss_all = loss_all + self.alpha * cluster_loss
 
         l1_reg = torch.tensor(0.0, device=self.device)
@@ -235,9 +300,25 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                     error_if_nonfinite=True,
                 )
             self.optimizer.step()
+            if (
+                self.log_candidate_row_distances
+                and self._expected_training_batches is not None
+                and self.current_batch == self._expected_training_batches
+            ):
+                # Capture task divergence after learning but before NCMTL copies
+                # cluster centres back into the candidate matrices.
+                self._latest_row_distance_snapshot = self.row_distance_logger.capture(
+                    self.model,
+                    epoch=self.current_epoch,
+                    batch=self.current_batch,
+                )
             if self._should_recluster():
                 self._update_cluster_state()
                 self._write_cluster_history(float(cluster_loss.detach().item()))
+            elif self.sharing_granularity == "row":
+                self.row_task_sharing.share(
+                    self.model.get_candidate_weight_tensors()
+                )
             elif bool(self.model.cluster_frozen.item()):
                 self.model.share_candidate_weights_by_cluster()
                 self._write_cluster_history(float(cluster_loss.detach().item()))
@@ -285,12 +366,25 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         return super()._epoch_report_line(epoch, phase, stats)
 
     def _write_cluster_summary(self) -> None:
+        if self.sharing_granularity == "row":
+            summary = {
+                "task_type": self.task_type,
+                "sharing_granularity": "row",
+                "strategy": "closest_pair",
+                "frozen": self.row_task_sharing.initialized,
+                "frozen_epoch": self.row_task_sharing.assignment_epoch,
+                "row_pair_counts": self.row_task_sharing.assignment_counts(),
+            }
+            with open(self.cluster_summary_path, "w") as summary_file:
+                json.dump(summary, summary_file, indent=2)
+            return
         state = self.model.get_cluster_state()
         assignments = {
             task: cluster for task, cluster in zip(self.task_array, state["assignments"])
         }
         summary = {
             "task_type": self.task_type,
+            "sharing_granularity": "matrix",
             "num_clusters": self.num_clusters,
             "frozen": state["frozen"],
             "frozen_epoch": self.frozen_epoch,

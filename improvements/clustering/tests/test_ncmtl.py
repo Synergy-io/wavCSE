@@ -1,5 +1,6 @@
 """Synthetic, data-free checks for the three-task NCMTL implementation."""
 
+import json
 import os
 import sys
 import tempfile
@@ -20,6 +21,9 @@ from improvements.clustering.trainers.ncmtl_trainer import MultiTasksModelTraine
 from improvements.clustering.utils.ncmtl_clustering import (
     canonicalize_cluster_labels,
     cluster_candidate_weights,
+)
+from improvements.clustering.utils.candidate_row_distances import (
+    compute_candidate_row_distances,
 )
 
 
@@ -195,6 +199,20 @@ class NCMTLModelTests(unittest.TestCase):
         )
         self.assertEqual(tuple(model.get_all_embeddings(inputs).shape), (2, 2000))
 
+    def test_candidate_row_distances_preserve_every_row(self):
+        model = build_model(identical_candidate_initialization=True)
+        with torch.no_grad():
+            model.candidate_layers[1].weight[0].add_(1.0)
+            model.candidate_layers[2].weight[1].add_(2.0)
+
+        distances = compute_candidate_row_distances(
+            model.get_candidate_weight_tensors(), ["ks", "si", "er"]
+        )
+        self.assertEqual(set(distances), {"ks_si", "ks_er", "si_er"})
+        self.assertTrue(all(tuple(values.shape) == (8,) for values in distances.values()))
+        self.assertGreater(float(distances["ks_si"][0]), 0.0)
+        self.assertEqual(float(distances["ks_si"][1]), 0.0)
+
     def test_hard_sharing_and_cluster_loss(self):
         model = build_model()
         with torch.no_grad():
@@ -315,6 +333,63 @@ class NCMTLTrainerTests(unittest.TestCase):
                 trainer.model.candidate_layers[0].weight,
                 trainer.model.candidate_layers[1].weight,
             ))
+
+    def test_row_distance_diagnostics_write_epoch_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trainer = self._build_trainer(
+                directory,
+                log_candidate_row_distances=True,
+            )
+            trainer._process_data_loader(trainer.train_dataloader, train_mode=True)
+
+            with open(trainer.row_distance_logger.matrices_path) as matrices_file:
+                matrices = json.load(matrices_file)
+            with open(trainer.row_distance_logger.values_path) as values_file:
+                values = json.load(values_file)
+
+            self.assertEqual(len(matrices), 1)
+            self.assertEqual(len(values), 1)
+            self.assertEqual(matrices[0]["stage"], "post_optimizer_pre_sharing")
+            self.assertEqual(len(matrices[0]["matrix"]), 3)
+            self.assertEqual(set(values[0]["values"]), {"ks_si", "ks_er", "si_er"})
+            self.assertTrue(all(
+                len(pair_values) == 8
+                for pair_values in values[0]["values"].values()
+            ))
+
+    def test_row_sharing_freezes_warmup_assignments_and_writes_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trainer = self._build_trainer(
+                directory,
+                sharing_granularity="row",
+                warmup_epochs=1,
+                log_candidate_row_distances=True,
+            )
+            trainer._process_data_loader(trainer.train_dataloader, train_mode=True)
+            self.assertFalse(trainer.row_task_sharing.initialized)
+
+            trainer._process_data_loader(trainer.train_dataloader, train_mode=True)
+            self.assertTrue(trainer.row_task_sharing.initialized)
+            self.assertEqual(trainer.row_task_sharing.assignment_epoch, 1)
+            self.assertEqual(
+                sum(trainer.row_task_sharing.assignment_counts().values()), 8
+            )
+            self.assertTrue(os.path.exists(
+                trainer.row_task_sharing.assignment_csv_path
+            ))
+            self.assertTrue(os.path.exists(
+                trainer.row_task_sharing.assignment_summary_path
+            ))
+
+            weights = trainer.model.get_candidate_weight_tensors()
+            assignments = trainer.row_task_sharing.assignments
+            pair_indices = ((0, 1), (0, 2), (1, 2))
+            for pair_id, (first, second) in enumerate(pair_indices):
+                mask = assignments == pair_id
+                if bool(torch.any(mask)):
+                    self.assertTrue(torch.equal(
+                        weights[first][mask], weights[second][mask]
+                    ))
 
 
 if __name__ == "__main__":
