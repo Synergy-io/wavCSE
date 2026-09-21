@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "experiment": {
+    "name": "NCMTL Auto pooling init_alpha screening",
+    "task_type": "ks_si_er",
+    "epochs": 30,
+    "run_count": 3,
+    "parameter": "pooling.auto.init_alpha",
+    "values": [0.01, 0.1, 1.0],
+    "primary_selection_metric": "validation.opt.macro_task_accuracy",
+    "selection_note": "Select init_alpha using validation metrics. Test metrics are descriptive only and must not be used for hyperparameter selection.",
+    "fixed_ncmtl_settings": {
+      "num_clusters": 2,
+      "cluster_regularization_alpha": 0.001,
+      "cluster_every_n_batches": 5,
+      "warmup_epochs": 3,
+      "identical_candidate_initialization": true,
+      "kmeans_n_init": 10,
+      "label_smoothing": 0.1
+    },
+    "limitations": [
+      "Each init_alpha value has only one run, so differences may include global training randomness.",
+      "The runs used the same K-Means random state, but that does not necessarily seed model initialization, data loading, dropout, and all CUDA operations.",
+      "These are 30-epoch screening runs; the selected value should be confirmed with longer training and multiple global seeds.",
+      "All three runs discovered KS+ER / SI and froze the assignments at epoch 6."
+    ]
+  },
+  "rankings": {
+    "validation_opt_macro_task_accuracy": [
+      {"rank": 1, "init_alpha": 0.01, "value": 0.920791},
+      {"rank": 2, "init_alpha": 0.1, "value": 0.915576},
+      {"rank": 3, "init_alpha": 1.0, "value": 0.913927}
+    ],
+    "validation_opt_accuracy_all": [
+      {"rank": 1, "init_alpha": 0.1, "value": 0.974114},
+      {"rank": 2, "init_alpha": 1.0, "value": 0.973343},
+      {"rank": 3, "init_alpha": 0.01, "value": 0.971238}
+    ],
+    "test_opt_accuracy_all_descriptive_only": [
+      {"rank": 1, "init_alpha": 0.1, "value": 0.975126},
+      {"rank": 2, "init_alpha": 1.0, "value": 0.973272},
+      {"rank": 3, "init_alpha": 0.01, "value": 0.971673}
+    ],
+    "test_opt_macro_task_accuracy_descriptive_only": [
+      {"rank": 1, "init_alpha": 0.1, "value": 0.913251},
+      {"rank": 2, "init_alpha": 0.01, "value": 0.906437},
+      {"rank": 3, "init_alpha": 1.0, "value": 0.904165}
+    ]
+  },
+  "recommendation": {
+    "validation_macro_winner": 0.01,
+    "validation_overall_winner": 0.1,
+    "recommended_for_next_stage": 0.01,
+    "reason": "The task-balanced validation macro accuracy is the declared primary metric. init_alpha=0.01 achieved 0.920791, helped by the strongest ER validation accuracy (0.806510), while init_alpha=0.1 achieved the highest sample-weighted overall validation accuracy.",
+    "confirmation": "Compare init_alpha=0.01 and 0.1 over multiple global seeds before treating the small difference as conclusive."
+  },
+  "runs": {
+    "auto_0.01": {
+      "pooling": {"type": "auto", "init_alpha": 0.01},
+      "run_id": "2026_09_01_04_47_36",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/auto_run_2026_09_01_04_47_30.log",
+        "result_directory": "improvements/clustering/results_ncmtl/2026_09_01_04_47_36"
+      },
+      "validation": {
+        "best": {"epoch": 28, "accuracy_all": 0.971238, "macro_task_accuracy": 0.920791, "tasks": {"ks": 0.983672, "si": 0.972190, "er": 0.806510}},
+        "opt": {"epoch": 28, "accuracy_all": 0.971238, "macro_task_accuracy": 0.920791, "tasks": {"ks": 0.983672, "si": 0.972190, "er": 0.806510}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.971673,
+          "loss_all": 0.152102,
+          "macro_task_accuracy": 0.906437,
+          "macro_task_loss": 0.411810,
+          "tasks": {"ks": {"accuracy": 0.984784, "loss": 0.148527, "samples": 6835}, "si": {"accuracy": 0.975033, "loss": 0.492358, "samples": 8251}, "er": {"accuracy": 0.759494, "loss": 0.594544, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.971673,
+          "loss_all": 0.152102,
+          "macro_task_accuracy": 0.906437,
+          "macro_task_loss": 0.411810,
+          "tasks": {"ks": {"accuracy": 0.984784, "loss": 0.148527, "samples": 6835}, "si": {"accuracy": 0.975033, "loss": 0.492358, "samples": 8251}, "er": {"accuracy": 0.759494, "loss": 0.594544, "samples": 553}}
+        },
+        "epoch_30": {
+          "accuracy_all": 0.972121,
+          "loss_all": 0.151354,
+          "macro_task_accuracy": 0.906737,
+          "macro_task_loss": 0.415146,
+          "tasks": {"ks": {"accuracy": 0.985077, "loss": 0.150219, "samples": 6835}, "si": {"accuracy": 0.975639, "loss": 0.484102, "samples": 8251}, "er": {"accuracy": 0.759494, "loss": 0.611117, "samples": 553}}
+        }
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    },
+    "auto_0.1": {
+      "pooling": {"type": "auto", "init_alpha": 0.1},
+      "run_id": "2026_09_01_16_04_47",
+      "sources": {
+        "log": "improvements/clustering/logs/run_2026_09_01_16_04_33.log",
+        "result_directory": "improvements/clustering/results_ncmtl_auto_0p1/2026_09_01_16_04_47"
+      },
+      "validation": {
+        "best": {"epoch": 26, "accuracy_all": 0.974114, "macro_task_accuracy": 0.915576, "tasks": {"ks": 0.986467, "si": 0.977260, "er": 0.783002}},
+        "opt": {"epoch": 26, "accuracy_all": 0.974114, "macro_task_accuracy": 0.915576, "tasks": {"ks": 0.986467, "si": 0.977260, "er": 0.783002}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.975126,
+          "loss_all": 0.156837,
+          "macro_task_accuracy": 0.913251,
+          "macro_task_loss": 0.429170,
+          "tasks": {"ks": {"accuracy": 0.987125, "loss": 0.193353, "samples": 6835}, "si": {"accuracy": 0.978669, "loss": 0.474130, "samples": 8251}, "er": {"accuracy": 0.773960, "loss": 0.620027, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.975126,
+          "loss_all": 0.156837,
+          "macro_task_accuracy": 0.913251,
+          "macro_task_loss": 0.429170,
+          "tasks": {"ks": {"accuracy": 0.987125, "loss": 0.193353, "samples": 6835}, "si": {"accuracy": 0.978669, "loss": 0.474130, "samples": 8251}, "er": {"accuracy": 0.773960, "loss": 0.620027, "samples": 553}}
+        },
+        "epoch_30": {
+          "accuracy_all": 0.973783,
+          "loss_all": 0.154838,
+          "macro_task_accuracy": 0.907325,
+          "macro_task_loss": 0.424532,
+          "tasks": {"ks": {"accuracy": 0.986832, "loss": 0.182662, "samples": 6835}, "si": {"accuracy": 0.977457, "loss": 0.473629, "samples": 8251}, "er": {"accuracy": 0.757685, "loss": 0.617305, "samples": 553}}
+        }
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    },
+    "auto_1.0": {
+      "pooling": {"type": "auto", "init_alpha": 1.0},
+      "run_id": "2026_09_01_16_05_11",
+      "sources": {
+        "log": "improvements/clustering/logs/run_2026_09_01_16_05_05.log",
+        "result_directory": "improvements/clustering/results_ncmtl_auto_1p0/2026_09_01_16_05_11"
+      },
+      "validation": {
+        "best": {"epoch": 28, "accuracy_all": 0.973343, "macro_task_accuracy": 0.913927, "tasks": {"ks": 0.984701, "si": 0.977694, "er": 0.779385}},
+        "opt": {"epoch": 28, "accuracy_all": 0.973343, "macro_task_accuracy": 0.913927, "tasks": {"ks": 0.984701, "si": 0.977694, "er": 0.779385}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.973272,
+          "loss_all": 0.148383,
+          "macro_task_accuracy": 0.904165,
+          "macro_task_loss": 0.418174,
+          "tasks": {"ks": {"accuracy": 0.986394, "loss": 0.146169, "samples": 6835}, "si": {"accuracy": 0.977457, "loss": 0.467039, "samples": 8251}, "er": {"accuracy": 0.748644, "loss": 0.641313, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.973272,
+          "loss_all": 0.148383,
+          "macro_task_accuracy": 0.904165,
+          "macro_task_loss": 0.418174,
+          "tasks": {"ks": {"accuracy": 0.986394, "loss": 0.146169, "samples": 6835}, "si": {"accuracy": 0.977457, "loss": 0.467039, "samples": 8251}, "er": {"accuracy": 0.748644, "loss": 0.641313, "samples": 553}}
+        },
+        "epoch_30": {
+          "accuracy_all": 0.973783,
+          "loss_all": 0.146462,
+          "macro_task_accuracy": 0.910037,
+          "macro_task_loss": 0.405508,
+          "tasks": {"ks": {"accuracy": 0.985077, "loss": 0.150267, "samples": 6835}, "si": {"accuracy": 0.978306, "loss": 0.461942, "samples": 8251}, "er": {"accuracy": 0.766727, "loss": 0.604314, "samples": 553}}
+        }
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    }
+  }
+}

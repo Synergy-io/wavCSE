@@ -1,22 +1,47 @@
 """
-wavCSE-GBC: Global Bias Coupling (inspired by Zhang et al. 2010)
+wavCSE-GBC: Global Bias Coupling
 
-Zhang et al. (2010) proposed Bayesian Online Multi-label Classification (BOMC)
-where a shared global bias parameter couples all classes in a multi-label setting.
-The key insight is that a shared hub parameter (global bias) serves as a coupling
-mechanism: it gets updated more often than per-class parameters, leading to more
-confident estimates and better information sharing across tasks.
+CITATION CORRECTED 2026-09-01: this file previously attributed its design to
+"Zhang et al. (2010)"/"Bayesian Online Multi-label Classification (BOMC)."
+That citation does not check out. Zhang & Yeung's actual 2010 paper
+("Bayesian Online Learning for Multi-label and Multi-variate Performance
+Measures," AISTATS 2010) is about online Gaussian-density-filtering
+multi-label classification -- it contains no "global bias"/"hub parameter"
+coupling concept. Zhang & Yang's 2021 MTL survey (arXiv:1707.08114), which
+this project's whole architecture taxonomy is organized around, mentions no
+such method either. No real published paper matching this description was
+found (see improvements/taskrelation/03-gbc/README.md for the verification
+writeup).
 
-Applied to wavCSE:
-- Instead of independent task classification heads with unconstrained biases,
-  we introduce a learnable global bias vector b_global that is shared across
-  all task heads.
-- Each task head output becomes: logits_t = W_t * h + b_t + b_global
-  where b_global couples all tasks through a common reference point.
-- This models the intuition that task base rates are related (e.g., if one
-  task has a high base rate for a class, related tasks may too).
+**GBC is an original design for this project, not an implementation of a
+named published method.** The closest real analog in spirit -- a shared
+parameter that all tasks couple through, plus a per-task adjustment -- is
+Evgeniou & Pontil, "Regularized Multi-Task Learning" (KDD 2004), which
+constrains each task's weight vector to a shared vector w0 plus a
+task-specific deviation v_t, regularized toward w0. The mechanism here
+differs from that paper: Evgeniou & Pontil regularize full linear weight
+vectors directly; GBC instead learns a nonlinear bottleneck projection of
+the shared hidden representation into a small "global bias space," combines
+it with a learned global parameter, and additively projects that combined
+signal into each task head's logits. No regularization term ties the tasks
+together -- coupling here is purely architectural (a shared computation
+path), not a loss-level constraint like Evgeniou & Pontil's.
 
-This is the LIGHTEST change to wavCSE - only modifies the classifier heads.
+Actual mechanism:
+- A learnable global bias vector b_global (a plain nn.Parameter) is added to
+  a per-example projection of the shared hidden representation
+  (global_bias_projector), forming a per-example "global coupling" signal.
+- Each task head's logits are: logits_t = W_t*h + task_bias_t +
+  Linear_t(global_coupling) -- i.e. the same global_coupling signal is
+  linearly projected into every task's own output space and added to that
+  task's logits.
+- This models the intuition that task base rates/output biases are related
+  (e.g. if one task's classes are more separable given the shared
+  representation, related tasks may be too), coupled through a shared,
+  representation-conditioned pathway rather than a shared weight vector.
+
+This is the lightest architectural change to wavCSE among the
+`taskrelation/` variants -- only the classifier-head computation changes.
 """
 
 import logging
@@ -44,11 +69,10 @@ class MultiClassifierOutput:
 
 class DownstreamMultiTaskModelGBC(nn.Module):
     """
-    wavCSE with Global Bias Coupling (GBC).
+    wavCSE with Global Bias Coupling (GBC) -- an original design for this
+    project (see module docstring for the citation-correction note).
 
-    Adds a shared global bias that couples all task classification heads,
-    inspired by the BOMC framework (Zhang et al., 2010).
-
+    Adds a shared global bias that couples all task classification heads.
     The global bias acts as a "hub" parameter - updated by every training
     example regardless of task, leading to more confident estimates and
     better information sharing.

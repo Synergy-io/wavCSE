@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "experiment": {
+    "name": "NCMTL cluster-loss alpha screening with Auto pooling",
+    "task_type": "ks_si_er",
+    "epochs": 30,
+    "run_count": 3,
+    "parameter": "ncmtl.alpha",
+    "values": [0.001, 0.01, 0.1],
+    "primary_selection_metric": "validation.opt.macro_task_accuracy",
+    "selection_note": "Select cluster alpha using validation metrics. Test metrics are descriptive only and must not be used for hyperparameter selection.",
+    "fixed_settings": {
+      "layer_pooling_type": "auto",
+      "auto_init_alpha": 0.01,
+      "label_smoothing": 0.1,
+      "num_clusters": 2,
+      "cluster_every_n_batches": 5,
+      "warmup_epochs": 3,
+      "identical_candidate_initialization": true,
+      "kmeans_random_state": 42,
+      "kmeans_n_init": 10
+    },
+    "limitations": [
+      "Each cluster-alpha value has only one run, so small differences may be caused by global training randomness.",
+      "The K-Means random state does not necessarily seed model initialization, data ordering, dropout, and all CUDA operations.",
+      "All three runs discovered KS+ER / SI and froze at epoch 6, so this comparison measures regularization strength under the same final grouping.",
+      "These are 30-epoch screening runs; the leading values should be confirmed across multiple global seeds."
+    ]
+  },
+  "rankings": {
+    "validation_opt_macro_task_accuracy": [
+      {"rank": 1, "cluster_alpha": 0.001, "value": 0.920791},
+      {"rank": 2, "cluster_alpha": 0.01, "value": 0.920260},
+      {"rank": 3, "cluster_alpha": 0.1, "value": 0.916606}
+    ],
+    "validation_opt_accuracy_all": [
+      {"rank": 1, "cluster_alpha": 0.01, "value": 0.972080},
+      {"rank": 2, "cluster_alpha": 0.001, "value": 0.971238},
+      {"rank": 3, "cluster_alpha": 0.1, "value": 0.970817}
+    ],
+    "test_opt_macro_task_accuracy_descriptive_only": [
+      {"rank": 1, "cluster_alpha": 0.01, "value": 0.918157},
+      {"rank": 2, "cluster_alpha": 0.1, "value": 0.910493},
+      {"rank": 3, "cluster_alpha": 0.001, "value": 0.906437}
+    ],
+    "test_opt_accuracy_all_descriptive_only": [
+      {"rank": 1, "cluster_alpha": 0.01, "value": 0.974998},
+      {"rank": 2, "cluster_alpha": 0.1, "value": 0.973656},
+      {"rank": 3, "cluster_alpha": 0.001, "value": 0.971673}
+    ]
+  },
+  "recommendation": {
+    "validation_macro_winner": 0.001,
+    "practical_finalists": [0.001, 0.01],
+    "recommended_for_next_stage": 0.001,
+    "reason": "The declared primary metric slightly favors 0.001: 0.920791 versus 0.920260 for 0.01. The difference is only 0.000531, so it is too small to treat as conclusive from one run. Alpha 0.1 was weaker on both validation macro and overall accuracy.",
+    "confirmation": "Repeat 0.001 and 0.01 with the same set of global seeds. Prefer the value with the better mean validation macro accuracy and report its variability."
+  },
+  "runs": {
+    "cluster_alpha_0.001": {
+      "cluster_alpha": 0.001,
+      "run_id": "2026_09_01_04_47_36",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/auto_run_2026_09_01_04_47_30.log",
+        "result_directory": "improvements/clustering/results_ncmtl/2026_09_01_04_47_36"
+      },
+      "validation": {
+        "best": {"epoch": 28, "accuracy_all": 0.971238, "macro_task_accuracy": 0.920791, "tasks": {"ks": 0.983672, "si": 0.972190, "er": 0.806510}},
+        "opt": {"epoch": 28, "accuracy_all": 0.971238, "macro_task_accuracy": 0.920791, "tasks": {"ks": 0.983672, "si": 0.972190, "er": 0.806510}}
+      },
+      "test": {
+        "best": {"accuracy_all": 0.971673, "loss_all": 0.152102, "macro_task_accuracy": 0.906437, "macro_task_loss": 0.411810, "tasks": {"ks": {"accuracy": 0.984784, "loss": 0.148527, "samples": 6835}, "si": {"accuracy": 0.975033, "loss": 0.492358, "samples": 8251}, "er": {"accuracy": 0.759494, "loss": 0.594544, "samples": 553}}},
+        "opt": {"accuracy_all": 0.971673, "loss_all": 0.152102, "macro_task_accuracy": 0.906437, "macro_task_loss": 0.411810, "tasks": {"ks": {"accuracy": 0.984784, "loss": 0.148527, "samples": 6835}, "si": {"accuracy": 0.975033, "loss": 0.492358, "samples": 8251}, "er": {"accuracy": 0.759494, "loss": 0.594544, "samples": 553}}},
+        "epoch_30": {"accuracy_all": 0.972121, "loss_all": 0.151354, "macro_task_accuracy": 0.906737, "macro_task_loss": 0.415146, "tasks": {"ks": {"accuracy": 0.985077, "loss": 0.150219, "samples": 6835}, "si": {"accuracy": 0.975639, "loss": 0.484102, "samples": 8251}, "er": {"accuracy": 0.759494, "loss": 0.611117, "samples": 553}}}
+      },
+      "cluster": {
+        "assignments": {"ks": 0, "si": 1, "er": 0},
+        "groups": [["ks", "er"], ["si"]],
+        "frozen": true,
+        "frozen_epoch": 6,
+        "nonzero_loss_statistics": {"observations": 147, "mean": 0.173131464, "minimum": 0.123003095, "maximum": 0.586363912, "mean_weighted_contribution": 0.000173131}
+      }
+    },
+    "cluster_alpha_0.01": {
+      "cluster_alpha": 0.01,
+      "run_id": "2026_09_01_18_12_39",
+      "sources": {
+        "log": "improvements/clustering/logs/run_2026_09_01_18_12_32.log",
+        "result_directory": "improvements/clustering/results_ncmtl_auto_0p01_cluster_alpha_0p01/2026_09_01_18_12_39"
+      },
+      "validation": {
+        "best": {"epoch": 25, "accuracy_all": 0.972080, "macro_task_accuracy": 0.920260, "tasks": {"ks": 0.983525, "si": 0.974363, "er": 0.802893}},
+        "opt": {"epoch": 25, "accuracy_all": 0.972080, "macro_task_accuracy": 0.920260, "tasks": {"ks": 0.983525, "si": 0.974363, "er": 0.802893}}
+      },
+      "test": {
+        "best": {"accuracy_all": 0.974998, "loss_all": 0.148610, "macro_task_accuracy": 0.918157, "macro_task_loss": 0.403466, "tasks": {"ks": {"accuracy": 0.985808, "loss": 0.137646, "samples": 6835}, "si": {"accuracy": 0.978427, "loss": 0.485826, "samples": 8251}, "er": {"accuracy": 0.790235, "loss": 0.586925, "samples": 553}}},
+        "opt": {"accuracy_all": 0.974998, "loss_all": 0.148610, "macro_task_accuracy": 0.918157, "macro_task_loss": 0.403466, "tasks": {"ks": {"accuracy": 0.985808, "loss": 0.137646, "samples": 6835}, "si": {"accuracy": 0.978427, "loss": 0.485826, "samples": 8251}, "er": {"accuracy": 0.790235, "loss": 0.586925, "samples": 553}}},
+        "epoch_30": {"accuracy_all": 0.974103, "loss_all": 0.148806, "macro_task_accuracy": 0.910272, "macro_task_loss": 0.402935, "tasks": {"ks": {"accuracy": 0.985662, "loss": 0.136095, "samples": 6835}, "si": {"accuracy": 0.978427, "loss": 0.488566, "samples": 8251}, "er": {"accuracy": 0.766727, "loss": 0.584143, "samples": 553}}}
+      },
+      "cluster": {
+        "assignments": {"ks": 0, "si": 1, "er": 0},
+        "groups": [["ks", "er"], ["si"]],
+        "frozen": true,
+        "frozen_epoch": 6,
+        "nonzero_loss_statistics": {"observations": 147, "mean": 0.137675600, "minimum": 0.101464391, "maximum": 0.359693378, "mean_weighted_contribution": 0.001376756}
+      }
+    },
+    "cluster_alpha_0.1": {
+      "cluster_alpha": 0.1,
+      "run_id": "2026_09_01_18_11_02",
+      "sources": {
+        "log": "improvements/clustering/logs/run_2026_09_01_18_10_45.log",
+        "result_directory": "improvements/clustering/results_ncmtl_auto_0p01_cluster_alpha_0p1/2026_09_01_18_11_02"
+      },
+      "validation": {
+        "best": {"epoch": 28, "accuracy_all": 0.970817, "macro_task_accuracy": 0.916606, "tasks": {"ks": 0.981024, "si": 0.974942, "er": 0.793852}},
+        "opt": {"epoch": 28, "accuracy_all": 0.970817, "macro_task_accuracy": 0.916606, "tasks": {"ks": 0.981024, "si": 0.974942, "er": 0.793852}}
+      },
+      "test": {
+        "best": {"accuracy_all": 0.973656, "loss_all": 0.149084, "macro_task_accuracy": 0.910493, "macro_task_loss": 0.414006, "tasks": {"ks": {"accuracy": 0.984638, "loss": 0.144218, "samples": 6835}, "si": {"accuracy": 0.978306, "loss": 0.475839, "samples": 8251}, "er": {"accuracy": 0.768535, "loss": 0.621960, "samples": 553}}},
+        "opt": {"accuracy_all": 0.973656, "loss_all": 0.149084, "macro_task_accuracy": 0.910493, "macro_task_loss": 0.414006, "tasks": {"ks": {"accuracy": 0.984638, "loss": 0.144218, "samples": 6835}, "si": {"accuracy": 0.978306, "loss": 0.475839, "samples": 8251}, "er": {"accuracy": 0.768535, "loss": 0.621960, "samples": 553}}},
+        "epoch_30": {"accuracy_all": 0.974231, "loss_all": 0.153592, "macro_task_accuracy": 0.907516, "macro_task_loss": 0.426316, "tasks": {"ks": {"accuracy": 0.985223, "loss": 0.150039, "samples": 6835}, "si": {"accuracy": 0.979639, "loss": 0.489284, "samples": 8251}, "er": {"accuracy": 0.757685, "loss": 0.639624, "samples": 553}}}
+      },
+      "cluster": {
+        "assignments": {"ks": 0, "si": 1, "er": 0},
+        "groups": [["ks", "er"], ["si"]],
+        "frozen": true,
+        "frozen_epoch": 6,
+        "nonzero_loss_statistics": {"observations": 147, "mean": 0.072166231, "minimum": 0.049469344, "maximum": 0.105242178, "mean_weighted_contribution": 0.007216623}
+      }
+    }
+  }
+}
