@@ -6,10 +6,14 @@ Usage:
 """
 
 import argparse
+import logging
 import os
+import random
 import sys
 from datetime import datetime
 
+import numpy as np
+import torch
 from dotenv import load_dotenv
 
 
@@ -62,13 +66,27 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
                 )
 
         if phase == "val":
-            diagnostics["shared_adapter_identity_distance"] = (
-                self.model.get_shared_adapter_identity_distance()
+            diagnostics["shared_fc2_weight_norm"] = (
+                self.model.get_shared_weight_norm()
             )
             diagnostics.update(
                 {
                     f"delta_norm_{task}": norm
                     for task, norm in self.model.get_delta_norms().items()
+                }
+            )
+            diagnostics.update(
+                {
+                    f"relative_delta_norm_{task}": norm
+                    for task, norm in self.model.get_relative_delta_norms().items()
+                }
+            )
+            diagnostics.update(
+                {
+                    f"delta_cosine_similarity_{pair}": similarity
+                    for pair, similarity in (
+                        self.model.get_delta_cosine_similarities().items()
+                    )
                 }
             )
 
@@ -94,18 +112,37 @@ def _config_path(path: str) -> str:
 
 
 def _parameter_counts(model: DownstreamMultiTaskModelFTN) -> dict[str, int]:
-    updates = [sum(p.numel() for p in module.parameters()) for module in model.task_updates]
+    updates = [
+        sum(p.numel() for p in module.parameters())
+        for module in model.task_updates
+    ]
+    if len(set(updates)) != 1:
+        raise ValueError(f"Expected equal per-task update sizes, got {updates}")
     return {
         "total_parameters": sum(p.numel() for p in model.parameters()),
         "trainable_parameters": sum(
             p.numel() for p in model.parameters() if p.requires_grad
         ),
-        "shared_adapter_parameters": sum(
-            p.numel() for p in model.shared_adapter.parameters()
+        "shared_fc2_parameters": sum(
+            p.numel() for p in model.hidden_layer.parameters()
         ),
         "task_update_parameters_total": sum(updates),
         "task_update_parameters_per_task": updates[0],
+        "ftn_rank": model.ftn_rank,
     }
+
+
+def _set_seed(seed: int) -> None:
+    """Seed experiment RNGs without forcing unsupported deterministic kernels."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    if torch.backends.cudnn.is_available():
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def main() -> None:
@@ -129,6 +166,9 @@ def main() -> None:
     load_dotenv(os.path.join(_REPO_ROOT, ".env"))
     cfg = load_config(_config_path(args.config))
     setup_logging(log_level=cfg["log_level"])
+    seed = int(cfg.get("seed", 42))
+    _set_seed(seed)
+    logging.info("Experiment seed: %d", seed)
 
     device_index = (
         args.device_index if args.device_index is not None else cfg["device"]["index"]
@@ -160,7 +200,6 @@ def main() -> None:
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
         mlflow.log_param("task_type", task_type)
-        mlflow.log_param("ftn_rank", ftn_rank)
 
         loader = LoadEmbedding(
             root_data_path=cfg["paths"]["root_data_path"],
@@ -228,6 +267,15 @@ def main() -> None:
                 f"final_delta_norm_{task}": norm
                 for task, norm in model.get_delta_norms().items()
             }
+        )
+        mlflow.log_metrics(
+            {
+                f"final_relative_delta_norm_{task}": norm
+                for task, norm in model.get_relative_delta_norms().items()
+            }
+        )
+        mlflow.log_metric(
+            "final_shared_fc2_weight_norm", model.get_shared_weight_norm()
         )
         mlflow.log_artifacts(trainer.ckpt_dir, artifact_path="checkpoints")
         mlflow.log_artifacts(trainer.results_dir, artifact_path="results")

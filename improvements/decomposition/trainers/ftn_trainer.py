@@ -17,7 +17,7 @@ from trainer.trainer_model import MultiTasksModelTrainer
 
 
 class MultiTasksModelTrainerFTN(MultiTasksModelTrainer):
-    """Reuse the standard loop with optional clipping and scheduler floor."""
+    """Standard loop with training-only regularization and optional safeguards."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -47,6 +47,19 @@ class MultiTasksModelTrainerFTN(MultiTasksModelTrainer):
         self.grad_norm_sum += total_norm_value
         self.grad_norm_max = max(self.grad_norm_max, total_norm_value)
         self.grad_norm_steps += 1
+
+    def _process_batch(self, batch, train_mode: bool):
+        """Exclude parameter regularization from predictive validation loss."""
+        if train_mode:
+            return super()._process_batch(batch, train_mode=True)
+
+        l1_lambda, l2_lambda = self.l1_lambda, self.l2_lambda
+        try:
+            self.l1_lambda = 0.0
+            self.l2_lambda = 0.0
+            return super()._process_batch(batch, train_mode=False)
+        finally:
+            self.l1_lambda, self.l2_lambda = l1_lambda, l2_lambda
 
     def consume_gradient_norm_stats(self):
         """Return and reset accumulated pre-clipping gradient statistics."""
