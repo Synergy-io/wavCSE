@@ -3,6 +3,7 @@
 import csv
 import json
 import logging
+import math
 import os
 from typing import Dict, Optional
 
@@ -31,6 +32,16 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         # Keep validation loss unsmoothed so it remains comparable to test NLL
         # and continues to reveal confidence-related overfitting.
         self.validation_loss_fn = nn.CrossEntropyLoss()
+
+        gradient_clip_norm = self.training_cfg.get("gradient_clip_norm")
+        self.gradient_clip_norm = (
+            None if gradient_clip_norm is None else float(gradient_clip_norm)
+        )
+        if self.gradient_clip_norm is not None and (
+            not math.isfinite(self.gradient_clip_norm)
+            or self.gradient_clip_norm <= 0.0
+        ):
+            raise ValueError("gradient_clip_norm must be positive and finite or null")
 
         self.alpha = float(ncmtl_cfg.get("alpha", 0.001))
         self.num_clusters = int(ncmtl_cfg.get("num_clusters", 2))
@@ -76,7 +87,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         logging.info(
             "ncmtl_start | candidate_dim=%d | identical_candidate_initialization=%s | "
             "clusters=%d | alpha=%g | interval=%d | warmup_epochs=%d | "
-            "kmeans_n_init=%d | label_smoothing=%g",
+            "kmeans_n_init=%d | label_smoothing=%g | gradient_clip_norm=%s",
             self.model.candidate_dim,
             self.model.identical_candidate_initialization,
             self.num_clusters,
@@ -85,6 +96,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             self.warmup_epochs,
             self.kmeans_n_init,
             self.label_smoothing,
+            self.gradient_clip_norm,
         )
 
     def _process_data_loader(self, data_loader, train_mode: bool):
@@ -216,6 +228,12 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         if train_mode:
             self.current_batch += 1
             loss_all.backward()
+            if self.gradient_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(),
+                    max_norm=self.gradient_clip_norm,
+                    error_if_nonfinite=True,
+                )
             self.optimizer.step()
             if self._should_recluster():
                 self._update_cluster_state()

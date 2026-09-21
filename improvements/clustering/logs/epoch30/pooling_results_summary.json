@@ -1,0 +1,264 @@
+{
+  "schema_version": 1,
+  "experiment": {
+    "name": "NCMTL layer-pooling screening",
+    "task_type": "ks_si_er",
+    "epochs": 30,
+    "run_count": 9,
+    "primary_selection_metric": "validation.opt.macro_task_accuracy",
+    "selection_note": "Choose pooling with validation metrics. Test metrics are included only for final reporting and must not be used to tune pooling.",
+    "limitations": [
+      "Each pooling method has only one run, so differences may include training randomness.",
+      "These are 30-epoch screening runs; finalists should be confirmed for 100 epochs and multiple global training seeds.",
+      "Eight runs discovered KS+ER / SI, while gated pooling discovered KS+SI / ER; cluster behavior therefore requires confirmation across global training seeds.",
+      "Gated pooling peaked at epoch 8 and degraded substantially by epoch 30, especially on SI.",
+      "The LNP p=2 final checkpoint collapsed severely on SI; its validation-selected checkpoints are substantially better than its epoch-30 checkpoint."
+    ]
+  },
+  "rankings": {
+    "validation_opt_macro_task_accuracy": [
+      {"rank": 1, "pooling": "auto_0.01", "value": 0.920791},
+      {"rank": 2, "pooling": "smp_1.0", "value": 0.916565},
+      {"rank": 3, "pooling": "sap_512", "value": 0.914611},
+      {"rank": 4, "pooling": "max", "value": 0.911402},
+      {"rank": 5, "pooling": "mix_0.5", "value": 0.908949},
+      {"rank": 6, "pooling": "mean", "value": 0.906088},
+      {"rank": 7, "pooling": "weighted_25", "value": 0.901556},
+      {"rank": 8, "pooling": "gated_25", "value": 0.835584},
+      {"rank": 9, "pooling": "lnp_2", "value": 0.830065}
+    ],
+    "test_best_overall_accuracy_descriptive_only": [
+      {"rank": 1, "pooling": "mix_0.5", "value": 0.975766},
+      {"rank": 2, "pooling": "smp_1.0", "value": 0.975318},
+      {"rank": 3, "pooling": "sap_512", "value": 0.973144},
+      {"rank": 4, "pooling": "auto_0.01", "value": 0.971673},
+      {"rank": 5, "pooling": "weighted_25", "value": 0.968029},
+      {"rank": 6, "pooling": "max", "value": 0.962657},
+      {"rank": 7, "pooling": "mean", "value": 0.962466},
+      {"rank": 8, "pooling": "gated_25", "value": 0.871347},
+      {"rank": 9, "pooling": "lnp_2", "value": 0.847880}
+    ],
+    "test_opt_macro_task_accuracy_descriptive_only": [
+      {"rank": 1, "pooling": "smp_1.0", "value": 0.917813},
+      {"rank": 2, "pooling": "mix_0.5", "value": 0.908418},
+      {"rank": 3, "pooling": "max", "value": 0.907875},
+      {"rank": 4, "pooling": "sap_512", "value": 0.906846},
+      {"rank": 5, "pooling": "auto_0.01", "value": 0.906437},
+      {"rank": 6, "pooling": "weighted_25", "value": 0.905368},
+      {"rank": 7, "pooling": "mean", "value": 0.904145},
+      {"rank": 8, "pooling": "lnp_2", "value": 0.824917},
+      {"rank": 9, "pooling": "gated_25", "value": 0.822017}
+    ]
+  },
+  "runs": {
+    "auto_0.01": {
+      "pooling": {"type": "auto", "parameter": 0.01},
+      "run_id": "2026_09_01_04_47_36",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/auto_run_2026_09_01_04_47_30.log",
+        "result_directory": "improvements/clustering/results_ncmtl/2026_09_01_04_47_36"
+      },
+      "validation": {
+        "best": {"epoch": 28, "accuracy_all": 0.971238, "macro_task_accuracy": 0.920791, "tasks": {"ks": 0.983672, "si": 0.972190, "er": 0.806510}},
+        "opt": {"epoch": 28, "accuracy_all": 0.971238, "macro_task_accuracy": 0.920791, "tasks": {"ks": 0.983672, "si": 0.972190, "er": 0.806510}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.971673, "loss_all": 0.152102, "macro_task_accuracy": 0.906437, "macro_task_loss": 0.411810,
+          "tasks": {"ks": {"accuracy": 0.984784, "loss": 0.148527, "samples": 6835}, "si": {"accuracy": 0.975033, "loss": 0.492358, "samples": 8251}, "er": {"accuracy": 0.759494, "loss": 0.594544, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.971673, "loss_all": 0.152102, "macro_task_accuracy": 0.906437, "macro_task_loss": 0.411810,
+          "tasks": {"ks": {"accuracy": 0.984784, "loss": 0.148527, "samples": 6835}, "si": {"accuracy": 0.975033, "loss": 0.492358, "samples": 8251}, "er": {"accuracy": 0.759494, "loss": 0.594544, "samples": 553}}
+        }
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    },
+    "smp_1.0": {
+      "pooling": {"type": "smp", "parameter": 1.0},
+      "run_id": "2026_09_01_03_16_16",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/smp_run_2026_09_01_03_16_11.log",
+        "result_directory": "improvements/clustering/results_ncmtl/2026_09_01_03_16_16"
+      },
+      "validation": {
+        "best": {"epoch": 30, "accuracy_all": 0.970747, "macro_task_accuracy": 0.916565, "tasks": {"ks": 0.982495, "si": 0.973349, "er": 0.793852}},
+        "opt": {"epoch": 30, "accuracy_all": 0.970747, "macro_task_accuracy": 0.916565, "tasks": {"ks": 0.982495, "si": 0.973349, "er": 0.793852}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.975318, "loss_all": 0.146827, "macro_task_accuracy": 0.917813, "macro_task_loss": 0.401339,
+          "tasks": {"ks": {"accuracy": 0.986101, "loss": 0.143851, "samples": 6835}, "si": {"accuracy": 0.978912, "loss": 0.472072, "samples": 8251}, "er": {"accuracy": 0.788427, "loss": 0.588093, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.975318, "loss_all": 0.146827, "macro_task_accuracy": 0.917813, "macro_task_loss": 0.401339,
+          "tasks": {"ks": {"accuracy": 0.986101, "loss": 0.143851, "samples": 6835}, "si": {"accuracy": 0.978912, "loss": 0.472072, "samples": 8251}, "er": {"accuracy": 0.788427, "loss": 0.588093, "samples": 553}}
+        }
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    },
+    "sap_512": {
+      "pooling": {"type": "sap", "parameter": 512},
+      "run_id": "2026_09_01_06_29_54",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/sap_run_2026_09_01_06_29_49.log",
+        "result_directory": "improvements/clustering/results_ncmtl/2026_09_01_06_29_54"
+      },
+      "validation": {
+        "best": {"epoch": 26, "accuracy_all": 0.970326, "macro_task_accuracy": 0.914611, "tasks": {"ks": 0.982348, "si": 0.973059, "er": 0.788427}},
+        "opt": {"epoch": 26, "accuracy_all": 0.970326, "macro_task_accuracy": 0.914611, "tasks": {"ks": 0.982348, "si": 0.973059, "er": 0.788427}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.973144, "loss_all": 0.138410, "macro_task_accuracy": 0.906846, "macro_task_loss": 0.392992,
+          "tasks": {"ks": {"accuracy": 0.985516, "loss": 0.155791, "samples": 6835}, "si": {"accuracy": 0.977336, "loss": 0.418875, "samples": 8251}, "er": {"accuracy": 0.757685, "loss": 0.604311, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.973144, "loss_all": 0.138410, "macro_task_accuracy": 0.906846, "macro_task_loss": 0.392992,
+          "tasks": {"ks": {"accuracy": 0.985516, "loss": 0.155791, "samples": 6835}, "si": {"accuracy": 0.977336, "loss": 0.418875, "samples": 8251}, "er": {"accuracy": 0.757685, "loss": 0.604311, "samples": 553}}
+        }
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    },
+    "max": {
+      "pooling": {"type": "max", "parameter": null},
+      "run_id": "2026_09_01_10_43_12",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/max_run_2026_09_01_10_43_06.log",
+        "result_directory": "improvements/clustering/results_ncmtl/2026_09_01_10_43_12"
+      },
+      "validation": {
+        "best": {"epoch": 23, "accuracy_all": 0.963311, "macro_task_accuracy": 0.903130, "tasks": {"ks": 0.982495, "si": 0.960168, "er": 0.766727}},
+        "opt": {"epoch": 27, "accuracy_all": 0.962469, "macro_task_accuracy": 0.911402, "tasks": {"ks": 0.978523, "si": 0.960023, "er": 0.795660}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.962657, "loss_all": 0.170248, "macro_task_accuracy": 0.893959, "macro_task_loss": 0.453771,
+          "tasks": {"ks": {"accuracy": 0.984199, "loss": 0.162316, "samples": 6835}, "si": {"accuracy": 0.959884, "loss": 0.559423, "samples": 8251}, "er": {"accuracy": 0.737794, "loss": 0.639575, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.963361, "loss_all": 0.167470, "macro_task_accuracy": 0.907875, "macro_task_loss": 0.440878,
+          "tasks": {"ks": {"accuracy": 0.983760, "loss": 0.158624, "samples": 6835}, "si": {"accuracy": 0.958672, "loss": 0.555196, "samples": 8251}, "er": {"accuracy": 0.781193, "loss": 0.608813, "samples": 553}}
+        }
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    },
+    "mix_0.5": {
+      "pooling": {"type": "mix", "parameter": 0.5},
+      "run_id": "2026_09_01_12_22_51",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/mix_05_run_2026_09_01_12_22_45.log",
+        "result_directory": "improvements/clustering/results_ncmtl_mix_05/2026_09_01_12_22_51"
+      },
+      "validation": {
+        "best": {"epoch": 30, "accuracy_all": 0.970887, "macro_task_accuracy": 0.907252, "tasks": {"ks": 0.985731, "si": 0.972914, "er": 0.763110}},
+        "opt": {"epoch": 27, "accuracy_all": 0.969344, "macro_task_accuracy": 0.908949, "tasks": {"ks": 0.983230, "si": 0.971466, "er": 0.772152}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.975766, "loss_all": 0.152335, "macro_task_accuracy": 0.919892, "macro_task_loss": 0.423085,
+          "tasks": {"ks": {"accuracy": 0.988003, "loss": 0.161201, "samples": 6835}, "si": {"accuracy": 0.977821, "loss": 0.475797, "samples": 8251}, "er": {"accuracy": 0.793852, "loss": 0.632257, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.973720, "loss_all": 0.153233, "macro_task_accuracy": 0.908418, "macro_task_loss": 0.419760,
+          "tasks": {"ks": {"accuracy": 0.986979, "loss": 0.150600, "samples": 6835}, "si": {"accuracy": 0.976972, "loss": 0.491628, "samples": 8251}, "er": {"accuracy": 0.761302, "loss": 0.617051, "samples": 553}}
+        }
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    },
+    "mean": {
+      "pooling": {"type": "mean", "parameter": null},
+      "run_id": "2026_09_01_09_22_04",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/mean_run_2026_09_01_09_21_58.log",
+        "result_directory": "improvements/clustering/results_ncmtl/2026_09_01_09_22_04"
+      },
+      "validation": {
+        "best": {"epoch": 30, "accuracy_all": 0.958751, "macro_task_accuracy": 0.906088, "tasks": {"ks": 0.981906, "si": 0.949739, "er": 0.786618}},
+        "opt": {"epoch": 30, "accuracy_all": 0.958751, "macro_task_accuracy": 0.906088, "tasks": {"ks": 0.981906, "si": 0.949739, "er": 0.786618}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.962466, "loss_all": 0.179215, "macro_task_accuracy": 0.904145, "macro_task_loss": 0.463034,
+          "tasks": {"ks": {"accuracy": 0.987418, "loss": 0.155568, "samples": 6835}, "si": {"accuracy": 0.954672, "loss": 0.611337, "samples": 8251}, "er": {"accuracy": 0.770344, "loss": 0.622198, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.962466, "loss_all": 0.179215, "macro_task_accuracy": 0.904145, "macro_task_loss": 0.463034,
+          "tasks": {"ks": {"accuracy": 0.987418, "loss": 0.155568, "samples": 6835}, "si": {"accuracy": 0.954672, "loss": 0.611337, "samples": 8251}, "er": {"accuracy": 0.770344, "loss": 0.622198, "samples": 553}}
+        }
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    },
+    "weighted_25": {
+      "pooling": {"type": "weighted", "parameter": 25},
+      "run_id": "2026_09_01_07_55_40",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/weighted_run_2026_09_01_07_55_30.log",
+        "result_directory": "improvements/clustering/results_ncmtl/2026_09_01_07_55_40"
+      },
+      "validation": {
+        "best": {"epoch": 30, "accuracy_all": 0.963451, "macro_task_accuracy": 0.901556, "tasks": {"ks": 0.981024, "si": 0.962341, "er": 0.761302}},
+        "opt": {"epoch": 30, "accuracy_all": 0.963451, "macro_task_accuracy": 0.901556, "tasks": {"ks": 0.981024, "si": 0.962341, "er": 0.761302}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.968029, "loss_all": 0.167711, "macro_task_accuracy": 0.905368, "macro_task_loss": 0.446016,
+          "tasks": {"ks": {"accuracy": 0.986686, "loss": 0.170184, "samples": 6835}, "si": {"accuracy": 0.966307, "loss": 0.544118, "samples": 8251}, "er": {"accuracy": 0.763110, "loss": 0.623746, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.968029, "loss_all": 0.167711, "macro_task_accuracy": 0.905368, "macro_task_loss": 0.446016,
+          "tasks": {"ks": {"accuracy": 0.986686, "loss": 0.170184, "samples": 6835}, "si": {"accuracy": 0.966307, "loss": 0.544118, "samples": 8251}, "er": {"accuracy": 0.763110, "loss": 0.623746, "samples": 553}}
+        }
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    },
+    "gated_25": {
+      "pooling": {"type": "gated", "parameter": 25},
+      "run_id": "2026_09_01_13_46_02",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/gated_run_2026_09_01_13_45_56.log",
+        "result_directory": "improvements/clustering/results_ncmtl/2026_09_01_13_46_02"
+      },
+      "validation": {
+        "best": {"epoch": 8, "accuracy_all": 0.880533, "macro_task_accuracy": 0.835584, "tasks": {"ks": 0.974846, "si": 0.799537, "er": 0.732369}},
+        "opt": {"epoch": 8, "accuracy_all": 0.880533, "macro_task_accuracy": 0.835584, "tasks": {"ks": 0.974846, "si": 0.799537, "er": 0.732369}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.871347, "loss_all": 0.297184, "macro_task_accuracy": 0.822017, "macro_task_loss": 0.682141,
+          "tasks": {"ks": {"accuracy": 0.980834, "loss": 0.167912, "samples": 6835}, "si": {"accuracy": 0.792631, "loss": 1.145563, "samples": 8251}, "er": {"accuracy": 0.692586, "loss": 0.732949, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.871347, "loss_all": 0.297184, "macro_task_accuracy": 0.822017, "macro_task_loss": 0.682141,
+          "tasks": {"ks": {"accuracy": 0.980834, "loss": 0.167912, "samples": 6835}, "si": {"accuracy": 0.792631, "loss": 1.145563, "samples": 8251}, "er": {"accuracy": 0.692586, "loss": 0.732949, "samples": 553}}
+        },
+        "final_epoch_warning": {"validation_accuracy_all": 0.8105, "validation_macro_task_accuracy": 0.788467, "validation_si_accuracy": 0.6585, "test_accuracy_all": 0.797493, "test_si_accuracy": 0.653497, "test_si_loss": 3.666483}
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 0, "er": 1}, "groups": [["ks", "si"], ["er"]], "frozen": true, "frozen_epoch": 6}
+    },
+    "lnp_2": {
+      "pooling": {"type": "lnp", "parameter": 2},
+      "run_id": "2026_09_01_12_19_55",
+      "sources": {
+        "log": "improvements/clustering/logs/epoch30/lnp_2_run_2026_09_01_12_19_49.log",
+        "result_directory": "improvements/clustering/results_ncmtl_lnp_p2/2026_09_01_12_19_55"
+      },
+      "validation": {
+        "best": {"epoch": 18, "accuracy_all": 0.854647, "macro_task_accuracy": 0.815007, "tasks": {"ks": 0.977052, "si": 0.744641, "er": 0.723327}},
+        "opt": {"epoch": 14, "accuracy_all": 0.851561, "macro_task_accuracy": 0.830065, "tasks": {"ks": 0.975728, "si": 0.735081, "er": 0.779385}}
+      },
+      "test": {
+        "best": {
+          "accuracy_all": 0.847880, "loss_all": 0.323545, "macro_task_accuracy": 0.807266, "macro_task_loss": 0.741508,
+          "tasks": {"ks": {"accuracy": 0.982151, "loss": 0.152313, "samples": 6835}, "si": {"accuracy": 0.747061, "loss": 1.270905, "samples": 8251}, "er": {"accuracy": 0.692586, "loss": 0.801307, "samples": 553}}
+        },
+        "opt": {
+          "accuracy_all": 0.848264, "loss_all": 0.322773, "macro_task_accuracy": 0.824917, "macro_task_loss": 0.703191,
+          "tasks": {"ks": {"accuracy": 0.981712, "loss": 0.152470, "samples": 6835}, "si": {"accuracy": 0.744395, "loss": 1.294893, "samples": 8251}, "er": {"accuracy": 0.748644, "loss": 0.662209, "samples": 553}}
+        },
+        "final_epoch_warning": {"accuracy_all": 0.460963, "loss_all": 7.795731, "si_accuracy": 0.015634, "si_loss": 35.994196}
+      },
+      "cluster": {"assignments": {"ks": 0, "si": 1, "er": 0}, "groups": [["ks", "er"], ["si"]], "frozen": true, "frozen_epoch": 6}
+    }
+  }
+}

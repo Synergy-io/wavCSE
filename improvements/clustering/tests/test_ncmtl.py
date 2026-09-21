@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import torch
 from torch.utils.data import Dataset
@@ -56,6 +57,7 @@ def training_config():
     return {
         "num_epochs": 1, "batch_size": 6, "learning_rate": 0.001,
         "label_smoothing": 0.1,
+        "gradient_clip_norm": 1.0,
         "weight_decay": 0.0, "saved_checkpoint_count": 1,
         "shuffle_train": False, "shuffle_val": False, "pin_memory": False,
         "drop_last_train": False, "drop_last_val": False, "num_workers": 0,
@@ -218,6 +220,45 @@ class NCMTLTrainerTests(unittest.TestCase):
             stats = trainer._process_batch(batch, train_mode=True)
             self.assertTrue(torch.isfinite(torch.tensor(stats.loss_all)))
             self.assertTrue(any(p.grad is not None for p in trainer.model.parameters()))
+
+    def test_gradient_clipping_runs_before_optimizer_step(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trainer = self._build_trainer(directory)
+            batch = next(iter(trainer.train_dataloader))
+            trainer.current_epoch = 1
+            events = []
+
+            original_step = trainer.optimizer.step
+
+            def tracked_step(*args, **kwargs):
+                events.append("step")
+                return original_step(*args, **kwargs)
+
+            trainer.optimizer.step = tracked_step
+            with patch(
+                "torch.nn.utils.clip_grad_norm_",
+                side_effect=lambda *args, **kwargs: events.append("clip") or torch.tensor(0.0),
+            ) as clip_mock:
+                trainer._process_batch(batch, train_mode=True)
+
+            self.assertEqual(events[:2], ["clip", "step"])
+            self.assertEqual(clip_mock.call_args.kwargs["max_norm"], 1.0)
+            self.assertTrue(clip_mock.call_args.kwargs["error_if_nonfinite"])
+
+    def test_gradient_clipping_can_be_disabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = training_config()
+            config["gradient_clip_norm"] = None
+            dataset = SyntheticDataset()
+            trainer = MultiTasksModelTrainerNCMTL(
+                model=build_model(), device=torch.device("cpu"),
+                task_type="ks_si_er", training_cfg=config,
+                results_root=os.path.join(directory, "results"),
+                checkpoints_root=os.path.join(directory, "checkpoints"),
+                training_data=dataset, validation_data=dataset,
+                ignore_index=-1, ncmtl_cfg=ncmtl_config(),
+            )
+            self.assertIsNone(trainer.gradient_clip_norm)
 
     def test_validation_has_no_clustering_side_effects(self):
         with tempfile.TemporaryDirectory() as directory:
