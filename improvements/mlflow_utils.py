@@ -68,11 +68,18 @@ def set_standard_tags(category, model, cfg, extra_tags=None):
     clustering-*/decomposition-* experiment at once, not just within one.
     """
     pooling_cfg = cfg.get("pooling", {})
+    research_cfg = cfg.get("research", {})
     tags = {
         "category": category,
         "model": model,
+        "method": research_cfg.get("method"),
+        "study_id": research_cfg.get("study_id"),
+        "stage": research_cfg.get("stage"),
+        "seed": cfg.get("seed"),
         "pooling_frame": pooling_cfg.get("frame_pooling_type"),
         "pooling_layer": pooling_cfg.get("layer_pooling_type"),
+        "layers": cfg.get("upstream", {}).get("selected_transformer_layers"),
+        "mlflow.note.content": research_cfg.get("run_note"),
     }
     if extra_tags:
         tags.update(extra_tags)

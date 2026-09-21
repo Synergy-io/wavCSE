@@ -1,0 +1,30 @@
+{
+  "study_id": "DG-0001",
+  "title": "Empirical directed task-transfer matrix",
+  "status": "active",
+  "stage": "stage_a_preparation",
+  "started_at": "2026-09-21",
+  "hypothesis": "Useful KS/SI/ER transfer is directional or pair-selective, so one symmetric dense Omega cannot represent it.",
+  "method": "wavcse_baseline",
+  "seed": 42,
+  "primary_checkpoint": "epoch",
+  "config": "configs/stage_a.yml",
+  "git_commit": null,
+  "arms": {
+    "ks": {"status": "pending"},
+    "si": {"status": "pending"},
+    "er": {"status": "pending"},
+    "ks_si": {"status": "pending"},
+    "ks_er": {"status": "pending"},
+    "si_er": {"status": "pending"},
+    "ks_si_er": {"status": "pending"}
+  },
+  "directed_transfer": null,
+  "decision": null,
+  "caveats": [
+    "Stage A is single-seed screening evidence.",
+    "ER uses the speaker-leaky historical split and cannot support a generalization claim.",
+    "Pairwise arms have more optimizer updates than single-task arms at the same epoch count.",
+    "Loss scaling and scheduler trajectories depend on the number of tasks."
+  ]
+}

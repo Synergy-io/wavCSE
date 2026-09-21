@@ -88,6 +88,14 @@ def main():
     results_root = cfg["paths"]["results_root"]
     checkpoints_root = cfg["paths"]["checkpoints_root"]
 
+    research_cfg = cfg.get("research", {})
+    study_id = research_cfg.get("study_id")
+    stage = research_cfg.get("stage")
+    if study_id:
+        output_parts = [str(study_id), str(stage or "unspecified"), task_type]
+        results_root = os.path.join(results_root, *output_parts)
+        checkpoints_root = os.path.join(checkpoints_root, *output_parts)
+
     upstream_model_type = cfg["upstream"]["model_type"]
     selected_transformer_layers = cfg["upstream"]["selected_transformer_layers"]
     transformer_layer_array = parse_transformer_layers(
@@ -141,11 +149,20 @@ def main():
     # MLflow setup
     # ----------------------------
     mlflow_utils.setup_mlflow(cfg)
-    run_name = mlflow_utils.build_run_name("base", "original", task_type)
+    run_suffix = "_".join(str(x) for x in (study_id, stage) if x)
+    run_name = mlflow_utils.build_run_name(
+        "base", "original", task_type, suffix=run_suffix or None
+    )
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
-        mlflow_utils.set_standard_tags("base", "original", cfg)
+        run_note = research_cfg.get("run_note")
+        if run_note:
+            run_note = f"{run_note} Task set: {task_type}."
+        mlflow_utils.set_standard_tags("base", "original", cfg, extra_tags={
+            "task_set": task_type,
+            "mlflow.note.content": run_note,
+        })
         mlflow.log_param("task_type", task_type)
 
         # ----------------------------
