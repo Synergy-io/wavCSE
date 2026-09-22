@@ -646,7 +646,9 @@ Latest iteration (2026-09-22, no compute): analysis/synthesis pass. Created
 `FRAMEWORK.md`, refreshed `MTRL_DIAGNOSTIC_SYNTHESIS.md` so it no longer
 prescribes the closed DEC-0007 sequence, annotated the TR-0002/TR-0003/TR-0004
 gates, and recorded DEC-0011. No Study was created, no run was launched and no
-metric was changed; every change is documentation.
+metric was changed; every change is documentation, committed as
+`be67b6a89e197f18e2fd28b7ceb15e64f795e1b0` (documentation only — it changes no
+training code, so the DG-0005 confirmation runs still report `8032a937`).
 
 GPU jobs still running: `NONE`. All DG-0005 queues finished; no tmux training
 session remains. The queueing helper `wait_for_gpu1_confirmation.py` was
