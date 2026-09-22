@@ -109,7 +109,7 @@ At 16L the aggregate difference is −0.010 points; at 25L it is −0.056 points
 | Object | Available evidence | What can be concluded |
 | --- | --- | --- |
 | Empirical directed transfer `T(A <- B)` | DG-0001 single/pairwise screen, ten-fold ER LOSO and optimizer-exposure controls | The raw matrix is not a semantic transfer target: update count and effective task batch size dominate it. Controlled KS/ER residual is unresolved; SI/ER is negative in both directions. |
-| Gradient interaction | no per-task gradient cosine, conflict rate or norm history | Unknown. DG-0002 is now the highest-priority diagnostic. |
+| Gradient interaction | DG-0002 exposure-matched seed-42 baseline/MTRL screen, 142 sampled steps per arm | Persistent pairwise conflict is not supported at this seed. ER shared-gradient norms dominate KS/SI in middle/late training; MTRL does not mitigate the imbalance. This is screening evidence pending seeds 0–4. |
 | Learned relation Ω | five-seed/fold/epoch diagnostics plus DG-0001 controlled transfer | Ω is symmetric, representation-sensitive and conditionally unstable. Its signs/magnitudes show moderate disagreement with controlled transfer, but protocols are not identical. |
 | Downstream outcome | matched five-seed aggregate/task metrics, ER LOSO and DG-0001 controls | MTRL has no reproducible meaningful advantage; raw transfer asymmetry is an optimizer-exposure artifact. |
 
@@ -119,6 +119,13 @@ zero. Across LOSO folds, SI↔ER Ω is positive in 7/10 while step-controlled
 transfer is negative in both directions. This weakens Ω as a utility proxy, but
 does not yet prove whether its estimation or downstream regularization causes
 MTRL's performance null.
+
+DG-0002 adds a different Ω mismatch. Final Ω saturates to uniform +1/3
+(off-diagonal range `6.95e-5`) while ER shared-gradient norms remain 7.36–7.66×
+the smallest baseline task norm in middle/late training. This does not make Ω a
+task-weighting matrix or establish causality; it shows that classical MTRL does
+not represent or regulate the dominant optimization-scale signal measured in
+the screen.
 
 ## Relation stability
 
@@ -225,35 +232,36 @@ This is an evidence boundary, not a completed method-selection framework.
 
 ### Single highest-information experiment
 
-**DG-0002 — exposure-controlled gradient compatibility.** Measure shared-parameter
-gradient norm per task, pairwise cosine and negative-conflict frequency early,
-middle and late in training while holding the task sampler/update schedule
-explicit. Compare ordinary wavCSE and MTRL only under the same exposure
-protocol.
+**Continue DG-0002 — matched-seed gradient compatibility.** The seed-42 screen
+already measured shared-parameter norms, pairwise cosine and conflict frequency
+under exactly paired exposure. It found no persistent pairwise conflict, but ER
+norm dominance met the pre-registered threshold in the middle and late thirds
+and MTRL did not mitigate it.
 
-This separates three remaining explanations:
+Repeat baseline and MTRL for seeds `0,1,2,3,4` under the same protocol. Use each
+seed's phase summary as the independent unit. Confirmation separates two
+remaining explanations:
 
-- persistent conflict/norm dominance → optimization interaction is implicated;
-- compatible gradients but Ω/transfer disagreement → relation estimation or
-  task-head summaries are implicated;
-- neither → revisit saturation and regularizer application rather than relation
-  directionality.
+- reproducible norm dominance with saturated Ω → optimization-scale mismatch is
+  implicated and can gate a targeted literature search;
+- seed-unstable dominance → gradient interaction is not a defensible explanation;
+  return to relation estimation or task-head parameter summaries.
 
 ### Minimum diagnostic sequence before searching for the next method
 
-1. **DG-0002:** controlled gradient diagnostics.
+1. **Complete DG-0002 confirmation:** matched baseline/MTRL seeds 0–4.
 2. **Protocol-matched DG-0003 only if needed:** compare Ω with a controlled
    transfer/gradient target under the same task set and budget.
 3. **Targeted literature search:** only after one of those establishes the
    concrete MTRL limitation.
 
 No new method search is justified yet. DG-0001 rejects asymmetry as the current
-literature-search target; optimization remains the highest-value unresolved
-branch.
+literature-search target; DG-0002's norm-dominance signal is still one-seed
+screening evidence.
 
 ## Concise synthesis
 
 1. **Strongest conclusion:** MTRL is outcome-neutral, and raw directed transfer is dominated by optimizer exposure rather than task semantics.
-2. **Most important uncertainty:** whether task-gradient conflict/norm dominance or Ω estimation explains the MTRL null.
-3. **Next scientific question:** under exposure-controlled sampling, do KS/SI/ER gradients conflict, and does Ω agree with that interaction?
-4. **Literature:** premature until DG-0002 or protocol-matched DG-0003 identifies the mechanism-level failure.
+2. **Most important uncertainty:** whether DG-0002's ER gradient-norm dominance reproduces across seeds or reflects ER's small/noisy batch regime.
+3. **Next scientific question:** across matched seeds, does MTRL consistently fail to mitigate the norm imbalance while Ω saturates?
+4. **Literature:** premature until DG-0002 confirmation or protocol-matched DG-0003 identifies the mechanism-level failure.

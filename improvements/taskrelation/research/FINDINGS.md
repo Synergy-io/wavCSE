@@ -282,13 +282,54 @@ optimizer steps, effective per-task batch size, loss scaling, epoch budget and
 checkpoint policy. DG-0001 cannot justify an asymmetric replacement method.
 Ω/transfer correspondence must use a controlled transfer target.
 
-**Required follow-up.** DG-0002 is next: measure per-task gradient norms,
-cosines and conflict frequency under exposure-controlled sampling. No
-next-method literature search is justified from DG-0001.
+**Required follow-up.** DG-0002's seed-42 screen found no persistent pairwise
+conflict but did find strong ER gradient-norm dominance (F9). Confirm that
+signal across matched seeds before any next-method literature search.
 
 Provenance: `research/studies/DG-0001/{STUDY.md,analysis.md,result.json}`;
 `research/task_relations/{empirical_transfer.json,loso_transfer.json,optimization_control.json}`;
 MLflow experiment `taskrelation-diagnostics`.
+
+---
+
+## F9 — ER shared-gradient norm dominance is a confirmation candidate  (SCREENING, 2026-09-22)
+
+**Observation.** In DG-0002's exposure-matched seed-42 baseline, ER's mean
+shared-parameter gradient norm was 7.36× and 7.66× the smallest task norm in the
+middle and late training thirds. Classical MTRL did not remove the imbalance:
+its ratios were 6.75× and 9.28×. No pair met the pre-registered persistent
+gradient-conflict threshold.
+
+**Evidence.** Each arm sampled the same 142 of 2,820 optimizer steps. Per-step
+valid-example counts matched exactly across methods. Baseline phase means
+(KS/SI/ER) were 1.117/1.389/8.218 in the middle third and
+0.864/0.831/6.363 late. MTRL means were 1.148/1.123/7.576 and
+0.862/0.651/6.038. Baseline late pairwise mean cosines were near zero
+(KS↔SI +0.005, KS↔ER +0.003, SI↔ER +0.025), not persistently negative.
+
+**Relation to Ω.** MTRL Ω saturated by late training to uniform positive
+coupling: final off-diagonals were 0.33304/0.33311/0.33307, range `6.95e-5`.
+Thus the current mechanism lost pair discrimination while the shared
+optimization remained strongly scale-imbalanced. This is correspondence, not
+causal evidence that saturation created the imbalance.
+
+**Alternative explanations.** ER contributed only 47.2 examples per sampled
+mixed batch on average, versus 539.1 KS and 1461.7 SI. Its norm may reflect
+sample scarcity, gradient-estimate noise, task difficulty or label noise rather
+than semantic task relations. One seed cannot establish a general task
+property. The within-run samples are correlated and are not independent
+replicates.
+
+**Implication.** The pairwise-conflict explanation is weakened for this seed;
+optimization-scale imbalance is the confirmation candidate. Do not select a
+mechanism or enter literature mode yet.
+
+**Required follow-up.** Continue DG-0002 with matched baseline/MTRL seeds 0–4
+and use seed-level phase summaries as the independent observations.
+
+Provenance: `research/studies/DG-0002/{PLAN.md,analysis.md,result.json}`;
+MLflow runs `71b89be472284af9a855f46871eb9f38` and
+`12a92107a6a34f26a705061f0e373239`.
 
 ---
 

@@ -26,4 +26,20 @@ Promote to matched seeds 0–4 only for an exposure-matched persistent signal: p
 
 ## Git commit
 
-Pending implementation/config commit; populate before launch.
+Implementation/config commit: `75e31b81e860d54f6125dd4a623d85e93718b7ec`.
+
+## Results
+
+Both seed-42 arms finished at commit `75e31b81e860d54f6125dd4a623d85e93718b7ec` with 142 exactly exposure-matched diagnostic samples. Baseline ER shared-gradient norms were 7.36× and 7.66× the smallest task norm in the middle and late thirds; MTRL ratios were 6.75× and 9.28×. No pair met the persistent-conflict threshold. Final Ω saturated to uniform positive coupling (off-diagonal range `6.95e-5`). Fixed-epoch MTRL deltas were aggregate −0.00090, KS +0.00073, SI −0.00303, and leaky-split ER +0.01085.
+
+## Interpretation
+
+The persistent pairwise-conflict explanation is weakened. A stronger screening signal is ER gradient-norm dominance, which MTRL does not mitigate or represent in its saturated Ω. ER's much smaller effective batch (mean 47 examples versus KS 539 and SI 1462) remains a competing data-regime explanation. One seed cannot establish generality, and ordinary-split ER accuracy is not a valid performance claim.
+
+## Decision
+
+`PROMISING` diagnostic screen. No mechanism promotion and no literature search yet.
+
+## Next step
+
+Continue DG-0002 with matched baseline and MTRL seeds `0,1,2,3,4`. Analyze seed-level phase summaries; do not treat within-run gradient samples as independent confirmation evidence.

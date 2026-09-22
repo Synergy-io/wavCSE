@@ -116,7 +116,9 @@ diagnostic exists:
 * beneficial asymmetric transfer — DG-0001's raw signal was rejected after
   optimizer-exposure controls (F8); replication under a fully controlled sampler
   would be required to reopen it;
-* gradient conflict or norm dominance — requires DG-0002;
+* persistent pairwise gradient conflict — not supported in DG-0002's seed-42
+  screen; ER gradient-norm dominance is promising but requires matched seeds
+  0–4 before it can explain MTRL's null result;
 * causal Ω/transfer mismatch — DG-0001 shows a moderate discrepancy, but the
   triple-task Ω and pairwise controlled-transfer protocols are not identical;
 * ER data-size causation — requires DG-0005;

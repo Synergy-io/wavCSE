@@ -145,7 +145,7 @@ caveats. Controlled decomposition and Ω comparison are in
 
 ## DG-0002 — Gradient compatibility baseline
 
-**Status:** READY — RECOMMENDED NEXT STUDY
+**Status:** PROMISING — seed-42 paired screen complete; matched seeds 0–4 pending
 
 ### Question
 
@@ -185,6 +185,23 @@ Pairs:
 ### Why
 
 A static task-relation matrix may fail if optimization relationships are dynamic.
+
+### Screening outcome
+
+The exposure check passed across 142 sampled steps per arm. Persistent pairwise
+gradient conflict was not supported: baseline pairwise cosines were weakly
+positive early and near zero late, with no pair crossing the pre-registered
+conflict threshold. A different signal met its threshold: baseline ER
+shared-gradient norms were 7.36× and 7.66× the smallest task norm in the middle
+and late thirds. MTRL did not mitigate this scale imbalance; its corresponding
+ratios were 6.75× and 9.28× while Ω saturated to uniform +1/3 coupling.
+
+This is one-seed screening evidence. Continue DG-0002 with matched baseline and
+MTRL seeds 0–4. If the norm pattern replicates, it identifies an
+optimization-scale limitation and can gate targeted literature work. If it
+does not, reject gradient interaction as the explanation and return to Ω
+estimation / parameter-summary diagnostics. See
+`studies/DG-0002/{analysis.md,result.json}`.
 
 ---
 

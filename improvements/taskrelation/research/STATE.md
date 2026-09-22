@@ -46,8 +46,8 @@ findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 # Current Research Phase
 
-**Phase:** MTRL diagnosis — establishing *why* classical MTRL fails to beat the
-matched baseline, before any new mechanism is implemented.
+**Phase:** MTRL diagnosis — confirming whether DG-0002's seed-42
+shared-gradient norm imbalance is reproducible before selecting any mechanism.
 
 **Formal progression** (binding — DEC-0005; stages are not skipped):
 
@@ -314,6 +314,12 @@ without a material KS or SI gain. See the revised F6 and the formal synthesis.
   matching. Equal epochs do not imply equal optimization opportunity when task
   sets change concatenated dataset size and effective task minibatches.
 
+* **F9 — ER gradient-norm dominance is a confirmation candidate (SCREENING).**
+  In DG-0002 seed 42, baseline ER shared-gradient norms were 7.36× and 7.66×
+  the smallest task norm in the middle/late thirds. MTRL did not mitigate the
+  imbalance and Ω saturated uniformly. No pair showed persistent conflict.
+  Matched seeds 0–4 are required before treating this as a limitation.
+
 * **R1 — DG-0001 created the first single/pairwise runs.** The dynamic task path
   is exercised; its raw matrix is preserved but is not a semantic transfer
   target because of F8.
@@ -345,9 +351,10 @@ Candidate explanations to test include:
 
 DG-0001 weakens the asymmetry explanation: its raw directed matrix was dominated
 by task-count-dependent optimizer exposure (F8), and no positive semantic
-transfer residual survived step matching. It also shows moderate Ω/transfer
-disagreement, but not yet its cause. Gradient conflict, data-size causation and
-parameter-summary inadequacy remain untested.
+transfer residual survived step matching. DG-0002's seed-42 screen weakens
+persistent pairwise gradient conflict but identifies ER gradient-norm dominance
+as a confirmation candidate (F9). Data-size causation and parameter-summary
+inadequacy remain untested; the norm result is not yet a mechanism gate.
 
 Each candidate is only admissible as motivation for a mechanism after a
 diagnostic study (`DG-xxxx`) has produced evidence for it, and the mechanism must
@@ -358,20 +365,21 @@ gating rules.
 
 # Next Research Action
 
-Diagnostics only. DG-0001 is complete and does **not** justify an asymmetric or
-sparse replacement method. Its raw ER-directed asymmetry disappeared after
-optimizer-exposure controls; SI/ER instead showed negative residual interaction.
+Diagnostics only. DG-0002's exposure-matched seed-42 screen is **PROMISING**:
+ER shared-gradient norms dominated KS/SI in the middle and late thirds, while
+MTRL did not mitigate the imbalance and Ω saturated to uniform +1/3. Persistent
+pairwise conflict was not supported.
 
-The next recommended study is **DG-0002 — gradient compatibility baseline**.
-Measure per-task gradient norms, pairwise cosine and conflict frequency under an
-exposure-controlled sampling protocol. The purpose is to determine whether
-optimization interaction explains MTRL's null result and the SI/ER negative
-residual before interpreting Ω as a failed relation representation.
+Continue the same Study with matched baseline and MTRL seeds `0,1,2,3,4`,
+preserving the 30-epoch `smp` 25-layer protocol and diagnostic schedule. Treat
+seed-level phase summaries—not the correlated within-run samples—as the
+independent observations.
 
-DG-0003 remains incomplete: existing Ω and controlled transfer disagree
-moderately, but triple-task MTRL Ω and pairwise baseline transfer are not the
-same protocol. Do not enter next-method literature mode until DG-0002 or a
-protocol-matched Ω/transfer study identifies the concrete mechanism failure.
+Do not enter next-method literature mode yet. If the norm pattern confirms, it
+identifies a concrete optimization-scale limitation and should drive targeted
+literature queries. If it fails, reject gradient interaction as the explanation
+and return to Ω estimation / parameter-summary diagnostics. DG-0003 remains
+incomplete because its Ω/transfer protocols are unmatched.
 
 ---
 
@@ -517,18 +525,18 @@ The same important result should be traceable between both.
 
 No mechanism work. Completed and pending diagnostics:
 
-* DG-0001 — complete. The first raw directed matrix is preserved, but F8 shows
-  optimizer exposure dominates it; it cannot justify asymmetry;
-* DG-0002 — **next recommended study**. Measure gradient norms/cosines/conflict
-  with exposure-controlled task sampling;
+* DG-0001 — complete. F8 shows optimizer exposure dominates its raw directed
+  matrix; it cannot justify asymmetry;
+* DG-0002 — **ACTIVE / PROMISING**. Seed-42 paired screen complete; matched
+  baseline/MTRL seeds 0–4 pending to confirm or reject F9;
 * DG-0003 — partial Ω/transfer discrepancy only; causal interpretation remains
   blocked by protocol mismatch;
 * DG-0004 — retrospective stability complete; prospective prediction remains;
 * DG-0005/DG-0006 — ER data-regime and cross-diagnostic fold controls remain.
 
-The single-task/pairwise code path is now exercised by DG-0001. Every future
-transfer diagnostic must control optimizer steps, effective per-task batch size,
-loss scaling, epoch budget and checkpoint policy (F8).
+Future transfer diagnostics must control optimizer steps, effective per-task
+batch size, loss scaling, epoch budget and checkpoint policy (F8). DG-0002
+additionally records exact per-task batch exposure for every sampled step.
 
 ---
 
@@ -550,28 +558,39 @@ diagnosis — not a champion. GBC is archived and not eligible (DEC-0003).
 
 Update this section after every completed research cycle.
 
-Last completed study:
+Last fully completed Study:
 
 `DG-0001 — empirical directed task-transfer matrix` (2026-09-21).
-Result: raw ER-directed asymmetry was dominated by optimizer exposure; no
-positive semantic transfer residual was resolved. See
-`research/studies/DG-0001/analysis.md` and F8.
 
-Last formal analysis:
+Most recent completed cycle/stage:
 
-`2026-09-21 — classical MTRL diagnostic synthesis`
-(`research/task_relations/MTRL_DIAGNOSTIC_SYNTHESIS.md`), now extended by
-DG-0001.
+`DG-0002 — paired gradient-compatibility screen` (2026-09-22), status
+**PROMISING**. Both seed-42 arms finished; no GPU jobs remain.
 
-Current active study:
+Current active Study:
 
-`NONE`
+`DG-0002` — confirmation pending.
 
-Next recommended action:
+Important new finding:
 
-`DG-0002 — gradient compatibility baseline`, designed with
-exposure-controlled task sampling so gradient diagnostics do not reproduce
-DG-0001's optimizer-step confound.
+F9 (SCREENING): ER's shared-gradient norm dominated KS/SI by 7.36–7.66× in
+baseline middle/late training; MTRL did not mitigate it and Ω saturated. No
+pair met the persistent-conflict threshold.
+
+Unresolved question:
+
+Does the norm imbalance reproduce across independent seeds, or is it a
+seed/data-regime artifact?
+
+Next recommended experiment:
+
+Continue DG-0002 with matched baseline and MTRL seeds `0,1,2,3,4` under the
+same 30-epoch `smp` 25-layer protocol. Confirmation is pending; do not start a
+new Study, mechanism, or literature cycle first.
+
+GPU jobs still running:
+
+`NONE`.
 
 Current consecutive unsuccessful mechanism studies:
 
