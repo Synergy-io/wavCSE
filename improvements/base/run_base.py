@@ -30,13 +30,15 @@ _IMPROVEMENTS_DIR = os.path.dirname(_THIS_DIR)              # .../improvements
 _REPO_ROOT = os.path.dirname(_IMPROVEMENTS_DIR)              # .../wavCSE (git repo root)
 _DOWNSTREAM_DIR = os.path.join(_REPO_ROOT, "downstream")
 
-sys.path.insert(0, _DOWNSTREAM_DIR)     # exposes dataset/, model/, trainer/, evaluator/, utils/ as top-level
-sys.path.insert(0, _IMPROVEMENTS_DIR)   # exposes mlflow_utils as top-level
+sys.path.insert(0, _REPO_ROOT)         # exposes improvements as a package
+sys.path.insert(0, _DOWNSTREAM_DIR)    # exposes dataset/, model/, trainer/, evaluator/, utils/
+sys.path.insert(0, _IMPROVEMENTS_DIR)  # exposes mlflow_utils as top-level
 
 import mlflow
 import mlflow_utils
 from loading_utils import get_loader_device
 from seed_utils import set_seed
+from improvements.gradient_diagnostics import make_gradient_diagnostic_trainer
 
 from dataset.load_embedding import LoadEmbedding
 from model.downstream_model import DownstreamMultiTaskModel
@@ -149,16 +151,13 @@ def main():
     # MLflow setup
     # ----------------------------
     mlflow_utils.setup_mlflow(cfg)
-    run_suffix = "_".join(str(x) for x in (study_id, stage) if x)
-    run_name = mlflow_utils.build_run_name(
-        "base", "original", task_type, suffix=run_suffix or None
-    )
+    run_name = mlflow_utils.build_research_run_name(
+        cfg, "wavcse-baseline", task_type
+    ) or mlflow_utils.build_run_name("base", "original", task_type)
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
-        run_note = research_cfg.get("run_note")
-        if run_note:
-            run_note = f"{run_note} Task set: {task_type}."
+        run_note = mlflow_utils.resolve_run_note(cfg)
         mlflow_utils.set_standard_tags("base", "original", cfg, extra_tags={
             "task_set": task_type,
             "mlflow.note.content": run_note,
@@ -201,7 +200,13 @@ def main():
         # ----------------------------
         # Train
         # ----------------------------
-        trainer = _LiveMlflowTrainer(
+        trainer_cls = _LiveMlflowTrainer
+        if training_cfg.get("gradient_diagnostics", {}).get("enabled", False):
+            trainer_cls = mlflow_utils.make_live_trainer(
+                make_gradient_diagnostic_trainer(MultiTasksModelTrainer)
+            )
+        trainer = trainer_cls(
+
             model=model,
             device=device,
             task_type=task_type,

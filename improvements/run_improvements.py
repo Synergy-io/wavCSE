@@ -55,6 +55,7 @@ from utils.parse_transformer_layers import parse_transformer_layers
 from improvements.loading_utils import get_loader_device
 from improvements.seed_utils import set_seed
 from improvements import mlflow_utils
+from improvements.gradient_diagnostics import make_gradient_diagnostic_trainer
 
 # "gbc"/"tsm"/"pmr" are all task-relation-learning variants (Kevin's branch).
 # When other members add their own architecture folders (lowrank/, clustering/,
@@ -151,10 +152,15 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
                   validation_data, ignore_index):
     """Factory for building the appropriate trainer."""
     training_cfg = cfg["training"]
+    def live_trainer(trainer_cls):
+        if training_cfg.get("gradient_diagnostics", {}).get("enabled", False):
+            trainer_cls = make_gradient_diagnostic_trainer(trainer_cls)
+        return mlflow_utils.make_live_trainer(trainer_cls)
+
 
     if model_type == "tsm":
         from improvements.taskrelation.trainers.tsm_trainer import MultiTasksModelTrainerTSM
-        trainer_cls = mlflow_utils.make_live_trainer(MultiTasksModelTrainerTSM)
+        trainer_cls = live_trainer(MultiTasksModelTrainerTSM)
         tsm_cfg = cfg.get("tsm", {})
         return trainer_cls(
             model=model,
@@ -191,7 +197,7 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
         mtrl_trainer_module = _load_module_from_path(
             "mtrl_trainer", os.path.join(mtrl_dir, "mtrl_trainer.py")
         )
-        trainer_cls = mlflow_utils.make_live_trainer(
+        trainer_cls = live_trainer(
             mtrl_trainer_module.MultiTasksModelTrainerMTRL
         )
         mtrl_cfg = cfg.get("mtrl", {})
@@ -211,7 +217,7 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
     else:
         # GBC and original use the standard trainer
         from trainer.trainer_model import MultiTasksModelTrainer
-        trainer_cls = mlflow_utils.make_live_trainer(MultiTasksModelTrainer)
+        trainer_cls = live_trainer(MultiTasksModelTrainer)
         return trainer_cls(
             model=model,
             device=device,
@@ -306,13 +312,19 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
     # ----------------------------
     category = MODEL_CATEGORY.get(model_type, "taskrelation")
     mlflow_utils.setup_mlflow(cfg)
-    run_name = mlflow_utils.build_run_name(category, model_type, task_type)
-
+    run_name = mlflow_utils.build_research_run_name(
+        cfg, model_type, task_type
+    ) or mlflow_utils.build_run_name(category, model_type, task_type)
     from evaluator.evaluator_model import MultiTasksModelEvaluator
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
-        mlflow_utils.set_standard_tags(category, model_type, cfg)
+        mlflow_utils.set_standard_tags(
+            category,
+            model_type,
+            cfg,
+            extra_tags={"task_set": task_type},
+        )
         mlflow.log_param("task_type", task_type)
 
         # Build model
