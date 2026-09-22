@@ -215,7 +215,8 @@ def main():
             checkpoints_root=checkpoints_root,
             training_data=train_data,
             validation_data=val_data,
-            ignore_index=ignore_index
+            ignore_index=ignore_index,
+            seed=seed,
         )
         trainer.train()
 

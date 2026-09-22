@@ -228,6 +228,7 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
             training_data=training_data,
             validation_data=validation_data,
             ignore_index=ignore_index,
+            seed=cfg.get("seed"),
         )
 
 

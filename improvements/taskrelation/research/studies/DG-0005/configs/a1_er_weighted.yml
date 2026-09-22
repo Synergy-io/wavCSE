@@ -1,0 +1,83 @@
+# DG-0005 A1: ER-weighted training composition; validation/test remain unchanged.
+
+log_level: INFO
+seed: 42
+
+device:
+  type: cuda
+  index: 1
+
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/embedding
+  results_root: improvements/taskrelation/research/studies/DG-0005/outputs/a1/results
+  checkpoints_root: improvements/taskrelation/research/studies/DG-0005/outputs/a1/checkpoints
+
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: smp
+  layer_pooling_param: 0.5
+
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+
+training:
+  num_epochs: 30
+  batch_size: 2048
+  learning_rate: 0.0025
+  weight_decay: 0.00000005
+  saved_checkpoint_count: 1
+  shuffle_train: true
+  shuffle_val: false
+  pin_memory: true
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 4
+  patience: 5
+  factor: 0.5
+  l1_lambda: 0.0000001
+  l2_lambda: 0.00001
+  task_sampling_weights:
+    er: 11.5
+  gradient_diagnostics:
+    enabled: true
+    sample_interval_steps: 20
+    exclude_parameter_prefixes:
+      - classifiers.
+
+evaluation:
+  batch_size: 2048
+  shuffle: false
+  pin_memory: true
+  drop_last: false
+  num_workers: 4
+
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: taskrelation-diagnostics
+
+research:
+  study_id: DG-0005
+  stage: screen
+  family: task_relation_learning
+  method: wavcse-er-weighted-composition
+  hypothesis_slug: er-data-regime-gradient-scale
+  task_set: ks_si_er
+  representation: smp25
+  parent_study: DG-0002
+  baseline_study: DG-0005-a0
+  agent_generated: true
+  status: active
+  run_note_file: improvements/taskrelation/research/studies/DG-0005/NOTE.md

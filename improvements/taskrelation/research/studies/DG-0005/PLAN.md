@@ -35,7 +35,7 @@ A third, non-exclusive outcome is that the ER norm *increases* with more ER samp
 
 ## Independent variable
 
-Per-task training-batch composition for ER, controlled by one knob (ER sampling weight), training split only.
+Per-task training-batch composition for ER, controlled by one training-only sampling weight. A1 fixes the ER weight at `11.5` while KS/SI remain `1.0`; this approximately equalizes ER's and KS's sampling mass from the observed 539:47 count ratio without changing `num_samples`.
 
 ## Matched control
 
@@ -51,7 +51,7 @@ Held identical across arms:
 - task set `ks_si_er`; training/validation/test splits unchanged, full data;
 - evaluation data never resampled or subsetted (the existing global `subset_percentage` also subsets validation and testing, so it must not be used for this Study);
 - 30 epochs; global batch 2048; `drop_last_train`; `num_samples` unchanged so optimizer steps stay ≈2820;
-- AdamW LR 0.0025, weight decay 5e-8, l1 1e-7, l2 1e-5, ReduceLROnPlateau patience 5 / factor 0.5;
+- AdamW LR 0.0025, weight decay 5e-8, l1 1e-7, l2 1e-5, and the inherited effective ReduceLROnPlateau patience 1 / factor 0.5 (the historical `patience`/`factor` config keys remain inert and matched);
 - checkpoint selection and the test evaluator;
 - seed, and the gradient diagnostic schedule (first, final, every 20th step) with the same shared-parameter definition (all trainable parameters excluding `classifiers.`).
 
