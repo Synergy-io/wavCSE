@@ -635,7 +635,11 @@ GPU jobs still running: `NONE`. All DG-0005 queues finished; no tmux training
 session remains. The queueing helper `wait_for_gpu1_confirmation.py` was
 deleted after use; `run_confirmation.py` remains as the Study's stage runner.
 Every confirmation run records commit `8032a937050d8bbd3114b172cb813a8fc7370b37`;
-HEAD may advance again.
+HEAD may advance again. The scientific-interpretation record (this file,
+`FINDINGS.md`, `DECISIONS.md`, `FAILURES.md`, `BACKLOG.md`, `STUDIES.jsonl`,
+`studies/DG-0005/*`) was committed as `b485be48f6bdb2ec6238b6ee7f5a5ce2cca0357f`
+— a documentation commit that changes no training code, so it does not affect
+the runs above.
 
 Current consecutive unsuccessful mechanism studies:
 
