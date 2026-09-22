@@ -22,16 +22,16 @@ A candidate advances to implementation only if it passes all six eligibility gat
 
 ## Results
 
-Pending. Cards and the ranked assessment are produced by two parallel literature passes (one per family) and integrated by the controller.
+Both family passes completed and were verified against primary sources by the controller. **Family B:** 6 papers verified; **Gonçalves et al. 2016 p-MSSL** (JMLR 17(33)) passes all six gates — a sparse task *precision* learned by graphical lasso (`−d log|Ω| + ℓ₁`), classification supported by the paper's own GLM extension, `1/n_k` loss scaling. Bonilla 2007 is deviation-class (Gaussian regression outputs); Zhao 2020, Zhang & Schneider 2010, Yu 2007 and Fifty 2021 fail their gates. **Family A:** 9 papers verified; **no clean pass.** Lee et al. 2016 AMTL (ICML, directed graph with loss-scaled rows), Zhou & Yang 2023 AutoTR (KDD, closed-form directed matrix) and Oliveira et al. 2019 GAMTL (IJCAI) all require a declared deviation: our heads (12/1251/4 classes) have no aligned parameter columns, so the directed relation can only act on class-mean head summaries. Six others fail outright, including three papers named "GAMTL" that are grouping/undirected methods and Zhang & Yeung's TKDD 2014 "asymmetric" MTRL, whose relation object is in fact symmetric.
 
 ## Interpretation
 
-Pending.
+The estimator family contains a method that targets our measured failure (Ω saturation) while remaining a clean published implementation, and its input is literally the same summary matrix the in-category control already uses — so the comparison isolates the estimator. The directed family is real and its canonical member (AMTL) is designed for exactly our sample-size imbalance, but faithful attachment is impossible for heterogeneous heads; the deviation is shared with the control (which also operates on summaries), so it does not break comparability, though it does forfeit external validity.
 
 ## Decision
 
-Pending.
+`COMPLETE — CANDIDATES_FOUND`. Recommended order: MSSL (clean), then AMTL if the human admits deviation-class arms, then AutoTR as an ablation of AMTL's loss-scaling ingredient. The deviation-class admissibility call is escalated to the human; it is not decided here.
 
 ## Next step
 
-If one or more candidates pass: register a `TR-xxxx` Study per variant on the shared protocol in `PLAN.md` §Controlled variables, screen at one seed against both controls, then confirm at seeds 0–4. If a family fails: record the negative result and report back to the human — do not substitute an adjacent mechanism.
+Register `TR-0007` for the clean-pass candidate (MSSL) and run it under `VARIANT_BENCHMARK_PROTOCOL.md` against both controls: screen at one seed, confirm at seeds 0–4. Hold the family-A arm pending the human's deviation-class decision. No adjacent mechanism is substituted for any failed candidate.

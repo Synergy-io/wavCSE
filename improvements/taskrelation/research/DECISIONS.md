@@ -383,3 +383,24 @@ argument.
 2. The F9-specific literature prohibition (DEC-0011) continues to bar re-running the *F9* search; it does not bar searching the new premise, which this decision explicitly changes.
 3. Every variant arm must pin pooling, layers, epochs, batch composition, seeds, checkpoint policy and evaluation protocol, and must report per-task plus aggregate results — otherwise the pooling confound (F2, ~3pp on ER) swamps the mechanism.
 4. Any ER performance claim still requires LOSO (F3); the benchmark's ER numbers from the ordinary split remain screening context only.
+
+---
+
+## DEC-0014 — HUMAN DECISION: activate Option 3 for the directed-relation question; the asymmetric arm is project-original, not a published variant
+
+**Status:** ACTIVE — 2026-09-22 (human-authored decision)
+
+**Previous direction:** DEC-0013 re-scoped the programme to benchmarking *published* relation-learning variants, with faithfulness to the source paper required. `LT-0002` then verified 15 papers across the two selected families and found that family A (asymmetric/directed) has **no clean pass**: AMTL (Lee et al. 2016), AutoTR (Zhou & Yang 2023) and GAMTL (Oliveira et al. 2019) each assume aligned per-task parameter columns, which our 12 / 1251 / 4-class heads do not provide, so a directed relation can only act on class-mean head summaries. DEC-0009 §4 had deferred exactly this situation — project-original work — behind explicit human authorization.
+
+**Evidence causing the change:** `LT-0002`'s gate result (see `studies/LT-0002/analysis.md` §3–§4) plus the human's decision among the three presented options.
+
+**Decision (human):** the directed-relation experiment proceeds as a **project-original mechanism** under the Option-3 path, not as a faithful implementation of any published method.
+
+**Consequences:**
+
+1. **Labelling is mandatory.** The arm is described as *project-original, motivated by the asymmetric-transfer literature* (Lee et al. 2016 in particular), and **must not** be presented as an implementation of AMTL, AutoTR or GAMTL. This is the constraint that archived GBC after its attribution was retracted (DEC-0003).
+2. **No faithfulness claim, no external-validity claim.** Because the mechanism is ours, the question it answers is explicitly scoped: *does a directed, sparsity-controlled relation over class-mean head summaries help under this protocol?* It cannot support statements about AMTL as published.
+3. **Lineage is still cited honestly.** The literature cards remain in the registry as motivation and as the source of design ingredients (loss-scaled sparsity, non-negativity, directed rows), each attributed to its paper.
+4. **MSSL is unaffected and remains a published arm** — it passed cleanly (`LT-0002` family B) and its input is literally the summary matrix, so it keeps its faithful-implementation status.
+5. **The benchmark therefore has two mechanism arms of different epistemic status**, and every results table must state which is literature-derived and which is project-original: `TR-0007` (MSSL, published) and `TR-0008` (directed relation, project-original).
+6. The deferred `DG-xxxx` diagnostics remain deferred; this decision does not reopen them.
