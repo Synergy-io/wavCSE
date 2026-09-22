@@ -292,44 +292,32 @@ MLflow experiment `taskrelation-diagnostics`.
 
 ---
 
-## F9 — ER shared-gradient norm dominance is a confirmation candidate  (SCREENING, 2026-09-22)
+## F9 — ER shared-gradient norm dominance is reproducible and MTRL does not mitigate it  (ESTABLISHED, 2026-09-22)
 
-**Observation.** In DG-0002's exposure-matched seed-42 baseline, ER's mean
-shared-parameter gradient norm was 7.36× and 7.66× the smallest task norm in the
-middle and late training thirds. Classical MTRL did not remove the imbalance:
-its ratios were 6.75× and 9.28×. No pair met the pre-registered persistent
-gradient-conflict threshold.
+**Observation.** Under matched three-task `smp` 25-layer training, ER's shared-parameter gradient norm dominates KS/SI in the middle and late thirds across seeds `0–4`. Classical MTRL does not consistently reduce that scale imbalance. Persistent pairwise gradient conflict is not supported.
 
-**Evidence.** Each arm sampled the same 142 of 2,820 optimizer steps. Per-step
-valid-example counts matched exactly across methods. Baseline phase means
-(KS/SI/ER) were 1.117/1.389/8.218 in the middle third and
-0.864/0.831/6.363 late. MTRL means were 1.148/1.123/7.576 and
-0.862/0.651/6.038. Baseline late pairwise mean cosines were near zero
-(KS↔SI +0.005, KS↔ER +0.003, SI↔ER +0.025), not persistently negative.
+**Evidence.** Each baseline/MTRL seed pair sampled the same 142 of 2,820 optimizer steps with identical per-step valid-example counts and the same 1,550,800 shared parameters. Seed-level phase summaries are the independent observations:
 
-**Relation to Ω.** MTRL Ω saturated by late training to uniform positive
-coupling: final off-diagonals were 0.33304/0.33311/0.33307, range `6.95e-5`.
-Thus the current mechanism lost pair discrimination while the shared
-optimization remained strongly scale-imbalanced. This is correspondence, not
-causal evidence that saturation created the imbalance.
+| Method | Phase | Mean max/min task-norm ratio | Seed SD | 95% t interval | Seeds ≥ 3 |
+| --- | --- | ---: | ---: | --- | ---: |
+| baseline | middle | 7.243 | 0.272 | [6.905, 7.581] | 5/5 |
+| baseline | late | 8.962 | 0.456 | [8.396, 9.528] | 5/5 |
+| MTRL | middle | 7.129 | 0.421 | [6.606, 7.652] | 5/5 |
+| MTRL | late | 9.004 | 1.059 | [7.689, 10.319] | 5/5 |
 
-**Alternative explanations.** ER contributed only 47.2 examples per sampled
-mixed batch on average, versus 539.1 KS and 1461.7 SI. Its norm may reflect
-sample scarcity, gradient-estimate noise, task difficulty or label noise rather
-than semantic task relations. One seed cannot establish a general task
-property. The within-run samples are correlated and are not independent
-replicates.
+Paired MTRL-minus-baseline ratio differences were −0.114 (95% CI [−0.717, +0.490]) middle and +0.042 ([−1.473, +1.556]) late. No pair met the pre-registered persistent-conflict threshold in any seed; baseline late mean cosines were KS↔SI `+0.002`, KS↔ER `+0.001`, and SI↔ER `+0.022`.
 
-**Implication.** The pairwise-conflict explanation is weakened for this seed;
-optimization-scale imbalance is the confirmation candidate. Do not select a
-mechanism or enter literature mode yet.
+**Relation to Ω.** Final off-diagonal Ω magnitudes saturated near `1/3` in all five seeds. Seeds 0–3 were uniform positive; seed 4 had both ER edges near `−1/3`, reproducing F6's joint sign flip. Magnitude saturation is reproducible, but uniform positive coupling is not. Ω's sign varies while the norm-dominance signal persists.
 
-**Required follow-up.** Continue DG-0002 with matched baseline/MTRL seeds 0–4
-and use seed-level phase summaries as the independent observations.
+**Outcome context.** Fixed-epoch MTRL-minus-baseline deltas were aggregate −0.00031, KS −0.00018, SI −0.00036, and ordinary-split ER −0.00109; every paired 95% interval included zero. This confirms no architecture improvement. The ordinary-split ER outcome remains speaker-leaky and supports no ER performance claim.
 
-Provenance: `research/studies/DG-0002/{PLAN.md,analysis.md,result.json}`;
-MLflow runs `71b89be472284af9a855f46871eb9f38` and
-`12a92107a6a34f26a705061f0e373239`.
+**Interpretation.** Classical MTRL's head-parameter covariance neither represents nor regulates the dominant shared-optimization scale behavior measured here. This is a concrete limitation to drive targeted literature research. It is not causal evidence that norm imbalance explains all of MTRL's outcome null.
+
+**Alternative explanations.** ER contributes about 47 valid examples per sampled batch versus 539 KS and 1,462 SI. Data scarcity, task difficulty, label noise and gradient-estimate variance may cause the larger norms. The imbalance is protocol-reproducible, not yet task-intrinsic. A data-regime control is required before making that stronger claim.
+
+**Implication.** Enter targeted literature mode using the observed problem: unequal task-gradient scale or relation reliability not handled by static head covariance. Do not jump directly to generic gradient surgery or loss weighting; first verify a published method's Task Relation Learning taxonomy and assumption match.
+
+Provenance: `research/studies/DG-0002/{PLAN.md,analysis.md,confirmation_result.json}`; MLflow experiment `taskrelation-diagnostics`, stage `confirm`, ten runs at commit `7f6d5248`.
 
 ---
 

@@ -1,6 +1,6 @@
 # DG-0002 — Exposure-controlled gradient compatibility baseline
 
-Status: CONFIRMING — matched baseline/MTRL seeds 0–4 pending under the unchanged protocol
+Status: CONFIRMED — matched baseline/MTRL seeds 0–4 completed 2026-09-22
 Type: diagnostic
 Started: 2026-09-22
 Research family: Task Relation Learning

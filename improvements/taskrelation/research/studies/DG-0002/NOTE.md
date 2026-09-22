@@ -24,26 +24,34 @@ Use fixed-final-epoch KS/SI/ER/aggregate outcomes as context, with `opt` and `be
 
 Promote to matched seeds 0–4 only for an exposure-matched persistent signal: pairwise mean cosine at most -0.05 with conflict frequency at least 0.60 in at least two thirds, norm ratio at least 3 in at least two thirds, or a material compatibility sign/order change across training. Weaken the hypothesis if gradients are near-neutral and similarly scaled, or if MTRL coherently mitigates the measured conflict. One seed cannot confirm the hypothesis.
 
-## Confirmation continuation
+## Confirmation execution
 
-The `PROMISING` screen is now being confirmed with baseline and MTRL seeds `0,1,2,3,4`. Each MLflow run uses stage `confirm`; seed-level phase summaries are the independent observations. The primary confirmation question is whether ER gradient-norm dominance reproduces and whether MTRL consistently fails to reduce it while Ω saturates.
+Matched baseline and MTRL seeds `0,1,2,3,4` completed under stage `confirm`. Each arm produced 142 exactly exposure-matched diagnostic samples; seed-level phase summaries are the independent observations.
 
-## Git commit
+## Git commits
 
-Implementation/config commit: `75e31b81e860d54f6125dd4a623d85e93718b7ec`.
+- instrumentation/screen config: `75e31b81e860d54f6125dd4a623d85e93718b7ec`
+- confirmation configs: `f38a6dbea81837ac802caf7065144c125a392275`
+- commit used by all ten confirmation runs: `7f6d5248f40c0c1cbd30f15b8f7cd1fe2dbb04eb`
+
+## Execution incident
+
+The first queue attempt used the launcher as a file path and exited before MLflow or training with `ModuleNotFoundError: improvements`. Commit `7f6d5248` changed it to the package entry point; the unchanged scientific configurations were then run successfully. The failed command remains in `logs/confirmation/confirm_baseline_s00.log`.
 
 ## Results
 
-Both seed-42 arms finished at commit `75e31b81e860d54f6125dd4a623d85e93718b7ec` with 142 exactly exposure-matched diagnostic samples. Baseline ER shared-gradient norms were 7.36× and 7.66× the smallest task norm in the middle and late thirds; MTRL ratios were 6.75× and 9.28×. No pair met the persistent-conflict threshold. Final Ω saturated to uniform positive coupling (off-diagonal range `6.95e-5`). Fixed-epoch MTRL deltas were aggregate −0.00090, KS +0.00073, SI −0.00303, and leaky-split ER +0.01085.
+Across seeds 0–4, baseline ER-to-smallest-task shared-gradient norm ratios were `7.243 ± 0.272` in the middle third and `8.962 ± 0.456` late; every seed exceeded the pre-registered ratio-3 threshold in both phases. MTRL ratios were `7.129 ± 0.421` and `9.004 ± 1.059`, again above threshold in every seed. Paired MTRL-minus-baseline ratio differences were −0.114 (95% CI [−0.717, +0.490]) middle and +0.042 ([−1.473, +1.556]) late: no consistent mitigation.
+
+No task pair met the persistent-conflict threshold in any seed; late mean cosines remained near zero. Ω saturated in magnitude in all five seeds. Four seeds ended uniform positive; seed 4 reproduced the known joint ER-edge sign flip. Fixed-epoch MTRL-minus-baseline outcome deltas were aggregate −0.00031, KS −0.00018, SI −0.00036 and ordinary-split ER −0.00109; every paired 95% interval included zero.
 
 ## Interpretation
 
-The persistent pairwise-conflict explanation is weakened. A stronger screening signal is ER gradient-norm dominance, which MTRL does not mitigate or represent in its saturated Ω. ER's much smaller effective batch (mean 47 examples versus KS 539 and SI 1462) remains a competing data-regime explanation. One seed cannot establish generality, and ordinary-split ER accuracy is not a valid performance claim.
+ER gradient-scale dominance is reproducible under this matched `smp` 25-layer protocol, and classical MTRL does not remove it. Persistent pairwise gradient conflict is rejected as the explanation supported by DG-0002. The result identifies an optimization-scale limitation that Ω does not regulate; it does not prove that the imbalance causes MTRL's performance null. ER's smaller effective batch, task difficulty and label noise remain competing causes. Ordinary-split ER outcomes remain speaker-leaky and support no performance claim.
 
 ## Decision
 
-`PROMISING` diagnostic screen; matched-seed confirmation active. No mechanism promotion and no literature search unless the signal confirms.
+`CONFIRMED` diagnostic finding. This is confirmation of task-gradient scale imbalance, not confirmation of an architecture improvement or an ER accuracy effect.
 
 ## Next step
 
-Complete and analyze all ten matched confirmation runs, update each DagsHub note with the Study decision, then either enter targeted literature mode for the confirmed limitation or return to Ω estimation/parameter-summary diagnostics.
+Enter targeted literature mode. Search for published Task Relation Learning methods whose stated assumption addresses unequal task-gradient scale or reliability while retaining explicit learned task relations. Do not implement generic gradient surgery, loss weighting, or a new architecture unless its taxonomy and mechanism are verified against this finding. A data-regime control remains necessary before calling the scale imbalance task-intrinsic.

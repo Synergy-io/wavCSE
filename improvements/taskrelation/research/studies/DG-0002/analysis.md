@@ -1,6 +1,6 @@
 # DG-0002 Analysis — Exposure-controlled gradient compatibility
 
-Status: **PROMISING — one-seed diagnostic screen; confirmation required**
+Status: **CONFIRMED — matched seeds 0–4; norm dominance established, persistent conflict rejected**
 
 ## Protocol and execution
 
@@ -113,3 +113,63 @@ The exposure check passed and the pre-registered norm-dominance criterion was me
 > Does persistent ER shared-gradient norm dominance reproduce across seeds, and does classical MTRL consistently fail to reduce it while Ω saturates?
 
 Do not start a new mechanism or targeted literature search from this one seed. Continue DG-0002 with matched baseline and MTRL seeds `0,1,2,3,4`, the same 30-epoch protocol, and seed-level phase summaries. Treat each seed—not each sampled step—as the independent unit. If norm dominance is reproducible, it identifies a concrete optimization-scale limitation and justifies targeted literature work. If it is not, reject the gradient-interaction explanation and return to Ω estimation/parameter-summary diagnostics.
+
+## Matched-seed confirmation
+
+### Execution and controls
+
+Baseline and MTRL arms completed for seeds `0,1,2,3,4` using the unchanged 30-epoch `smp(0.5)` 25-layer protocol. All ten runs used commit `7f6d5248f40c0c1cbd30f15b8f7cd1fe2dbb04eb`. Every baseline/MTRL seed pair sampled the same 142 of 2,820 steps, with identical sampled valid-example counts and the same 1,550,800 shared parameters. The independent observations below are the five seed-level phase summaries, not within-run gradient samples.
+
+### Reproducible gradient-scale imbalance
+
+| Method | Phase | Mean max/min task-norm ratio | Seed SD | 95% t interval | Seeds ≥ 3 |
+| --- | --- | ---: | ---: | --- | ---: |
+| baseline | middle | 7.243 | 0.272 | [6.905, 7.581] | 5/5 |
+| baseline | late | 8.962 | 0.456 | [8.396, 9.528] | 5/5 |
+| MTRL | middle | 7.129 | 0.421 | [6.606, 7.652] | 5/5 |
+| MTRL | late | 9.004 | 1.059 | [7.689, 10.319] | 5/5 |
+
+ER was the largest-norm task in these phases. Baseline seed-level middle ratios ranged 6.921–7.484 and late ratios 8.272–9.382. MTRL-minus-baseline paired ratio differences were:
+
+| Phase | Mean paired Δ | 95% paired t interval |
+| --- | ---: | --- |
+| early | +0.007 | [−0.136, +0.150] |
+| middle | −0.114 | [−0.717, +0.490] |
+| late | +0.042 | [−1.473, +1.556] |
+
+MTRL therefore did not consistently reduce the scale imbalance. It remained above the pre-registered ratio-3 threshold in the middle and late thirds for every seed.
+
+### Pairwise compatibility
+
+No baseline seed produced a pair meeting the persistent-conflict criterion. Across seeds, baseline late mean cosines were KS↔SI `+0.002`, KS↔ER `+0.001`, and SI↔ER `+0.022`; corresponding negative-conflict frequencies were `0.464`, `0.426`, and `0.357`. MTRL late means were similarly near zero (`+0.002`, `+0.004`, `+0.020`). The persistent pairwise-conflict branch is rejected for this protocol: gradients become near-orthogonal, not persistently opposed.
+
+### Ω correspondence
+
+Every MTRL seed ended with saturated off-diagonal magnitudes near `1/3`. Seeds 0–3 were uniform positive. Seed 4 had KS↔SI `+0.33316`, KS↔ER `−0.33323`, and SI↔ER `−0.33316`, reproducing F6's joint ER-edge sign flip. Thus magnitude saturation is reproducible, but uniform positive coupling is not. Ω's sign structure varies while the gradient-norm imbalance remains present in every seed; Ω does not regulate that scale behavior.
+
+### Outcome and validation context
+
+Fixed-final-epoch outcomes—the pre-registered context checkpoint—showed no resolved MTRL effect:
+
+| Metric | baseline mean | MTRL mean | paired Δ | 95% paired t interval |
+| --- | ---: | ---: | ---: | --- |
+| aggregate | 0.974730 | 0.974423 | −0.000307 | [−0.001213, +0.000599] |
+| KS | 0.986042 | 0.985867 | −0.000176 | [−0.000628, +0.000277] |
+| SI | 0.978209 | 0.977845 | −0.000364 | [−0.002069, +0.001342] |
+| ER | 0.783002 | 0.781917 | −0.001085 | [−0.010423, +0.008253] |
+
+MTRL's mean final/best validation aggregate accuracies were `0.972066/0.972922`, versus baseline `0.973076/0.973637`; final training accuracy was essentially unchanged (`0.991076` vs `0.990917`). The validation pattern and fixed-epoch tests provide no outcome improvement. The `opt` ordinary-split ER delta (`−0.01049`, interval excluding zero) reproduces F4's speaker-leaky result and is not an admissible ER generalization claim.
+
+### Interpretation and limits
+
+The narrow confirmed statement is:
+
+> Under matched three-task `smp` 25-layer training, ER shared-gradient norms dominate KS/SI in the middle and late phases across seeds 0–4, while classical MTRL neither removes the imbalance nor produces a resolved outcome improvement.
+
+This is a concrete optimization-scale limitation of the current mechanism, not causal evidence that scale imbalance explains all of MTRL's null outcome. ER contributes about 47 valid examples per sampled batch versus 539 KS and 1,462 SI; scarcity, task difficulty, label noise and gradient-estimate variance remain competing causes. A data-regime control is required before calling the imbalance task-intrinsic. No ER performance claim is made, so this diagnostic does not substitute for LOSO.
+
+### Study decision
+
+**CONFIRMED** for the norm-dominance diagnostic. **REJECTED** for persistent pairwise conflict. No architecture is promoted.
+
+The next action is targeted literature research from the measured failure mode: explicit task-relation methods that account for unequal task-gradient scale or relation reliability. Generic gradient surgery or loss reweighting is not automatically in Task Relation Learning scope and must not be implemented without taxonomy verification and a published method mapping.

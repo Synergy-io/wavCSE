@@ -39,15 +39,15 @@ Terminology — older docs are ambiguous about the word "baseline":
 * **MTRL** — the formal Task Relation Learning baseline *method* under study
   (`01-mtrl/`). The thing we diagnose and extend, not the thing we beat.
 
-Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0006). Established
+Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0007). Established
 findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 ---
 
 # Current Research Phase
 
-**Phase:** MTRL diagnosis — confirming whether DG-0002's seed-42
-shared-gradient norm imbalance is reproducible before selecting any mechanism.
+**Phase:** Targeted literature — identify a published Task Relation Learning
+method whose stated assumption addresses DG-0002/F9's confirmed gradient-scale limitation.
 
 **Formal progression** (binding — DEC-0005; stages are not skipped):
 
@@ -80,9 +80,10 @@ entries.
 
 **Immediate research question** — this, not "which architecture do we try next":
 
-> Why does classical MTRL fail to produce a significant reproducible improvement
-> over wavCSE for KS, SI and ER, and what measurable task behaviour indicates
-> which Task Relation Learning assumption should replace or extend it?
+> Which published Task Relation Learning methods explicitly account for unequal
+> task-gradient scale, task reliability or sample-size-dependent relation
+> confidence, and does their formal assumption match F9 without drifting into
+> generic loss weighting, gradient surgery, low-rank, clustering or decomposition?
 
 ---
 
@@ -314,11 +315,11 @@ without a material KS or SI gain. See the revised F6 and the formal synthesis.
   matching. Equal epochs do not imply equal optimization opportunity when task
   sets change concatenated dataset size and effective task minibatches.
 
-* **F9 — ER gradient-norm dominance is a confirmation candidate (SCREENING).**
-  In DG-0002 seed 42, baseline ER shared-gradient norms were 7.36× and 7.66×
-  the smallest task norm in the middle/late thirds. MTRL did not mitigate the
-  imbalance and Ω saturated uniformly. No pair showed persistent conflict.
-  Matched seeds 0–4 are required before treating this as a limitation.
+* **F9 — ER gradient-norm dominance is reproducible (ESTABLISHED).** Across
+  matched baseline/MTRL seeds 0–4, ER dominated the smallest task norm by
+  7.24×/8.96× in baseline middle/late training. MTRL remained at 7.13×/9.00×
+  with no consistent paired reduction. No seed showed persistent pairwise
+  conflict. Ω magnitude saturated in all seeds; one seed flipped both ER edges.
 
 * **R1 — DG-0001 created the first single/pairwise runs.** The dynamic task path
   is exercised; its raw matrix is preserved but is not a semantic transfer
@@ -351,10 +352,10 @@ Candidate explanations to test include:
 
 DG-0001 weakens the asymmetry explanation: its raw directed matrix was dominated
 by task-count-dependent optimizer exposure (F8), and no positive semantic
-transfer residual survived step matching. DG-0002's seed-42 screen weakens
-persistent pairwise gradient conflict but identifies ER gradient-norm dominance
-as a confirmation candidate (F9). Data-size causation and parameter-summary
-inadequacy remain untested; the norm result is not yet a mechanism gate.
+transfer residual survived step matching. DG-0002 rejects persistent pairwise
+gradient conflict under the matched protocol but establishes a reproducible
+optimization-scale limitation (F9). ER's data regime may cause the imbalance;
+parameter-summary inadequacy and causal Ω/transfer mismatch remain untested.
 
 Each candidate is only admissible as motivation for a mechanism after a
 diagnostic study (`DG-xxxx`) has produced evidence for it, and the mechanism must
@@ -365,21 +366,21 @@ gating rules.
 
 # Next Research Action
 
-Diagnostics only. DG-0002's exposure-matched seed-42 screen is **PROMISING**:
-ER shared-gradient norms dominated KS/SI in the middle and late thirds, while
-MTRL did not mitigate the imbalance and Ω saturated to uniform +1/3. Persistent
-pairwise conflict was not supported.
+Targeted literature only. DG-0002 is **CONFIRMED**: ER shared-gradient norms
+dominate KS/SI across seeds, classical MTRL does not consistently mitigate the
+imbalance, and persistent pairwise conflict is not supported.
 
-Continue the same Study with matched baseline and MTRL seeds `0,1,2,3,4`,
-preserving the 30-epoch `smp` 25-layer protocol and diagnostic schedule. Treat
-seed-level phase summaries—not the correlated within-run samples—as the
-independent observations.
+Execute DEC-0007. Search primary literature for published Task Relation
+Learning methods that explicitly model unequal task scale, task reliability,
+sample-size-dependent confidence or optimization-aware relations. Build queries
+from F9, create structured paper cards, verify taxonomy and map assumptions
+before registering an `LT-xxxx` candidate.
 
-Do not enter next-method literature mode yet. If the norm pattern confirms, it
-identifies a concrete optimization-scale limitation and should drive targeted
-literature queries. If it fails, reject gradient interaction as the explanation
-and return to Ω estimation / parameter-summary diagnostics. DG-0003 remains
-incomplete because its Ω/transfer protocols are unmatched.
+Do not implement generic gradient surgery, loss weighting or an arbitrary
+architecture. They are not automatically Task Relation Learning methods. If no
+published explicit-relation method addresses F9, record the negative search and
+enter `NEEDS-HUMAN-REVIEW`. A later data-regime control is still required before
+calling the imbalance task-intrinsic.
 
 ---
 
@@ -523,20 +524,21 @@ The same important result should be traceable between both.
 
 # Current Pending Work
 
-No mechanism work. Completed and pending diagnostics:
+No mechanism work:
 
-* DG-0001 — complete. F8 shows optimizer exposure dominates its raw directed
-  matrix; it cannot justify asymmetry;
-* DG-0002 — **ACTIVE / PROMISING**. Seed-42 paired screen complete; matched
-  baseline/MTRL seeds 0–4 pending to confirm or reject F9;
+* DG-0001 — complete; optimizer exposure dominates its raw transfer matrix (F8);
+* DG-0002 — **CONFIRMED**; ER gradient-scale dominance reproduces across seeds,
+  MTRL does not mitigate it, and persistent pairwise conflict is rejected (F9);
+* targeted literature action — **READY** under DEC-0007; no `LT-xxxx` Study has
+  yet been registered;
 * DG-0003 — partial Ω/transfer discrepancy only; causal interpretation remains
   blocked by protocol mismatch;
 * DG-0004 — retrospective stability complete; prospective prediction remains;
 * DG-0005/DG-0006 — ER data-regime and cross-diagnostic fold controls remain.
 
 Future transfer diagnostics must control optimizer steps, effective per-task
-batch size, loss scaling, epoch budget and checkpoint policy (F8). DG-0002
-additionally records exact per-task batch exposure for every sampled step.
+batch size, loss scaling, epoch budget and checkpoint policy (F8). Literature
+candidates must retain explicit learned task relations and map to F9.
 
 ---
 
@@ -560,33 +562,39 @@ Update this section after every completed research cycle.
 
 Last fully completed Study:
 
-`DG-0001 — empirical directed task-transfer matrix` (2026-09-21).
+`DG-0002 — exposure-controlled gradient compatibility baseline` (2026-09-22),
+decision **CONFIRMED** for gradient-norm dominance and **REJECTED** for
+persistent pairwise conflict.
 
 Most recent completed cycle/stage:
 
-`DG-0002 — paired gradient-compatibility screen` (2026-09-22), status
-**PROMISING**. Both seed-42 arms finished; no GPU jobs remain.
+Matched baseline/MTRL confirmation, seeds `0,1,2,3,4`, ten runs at commit
+`7f6d5248f40c0c1cbd30f15b8f7cd1fe2dbb04eb`.
 
 Current active Study:
 
-`DG-0002` — confirmation pending.
+`NONE`. The next stage is targeted literature research; no `LT-xxxx` Study has
+been opened.
 
 Important new finding:
 
-F9 (SCREENING): ER's shared-gradient norm dominated KS/SI by 7.36–7.66× in
-baseline middle/late training; MTRL did not mitigate it and Ω saturated. No
-pair met the persistent-conflict threshold.
+F9 (ESTABLISHED): baseline ER-to-smallest-task norm ratios were
+`7.243 ± 0.272` middle and `8.962 ± 0.456` late; MTRL was
+`7.129 ± 0.421` and `9.004 ± 1.059`. Every seed exceeded ratio 3 in both
+phases. No pair met the persistent-conflict threshold in any seed.
 
 Unresolved question:
 
-Does the norm imbalance reproduce across independent seeds, or is it a
-seed/data-regime artifact?
+Which published explicit task-relation method legitimately addresses unequal
+optimization scale or relation reliability? ER's smaller effective batch
+remains a competing cause, so the imbalance is not yet task-intrinsic.
 
-Next recommended experiment:
+Next recommended action:
 
-Continue DG-0002 with matched baseline and MTRL seeds `0,1,2,3,4` under the
-same 30-epoch `smp` 25-layer protocol. Confirmation is pending; do not start a
-new Study, mechanism, or literature cycle first.
+Execute DEC-0007 targeted literature mode. Produce primary-source paper cards
+and register an `LT-xxxx` candidate only if its formal assumption maps to F9 and
+its taxonomy remains Task Relation Learning. No GPU run or mechanism
+implementation comes first.
 
 GPU jobs still running:
 
@@ -594,16 +602,11 @@ GPU jobs still running:
 
 Current consecutive unsuccessful mechanism studies:
 
-`1` — classical MTRL (F4). The counter drives OBJECTIVE.md's plateau trigger;
-MTRL counts as the first, and the programme formally starts here. Diagnostic
-studies (DG-xxxx) do not increment it.
+`1` — classical MTRL (F4). Diagnostic studies do not increment the plateau
+counter.
 
 Literature-search trigger:
 
-Two triggers, the second taking precedence:
-
-1. the plateau criterion in OBJECTIVE.md; or
-2. **mandatory** as soon as a diagnostic identifies a concrete MTRL limitation —
-   targeted literature mode is a required stage of the formal progression
-   (DEC-0005), not a fallback. Build queries from the observed failure mode, not
-   from "best multi task learning model".
+**ACTIVE — diagnostic trigger.** F9 identifies a concrete MTRL limitation, so
+DEC-0005 requires targeted literature mode now. The plateau trigger remains
+independently configured at five consecutive failed mechanism studies.

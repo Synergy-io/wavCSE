@@ -145,7 +145,7 @@ caveats. Controlled decomposition and Ω comparison are in
 
 ## DG-0002 — Gradient compatibility baseline
 
-**Status:** PROMISING — seed-42 paired screen complete; matched seeds 0–4 pending
+**Status:** CONFIRMED — matched baseline/MTRL seeds 0–4 completed 2026-09-22
 
 ### Question
 
@@ -186,22 +186,18 @@ Pairs:
 
 A static task-relation matrix may fail if optimization relationships are dynamic.
 
-### Screening outcome
+### Outcome
 
-The exposure check passed across 142 sampled steps per arm. Persistent pairwise
-gradient conflict was not supported: baseline pairwise cosines were weakly
-positive early and near zero late, with no pair crossing the pre-registered
-conflict threshold. A different signal met its threshold: baseline ER
-shared-gradient norms were 7.36× and 7.66× the smallest task norm in the middle
-and late thirds. MTRL did not mitigate this scale imbalance; its corresponding
-ratios were 6.75× and 9.28× while Ω saturated to uniform +1/3 coupling.
+The exposure check passed for every matched seed pair. ER shared-gradient norms reproducibly dominated KS/SI:
 
-This is one-seed screening evidence. Continue DG-0002 with matched baseline and
-MTRL seeds 0–4. If the norm pattern replicates, it identifies an
-optimization-scale limitation and can gate targeted literature work. If it
-does not, reject gradient interaction as the explanation and return to Ω
-estimation / parameter-summary diagnostics. See
-`studies/DG-0002/{analysis.md,result.json}`.
+| Method | Middle max/min ratio | Late max/min ratio | Seeds above ratio 3 in both phases |
+| --- | ---: | ---: | ---: |
+| baseline | 7.243 ± 0.272 | 8.962 ± 0.456 | 5/5 |
+| MTRL | 7.129 ± 0.421 | 9.004 ± 1.059 | 5/5 |
+
+MTRL-minus-baseline paired ratio intervals included zero in both phases, so MTRL did not consistently mitigate the imbalance. No pair met the persistent-conflict threshold in any seed; late gradient interactions were near-orthogonal. Final Ω magnitude saturated near `1/3` in every seed, but seed 4 flipped both ER-edge signs.
+
+DG-0002 therefore confirms an optimization-scale limitation of classical MTRL under the matched `smp` 25-layer protocol and rejects persistent pairwise conflict as the supported explanation. It does not establish causation or an ER performance effect. Targeted literature research is now mandatory (DEC-0005); search from unequal task-gradient scale / relation reliability, not from a preselected mechanism. See F9 and `studies/DG-0002/{analysis.md,confirmation_result.json}`.
 
 ---
 
@@ -604,6 +600,16 @@ Targeted literature mode is a **required stage of the formal progression**
 concrete MTRL limitation, and it must be completed before a mechanism study is
 implemented. The OBJECTIVE.md plateau criterion is a second, independent
 trigger.
+
+## Current targeted literature action — READY
+
+**Observed limitation:** F9 establishes that ER shared-gradient norms dominate KS/SI by roughly `7–9×` in the middle/late phases across seeds, while classical MTRL's head-covariance relation mechanism does not mitigate the imbalance. Pairwise conflict is not persistent, and Ω magnitude saturates.
+
+**Search target:** published Task Relation Learning methods that explicitly model unequal task scale, task reliability, sample-size-dependent relation confidence, or optimization-aware task relations. Candidate queries should combine `"task relationship learning"` / `"task covariance"` with `"gradient magnitude"`, `"task uncertainty"`, `"unequal sample size"`, `"heteroscedastic"`, or `"reliability"`.
+
+**Taxonomy gate:** generic loss weighting, gradient surgery, mixture-of-experts, low-rank, clustering or decomposition methods are not admissible merely because they address imbalance. A candidate must retain explicit learned task relations and map its stated assumption to F9. If no such published method exists, record that negative literature result and request human review rather than relabeling another MTL category.
+
+**Remaining causal uncertainty:** ER's smaller effective batch may cause the imbalance. Literature screening may proceed now because the mechanism limitation is measured, but any claim that the relation is task-intrinsic still requires a data-regime control.
 
 Expected output per literature cycle: paper cards (`literature/INDEX.md`) and,
 for each method worth pursuing, an `LT-xxxx` study entry whose assumption maps

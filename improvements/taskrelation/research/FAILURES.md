@@ -37,11 +37,30 @@ does not establish whether the cause is symmetric/dense relation
 parameterization, relation estimation, parameter summarization or optimization.
 
 **Consequence:** No generic MTRL tuning. DG-0001 rejected raw asymmetry as an
-optimizer-exposure artifact (F8); DG-0002 is next.
+optimizer-exposure artifact (F8); DG-0002 confirms gradient-scale imbalance but
+rejects persistent pairwise conflict (F9).
 
 Provenance: FINDINGS.md F1–F4; `01-mtrl/README.md`; MLflow experiments
 `taskrelation-mtrl`, `wavcse-baseline`, `taskrelation-mtrl-er-kfold`,
 `wavcse-baseline-er-kfold`; `task_relations/MTRL_DIAGNOSTIC_SYNTHESIS.md`.
+
+---
+
+## FL-0002 — Persistent pairwise gradient conflict does not explain the MTRL null
+
+**Status:** ESTABLISHED NEGATIVE DIAGNOSTIC
+
+**Observation:** Under the matched `smp` 25-layer protocol, no KS/SI/ER pair met the pre-registered persistent-conflict threshold in baseline training for any seed `0–4`.
+
+**Evidence:** Baseline late mean cosines across seeds were KS↔SI `+0.002`, KS↔ER `+0.001`, and SI↔ER `+0.022`; negative-conflict frequencies were `0.464`, `0.426`, and `0.357`. MTRL late means were similarly near zero. The signal is near-orthogonality, not persistent opposition.
+
+**Rejected explanation:** Classical MTRL fails because it ignores a stable pairwise gradient conflict among these three tasks. DG-0002 provides no such conflict target under its controlled protocol.
+
+**What remains:** F9 establishes a different optimization signal: ER gradient norms dominate KS/SI by roughly `7–9×` in middle/late training, and MTRL does not consistently reduce it. This does not yet prove that scale imbalance causes the outcome null.
+
+**Consequence:** Do not prioritize conflict-only gradient surgery or a dynamic-relation mechanism from DG-0002. Target literature at explicit task-relation methods handling unequal task scale or reliability, subject to the taxonomy gate.
+
+Provenance: FINDINGS.md F9; `research/studies/DG-0002/{analysis.md,confirmation_result.json}`; MLflow `taskrelation-diagnostics`, stage `confirm`.
 
 ---
 
@@ -116,9 +135,9 @@ diagnostic exists:
 * beneficial asymmetric transfer — DG-0001's raw signal was rejected after
   optimizer-exposure controls (F8); replication under a fully controlled sampler
   would be required to reopen it;
-* persistent pairwise gradient conflict — not supported in DG-0002's seed-42
-  screen; ER gradient-norm dominance is promising but requires matched seeds
-  0–4 before it can explain MTRL's null result;
+* a causal gradient-scale explanation — F9 establishes reproducible ER
+  gradient-norm dominance and MTRL non-mitigation, but not that the imbalance
+  causes MTRL's outcome null;
 * causal Ω/transfer mismatch — DG-0001 shows a moderate discrepancy, but the
   triple-task Ω and pairwise controlled-transfer protocols are not identical;
 * ER data-size causation — requires DG-0005;
