@@ -45,7 +45,7 @@ class TaskWeightedSamplerTests(unittest.TestCase):
     def setUp(self):
         self.root = CombinedDatasetStub([
             PatternDataset(100, "10"),
-            PatternDataset(20, "01"),
+            Subset(PatternDataset(25, "01"), list(range(20))),
         ])
         self.dataset = Subset(self.root, list(range(len(self.root))))
 

@@ -60,7 +60,10 @@ def build_task_weighted_sampler(
     cumulative_sizes = []
     cumulative_size = 0
     for component in component_datasets:
-        pattern = getattr(component, "index_pattern", None)
+        pattern_source = component
+        while isinstance(pattern_source, Subset):
+            pattern_source = pattern_source.dataset
+        pattern = getattr(pattern_source, "index_pattern", None)
         if (
             not isinstance(pattern, str)
             or len(pattern) != len(task_array)
