@@ -27,23 +27,26 @@ Statuses:
 
 The formal progression is binding (DEC-0005). In practice, for every entry here:
 
-* **diagnostic studies (`DG-xxxx`) are the only studies that may start now.**
-* a mechanism study (`TR-xxxx`) requires **both** diagnostic evidence naming the
-  MTRL assumption that fails **and** a published method (`LT-xxxx`) whose stated
-  assumption addresses it. Until both exist its status is `BLOCKED` — "ready
-  after diagnostics" is not an admissible status for a mechanism study.
+* **Under DEC-0013 (human re-scope, 2026-09-22) mechanism studies may now start** provided the method is a *verified published* Task Relation Learning method. Diagnostics remain available and are deferred, not cancelled.
+* a mechanism study (`TR-xxxx`) requires a published method (`LT-xxxx`) whose
+  stated assumption is verified against its source paper. **Diagnostic evidence
+  is no longer a precondition** (DEC-0013), but every variant still needs its
+  literature card and a faithfulness check before screening. A variant with no
+  verified attribution is not admissible.
 * LNP is a diagnostic/control configuration, not a method (DEC-0002). GBC is
   archived and is not a backlog item (DEC-0003). TSM/PMR are quarantined pending
   the validity audit in DEC-0004 and are not backlog items.
 * targeted literature mode is **mandatory** once a diagnostic identifies a
   concrete MTRL limitation — it is a stage of the progression, not a
   plateau-only fallback.
-* **Current stage (2026-09-22): framework synthesis.** `DG-0005` is CONFIRMED,
-  the F9-era literature gate is closed and negative (`LT-0001`/FL-0003), and
-  DEC-0010 withdrew the task-intrinsic-scale rationale. No mechanism is
-  authorized; the next move is a human scope decision (DEC-0009/DEC-0011). The
-  cross-study framework lives in `FRAMEWORK.md`; mechanism entries below stay
-  BLOCKED until both gates of DEC-0005 hold.
+* **Current stage (2026-09-22): variant benchmarking** (DEC-0013). `DG-0005` is
+  CONFIRMED and F10 stands, the F9-era literature gate is closed and negative
+  (`LT-0001`/FL-0003), and the cross-study framework lives in `FRAMEWORK.md`.
+  The programme is now implementing and comparing **published** relation-learning
+  variants under one matched protocol, starting with the two families the human
+  selected: asymmetric/directed relations, and a better relation estimator or
+  task-parameter representation. `LT-0002` verifies the sources; variant Studies
+  follow with a shared protocol.
 
 ---
 
@@ -310,9 +313,9 @@ reduce negative transfer under matched evaluation, reject the hypothesis.
 
 ## TR-0002 — Asymmetric task relation learning
 
-**Status:** BLOCKED — gate: DG-0001 must show usable empirical asymmetry + an LT-xxxx published method
+**Status:** AUTHORIZED-FOR-BENCHMARK (DEC-0013, human) — no longer gated on DG-0001 producing asymmetry. Requires a verified published directed/asymmetric relation method and a shared matched protocol; DG-0001's rejected asymmetry evidence (F8) stays on record and must not be cited as motivation.
 
-**Gate status (2026-09-22):** DG-0001 did **not** deliver usable asymmetry — its raw ER-directed signal was reproduced by optimizer-exposure controls (F8). The existing evidence therefore cannot satisfy this gate; reopening it would require a new controlled transfer design, not a re-reading of DG-0001.
+**Benchmark note (2026-09-22):** the human selected this family as one of the first two. The scientific framing changes accordingly: the question is not "does asymmetry exist in KS/SI/ER?" (DG-0001 weakened that, F8) but "does a published asymmetric relation mechanism beat classical symmetric MTRL and the matched wavCSE baseline under one protocol?". The earlier gate paragraph below is retained as history.
 
 ### Hypothesis
 
@@ -434,7 +437,7 @@ The primary contribution must remain explicit Task Relation Learning.
 
 ## TR-0006 — Better task parameter representation for MTRL
 
-**Status:** BLOCKED on DG-0003 — this is a diagnostic of MTRL's own input representation; if it is pursued as a mechanism it additionally needs an LT-xxxx published method
+**Status:** AUTHORIZED-FOR-BENCHMARK (DEC-0013, human) — the human selected this family as one of the first two. DG-0003 is deferred, so the estimator question is answered empirically by the benchmark rather than by a prior diagnostic. Requires a verified published relation estimator or task-parameter representation; classical MTRL's mean-head summary (12 / 1251 / 4 classes) is the matched in-category control.
 
 ### Problem
 

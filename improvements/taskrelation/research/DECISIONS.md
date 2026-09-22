@@ -355,3 +355,31 @@ argument.
 **New direction:** The framework's missing-evidence list is re-ranked around a noise-free mean-gradient measurement; everything else in DEC-0010/DEC-0011 stands.
 
 **Expected consequence:** A future diagnostic of this question will measure `‖E g‖` and will test the late phase specifically, instead of re-running a composition sweep or trying to infer variance from norm dispersion. The framework's claim about scale is correspondingly sharper: gradient *scale* is a training-mixture property (F10), and the part of it that persists at matched composition is a late-training property of the task's mean gradient.
+
+---
+
+## DEC-0013 — HUMAN DECISION: re-scope to a benchmark of published MTRL variants; diagnostic-first sequencing deferred
+
+**Status:** ACTIVE — 2026-09-22 (human-authored decision)
+
+**Previous direction:** DEC-0005 / DEC-0009 / DEC-0011 kept mechanism work behind two gates — a diagnostic (`DG-xxxx`) that names the failing MTRL assumption, *and* a published method (`LT-xxxx`) whose assumption addresses it. Under that regime the programme sat in framework synthesis with every `TR-xxxx` entry `BLOCKED`, because the only limitations diagnosed so far were non-relational (gradient scale, F9/F10).
+
+**Evidence causing the change:** an explicit human decision, taken after a status review that established: (a) exactly one relation-learning method — classical MTRL — has ever been implemented and evaluated in this branch (35 runs; `tsm`/`pmr` have zero runs since DEC-0004; GBC is archived since DEC-0003); (b) the F9 literature gate's rejections were specific to the gradient-scale *rationale*, not to the variant families themselves; (c) the relation-method space is therefore unexplored rather than exhausted. The human judged variant exploration the higher priority and deferred the diagnostics.
+
+**Decision (human):**
+
+1. **Adopt a variant-benchmark design.** Several *published* Task Relation Learning variants, each implemented faithfully, evaluated under one shared matched protocol: screen, then multi-seed confirmation. The matched in-category control is classical MTRL; the reference is the matched wavCSE baseline. A variant that does not beat both has not contributed.
+2. **Diagnostic-first sequencing is deferred, not deleted.** Mechanism Studies may now start from a verified published method without a prior diagnostic naming the failing assumption. Deferred diagnostics (Ω-saturation causality; parameter-summary adequacy; relation-confidence noise under matched composition) stay on the backlog.
+3. **The published-method gate is unchanged.** No project-original mechanism and no invented architecture without a verified literature attribution. Faithfulness to the source paper must be checked before screening — the retracted GBC attribution (DEC-0003) is the precedent.
+4. **First two families:** (i) asymmetric / directed relations; (ii) better relation estimator or task-parameter representation.
+5. **Category boundaries hold.** Loss weighting, gradient surgery, low-rank, clustering and decomposition remain outside scope; the benchmark stays inside Task Relation Learning (DEC-0005 §3, FL-0003).
+6. **The contribution claim changes** from a limitation-driven literature-derived extension to a comparative benchmark of published relation-learning variants. Recorded here so the write-up states it honestly.
+
+**New direction:** Verify sources for the two families (`LT-0002`), then pre-register one `TR-xxxx` Study per variant with a single shared protocol so the arms stay comparable.
+
+**Expected consequence:**
+
+1. `STATE.md`'s stage becomes variant benchmarking; `FRAMEWORK.md` remains the synthesis artifact but its "no mechanism justified" statement is now the *reason for* the benchmark rather than a stopping point.
+2. The F9-specific literature prohibition (DEC-0011) continues to bar re-running the *F9* search; it does not bar searching the new premise, which this decision explicitly changes.
+3. Every variant arm must pin pooling, layers, epochs, batch composition, seeds, checkpoint policy and evaluation protocol, and must report per-task plus aggregate results — otherwise the pooling confound (F2, ~3pp on ER) swamps the mechanism.
+4. Any ER performance claim still requires LOSO (F3); the benchmark's ER numbers from the ordinary split remain screening context only.

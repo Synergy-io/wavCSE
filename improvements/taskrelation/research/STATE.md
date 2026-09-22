@@ -39,19 +39,22 @@ Terminology — older docs are ambiguous about the word "baseline":
 * **MTRL** — the formal Task Relation Learning baseline *method* under study
   (`01-mtrl/`). The thing we diagnose and extend, not the thing we beat.
 
-Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0012). Established
+Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0013). Established
 findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 ---
 
 # Current Research Phase
 
-**Phase:** **framework synthesis** (DEC-0011). DG-0005 is CONFIRMED (2026-09-22)
-and F9's gradient-norm dominance is a training-mixture property, not
-task-intrinsic (F10). The F9-era literature gate is closed and negative
-(`LT-0001`/FL-0003). No mechanism Study exists or is authorized; the programme
-waits on a human decision about the Option-3 gate (DEC-0009/DEC-0010) and
-consumes no compute meanwhile.
+**Phase:** **variant benchmarking** (DEC-0013, human re-scope, 2026-09-22).
+`DG-0005` stands (F10: gradient scale is a training-mixture property) and the
+F9-era rationale stays withdrawn. By human decision the diagnostic-first
+sequencing is **deferred**, and the programme now implements and compares
+**published** relation-learning variants under one matched protocol, starting
+with asymmetric/directed relations and a better relation estimator or
+task-parameter representation. The published-method and category gates are
+unchanged; only one relation method (classical MTRL) has ever been evaluated
+here, so this space is unexplored rather than exhausted.
 
 **Active artifact:** `FRAMEWORK.md` — the cross-study method-selection framework
 (conditioned-quantity table, relational-vs-optimization classification, evidence
@@ -88,14 +91,15 @@ previous ranked ordering (sparse → asymmetric → confidence → dynamic → l
 is removed for exactly this reason; the hypotheses survive as *gated* backlog
 entries.
 
-**Immediate research question (human-gated):**
+**Immediate research question:**
 
-> Which of the three documented options does the programme take — (a) a bounded
-> diagnostic separating gradient-estimate variance from ER convergence under
-> DG-0005's matched composition, (b) close-out with the framework as the
-> characterisation result, or (c) explicit Option-3 authorization with a
-> rationale that does not rest on F9? Only (a) or (c) would consume compute; the
-> framework does not require either.
+> For each published relation-learning variant in the two selected families:
+> does it beat **both** classical symmetric MTRL (matched in-category control)
+> and the matched **wavCSE baseline** under one shared protocol, without material
+> regression on any task? First sub-question, answered by `LT-0002` before any
+> code: which published methods in those families are formal Task Relation
+> Learning (Zhang & Yang §2.4) and implementable faithfully against disjoint,
+> heterogeneous KS/SI/ER heads?
 
 ---
 
@@ -553,7 +557,11 @@ The same important result should be traceable between both.
 
 # Current Pending Work
 
-No mechanism work:
+Mechanism work is **authorized for benchmarking** under DEC-0013 (published methods only):
+
+* `LT-0002` — **RUNNING**; source verification for the two selected families (asymmetric/directed relations; better relation estimator or task-parameter representation). Blocks any variant implementation until its cards exist.
+* `TR-xxxx` variant Studies — to be registered per verified method, one shared matched protocol, screen then confirm.
+* Deferred (not cancelled): the `DG-xxxx` diagnostics below.
 
 * DG-0001 — complete; optimizer exposure dominates its raw transfer matrix (F8);
 * DG-0002 — **CONFIRMED**; ER gradient-scale dominance reproduces across seeds,
@@ -562,16 +570,20 @@ No mechanism work:
   mechanism (DEC-0008, superseded by DEC-0009);
 * DG-0005 — **CONFIRMED** (2026-09-22); matched seeds 0–4 removed late ER
   norm dominance in 5/5 seeds under a passing exposure gate. Produced F10 and
-  refined F9. No mechanism is authorized by it;
+  refined F9. It authorizes no mechanism by itself — the benchmark's authority
+  comes from DEC-0013, which is a human decision;
 * DG-0003 — partial Ω/transfer discrepancy only; causal interpretation remains
   blocked by protocol mismatch;
 * DG-0004 — retrospective stability complete; prospective prediction remains;
 * DG-0006 — cross-diagnostic ER fold controls remain.
 
 Future transfer diagnostics must control optimizer steps, effective per-task
-batch size, loss scaling, epoch budget and checkpoint policy (F8). No new
-relation mechanism may cite F9, and no mechanism may be implemented at all,
-until a human records an explicit authorization under DEC-0009.
+batch size, loss scaling, epoch budget and checkpoint policy (F8). No relation
+mechanism may cite F9 — that rationale is withdrawn (DEC-0010). Mechanism work
+now proceeds under DEC-0013, which requires a verified published source for
+every variant, keeps the category boundaries (no loss weighting, gradient
+surgery, low-rank, clustering or decomposition), and fixes one shared matched
+protocol across arms.
 
 ---
 
@@ -634,13 +646,15 @@ Unresolved questions:
 
 Next recommended action:
 
-**None requiring GPU work.** What remains is a human choice among the three
-documented options in `FRAMEWORK.md` §6: (a) the bounded late-phase
-mean-gradient diagnostic (narrowed by DEC-0012 to measuring `‖E g‖` on the
-existing arms), (b) close-out with the framework as the characterisation result,
-or (c) explicit Option-3 authorization with a rationale that does not rest on
-F9. Option (a) would be pre-registered as its own `DG-xxxx` Study before any run,
-and any ER performance claim afterwards would still require LOSO (F3).
+**Variant benchmark, stage 1 — literature verification (`LT-0002`).** No code is
+written before the two families have verified paper cards: which published
+methods implement directed/asymmetric relations, and which implement a better
+relation estimator or task-parameter representation, under what assumptions, and
+whether those assumptions survive disjoint datasets with 12 / 1251 / 4-class
+heads. Then one pre-registered `TR-xxxx` Study per variant on a single shared
+protocol (pooling `smp` 0.5, all 25 layers, 30 epochs, batch 2048, seeds 0–4,
+classical MTRL and wavCSE baseline as the two controls), screen first, confirm
+before any promotion. The deferred diagnostics stay on the backlog.
 
 Latest iteration (2026-09-22, no compute): pre-registered post-hoc bound on
 DG-0005's ER norm drop (`studies/DG-0005/analyze_noise_shape.py`, pre-registered
