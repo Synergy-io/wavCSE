@@ -247,7 +247,7 @@ argument.
 
 ## DEC-0008 — No literature-eligible F9 mechanism; human scope decision required
 
-**Status:** ACTIVE — 2026-09-22
+**Status:** SUPERSEDED — 2026-09-22 by DEC-0009 (human scope decision recorded below).
 
 **Previous direction:** DEC-0007 required targeted primary-source research for an explicit Task Relation Learning method that models unequal task scale, task reliability, sample-size-dependent confidence, or optimization-aware relations.
 
@@ -262,3 +262,28 @@ argument.
 3. authorize a project-original relation-plus-reliability hybrid, explicitly abandoning the requirement that the mechanism itself be a faithful published method.
 
 **Expected consequence:** No architecture implementation or GPU training begins until the scope decision is recorded. The conservative default is option 1 because it preserves the formal contribution and existing category boundaries.
+
+---
+
+## DEC-0009 — HUMAN DECISION: retain strict Task Relation Learning scope; Option 3 deferred behind explicit gates
+
+**Status:** ACTIVE — 2026-09-22 (human-authored decision)
+
+**Decision (human):**
+
+1. **Retain strict Task Relation Learning scope now.** No mechanism is implemented under the current literature gate. Option 2 (broadening the research family to optimization-aware MTL) is **declined**.
+2. **Option 3 (project-original relation-plus-reliability hybrid) is not rejected in principle** but is deferred and gated: it may proceed only when **both** hold — (a) the environment supports it (compute, disk and implementation prerequisites actually available), and (b) the human explicitly authorizes it at that time.
+3. **DG-0005 is the authorized continuation:** the ER data-regime/gradient-noise diagnostic, which stays inside existing scope.
+4. The GradNorm-style scale-normalization arm proposed as a diagnostic control is **not authorized** here. It is an optimization-scope change and requires its own explicit approval before any implementation.
+
+**Previous direction:** DEC-0007 sent the programme into targeted literature mode from F9; DEC-0008 recorded that no eligible published mechanism exists and left the scope choice open.
+
+**Evidence:** F9 (DG-0002 confirmation, seeds 0–4: baseline ER-to-smallest-task norm ratios 7.243 ± 0.272 middle and 8.962 ± 0.456 late; MTRL 7.129 ± 0.421 and 9.004 ± 1.059; no persistent conflict; Ω magnitude saturation in every seed); FL-0003 / R3 / LT-0001 (eight primary sources, no method satisfying all gates).
+
+**Consequences:**
+
+1. `STATE.md` phase is DG-0005 execution, not mechanism search. The `TR-xxxx` gate stays closed until a human reopens it.
+2. Research-family identity in `AGENTS.md` (Task Relation Learning) is **unchanged** — Option 2's rename or new category folder must not be created.
+3. DG-0005's outcome becomes the evidence base for any future Option 3 authorization: if ER norm dominance tracks the data regime, a reliability/scale-aware relation mechanism is causally motivated; if dominance persists under matched per-batch composition, the imbalance is task-intrinsic and the mechanism rationale must change accordingly.
+4. Any future Option 3 work must be labelled **project-original, not literature-derived**, and must not repeat the retracted-attribution pattern that archived GBC (DEC-0003).
+5. Plateau counter remains `1`; DG-0005 is a diagnostic study and does not increment it.

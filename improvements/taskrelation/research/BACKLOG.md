@@ -457,7 +457,13 @@ Avoid methods whose main contribution becomes generic representation learning.
 
 ## DG-0005 — Data-regime hypothesis
 
-**Status:** READY — reprioritized 2026-09-22 after F9/LT-0001. This is the conservative autonomous continuation under DEC-0008 option 1: it stays inside existing Task Relation Learning scope, needs no new architecture, and is prerequisite to any relation-plus-reliability claim.
+**Status:** READY — PRE-REGISTERED 2026-09-22 (`studies/DG-0005/{PLAN.md,NOTE.md}`), authorized by DEC-0009. Stays inside existing Task Relation Learning scope, implements no mechanism, and is prerequisite to any relation-plus-reliability claim.
+
+**Arms:** A0 matched baseline; A1 ER-weighted training composition (raise ER per-batch contribution to KS scale); A2 pre-registered reverse direction (reduce KS/SI contribution to ER scale), launched only if A1 is ambiguous.
+
+**Gate:** the per-step realized valid-example counts must match each arm's design target, otherwise the arm is invalid, not merely noisy (F8).
+
+**Not in this Study:** no MTRL arm, no Ω analysis, no GradNorm-style scale-normalization arm (unauthorized), no LOSO (no ER performance claim).
 
 ### Reframed question for the F9 era
 

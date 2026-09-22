@@ -39,16 +39,17 @@ Terminology — older docs are ambiguous about the word "baseline":
 * **MTRL** — the formal Task Relation Learning baseline *method* under study
   (`01-mtrl/`). The thing we diagnose and extend, not the thing we beat.
 
-Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0007). Established
+Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0009). Established
 findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 ---
 
 # Current Research Phase
 
-**Phase:** NEEDS-HUMAN-REVIEW. The F9 literature gate (LT-0001) found no
-published explicit-relation mechanism that directly addresses the confirmed
-gradient-scale limitation; no mechanism Study is authorized.
+**Phase:** DG-0005 execution — ER data-regime gradient-scale control
+(authorized by DEC-0009). Strict Task Relation Learning scope retained; no
+mechanism Study is authorized. The GradNorm-style control arm is **not**
+authorized.
 
 **Formal progression** (binding — DEC-0005; stages are not skipped):
 
@@ -367,30 +368,24 @@ gating rules.
 
 # Next Research Action
 
-**Mechanism work is blocked pending a human scope decision.** LT-0001 screened
-eight primary sources against pre-registered gates and found no published
-method that both learns explicit task relations and directly addresses F9
-without category drift or an incompatible math setting (DEC-0008).
+**DEC-0009 (human decision) is recorded.** Strict Task Relation Learning scope
+is retained; Option 2 (optimization-aware MTL) is declined; Option 3 is deferred
+behind two gates — environment support **and** explicit human authorization at
+that time. The GradNorm-style diagnostic control arm is not authorized.
 
-The human must choose:
+The authorized next action is **`DG-0005` — ER data-regime gradient-scale
+control**, pre-registered in `studies/DG-0005/PLAN.md`: raise ER's per-batch
+training contribution to KS scale with exposure otherwise fixed, and test
+whether the F9 norm dominance collapses (H1, data-regime explanation) or
+persists (H2, task-intrinsic scale).
 
-1. **retain strict Task Relation Learning scope** (conservative default) and
-   resume causal diagnostics, beginning with an ER data-regime/gradient-noise
-   control;
-2. **broaden scope explicitly** to optimization-aware MTL, admitting methods
-   such as GradNorm or uncertainty weighting as a separate branch or control;
-3. **authorize a project-original hybrid** combining explicit task covariance
-   with reliability/scale, accepting that the mechanism is no longer a faithful
-   published method.
+Implementation prerequisites do not yet exist: the training loader takes no
+per-task sampler, per-sample task membership is not exposed, and
+`dataset.subset_percentage` must not be reused because it also subsets
+validation and test. The knob must be additive and default-off so the
+established baseline evaluation protocol is unchanged.
 
-Do not implement any mechanism, and do not relabel an adjacent MTL category,
-before that decision is recorded. Option 1 preserves the current contribution
-claim and category boundaries.
-
-The autonomous diagnostic continuation under option 1 is the ER data-regime
-question (`DG-0005`): does ER's much smaller effective batch, rather than task
-semantics, produce the F9 scale signal? A later Study must still add LOSO
-before any ER performance claim.
+A later Study must still add LOSO before any ER performance claim.
 
 ---
 
@@ -540,10 +535,10 @@ No mechanism work:
 * DG-0002 — **CONFIRMED**; ER gradient-scale dominance reproduces across seeds,
   MTRL does not mitigate it, and persistent pairwise conflict is rejected (F9);
 * LT-0001 — **REJECTED**; the F9 literature gate found no eligible published
-  mechanism (DEC-0008). Programme state is `NEEDS-HUMAN-REVIEW`;
-* DG-0005 — **READY** (reprioritized): test whether ER's data regime produces
-  the F9 scale imbalance. This is a diagnostic inside existing scope and is the
-  conservative autonomous continuation;
+  mechanism (DEC-0008, superseded by DEC-0009);
+* DG-0005 — **READY / PRE-REGISTERED** (`studies/DG-0005/{PLAN.md,NOTE.md}`);
+  authorized by DEC-0009. Tests whether ER's data regime produces the F9 scale
+  imbalance. No mechanism, no LOSO, no ER performance claim;
 * DG-0003 — partial Ω/transfer discrepancy only; causal interpretation remains
   blocked by protocol mismatch;
 * DG-0004 — retrospective stability complete; prospective prediction remains;
@@ -551,7 +546,8 @@ No mechanism work:
 
 Future transfer diagnostics must control optimizer steps, effective per-task
 batch size, loss scaling, epoch budget and checkpoint policy (F8). No new
-relation mechanism may cite F9 until a human records one of DEC-0008's options.
+relation mechanism may cite F9, and no mechanism may be implemented at all,
+until a human records an explicit authorization under DEC-0009.
 
 ---
 
@@ -585,7 +581,8 @@ commit `7f6d5248f40c0c1cbd30f15b8f7cd1fe2dbb04eb`.
 
 Current active Study:
 
-`NONE`. LT-0001 closed. No `TR-xxxx` may open without the DEC-0008 decision.
+`DG-0005` — READY, pre-registered, not yet executed. No `TR-xxxx` is open and
+none may open without an explicit human authorization under DEC-0009.
 
 Important new findings:
 
@@ -607,10 +604,11 @@ Either answer changes which mechanism category is appropriate.
 
 Next recommended action:
 
-Obtain the DEC-0008 human scope decision. Under the conservative default,
-open the DG-0005-style ER data-regime/gradient-noise diagnostic next; it is
-within existing scope, requires no new architecture, and is prerequisite to any
-relation-plus-reliability claim. No GPU training has been launched.
+Implement DG-0005's additive, default-off per-task training sampling knob,
+commit it, record the SHA, then run screening: A0 (matched baseline) on GPU 0
+and A1 (ER-weighted composition) on GPU 1, seed 42, ~18 min per arm. Monitor to
+completion and analyse seed-level phase summaries before any confirmation
+batch. No GPU training has been launched yet.
 
 GPU jobs still running:
 
@@ -624,5 +622,5 @@ the plateau counter.
 Literature-search trigger:
 
 **SATISFIED AND COMPLETE for F9 (LT-0001).** Re-enter literature mode only for a
-new, separately evidenced limitation or after a human broadens scope under
-DEC-0008.
+new, separately evidenced limitation, or if the human reopens scope under
+DEC-0009. Do not repeat the F9 search.
