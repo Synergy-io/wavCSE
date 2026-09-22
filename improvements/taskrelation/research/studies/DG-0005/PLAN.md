@@ -1,6 +1,6 @@
 # DG-0005 — ER data-regime gradient-scale control
 
-Status: CONFIRMING — seed-42 screen PROMISING; matched seeds 0–4 required
+Status: CONFIRMED 2026-09-22 — matched seeds 0–4 removed late ER norm dominance in 5/5 seeds under a passing exposure gate (see `analysis.md`, `confirmation_result.json`)
 Type: diagnostic
 Created: 2026-09-22T09:40:00+00:00
 Research family: Task Relation Learning

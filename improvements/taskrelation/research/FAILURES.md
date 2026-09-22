@@ -166,6 +166,40 @@ diagnostic exists:
   causes MTRL's outcome null;
 * causal Ω/transfer mismatch — DG-0001 shows a moderate discrepancy, but the
   triple-task Ω and pairwise controlled-transfer protocols are not identical;
-* ER data-size causation — requires DG-0005;
+* ER data-size causation — **resolved by DG-0005 (CONFIRMED)**: ER's gradient-norm
+  dominance is training-mixture dependent and disappears when ER contributes
+  KS-scale examples per batch (F10). The 7–9× ratio is *not* a task-intrinsic
+  property. What remains open is whether the residual norm drop is reduced
+  gradient-estimate variance or ER convergence/overfitting — DG-0005's single
+  knob cannot separate them;
 * confidence-aware, dynamic, layer-specific or sparse mechanism failure — no
   such mechanism has been tested.
+
+---
+
+## FL-0004 — Task-intrinsic gradient-scale justification for a relation mechanism
+
+**Status:** ESTABLISHED NEGATIVE JUSTIFICATION (2026-09-22)
+
+**Observation:** The symptom that motivated the F9-era mechanism search — ER
+gradient norms dominating KS/SI by 7–9× — is a sampling-regime effect, so it
+cannot license a scale- or reliability-aware mechanism as a fix for a task
+property.
+
+**Evidence:** DG-0005 matched seeds 0–4 at commit `8032a937` removed the late
+dominance in `5/5` seeds by changing only ER's per-batch sampling weight, with
+every exposure gate passing, a localized ER norm drop (`6.972 → 1.608`), and no
+change in pairwise cosine structure. F10.
+
+**Rejected justification:** "ER is intrinsically a large-gradient task, so
+classical MTRL's static covariance is inadequate for a scale/reliability
+reason." That premise is withdrawn (DEC-0010).
+
+**What this does not explain:** Why classical MTRL fails to improve outcomes
+(F4, FL-0001) remains unexplained. F7 saturation, relation estimation error and
+parameter-summary inadequacy are all still untested.
+
+**Consequence:** Do not re-open the F9 literature gate (FL-0003), and do not
+re-ablate sampling composition expecting a mechanism justification. A future
+mechanism must be motivated from relation structure or from an explicitly
+regime-conditioned claim.

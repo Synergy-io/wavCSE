@@ -457,7 +457,7 @@ Avoid methods whose main contribution becomes generic representation learning.
 
 ## DG-0005 — Data-regime hypothesis
 
-**Status:** CONFIRMING — seed-42 screen PROMISING 2026-09-22; matched A0/A1 seeds 0–4 are now required. Authorized by DEC-0009; remains diagnostic-only and does not reopen the mechanism gate.
+**Status:** DONE — **CONFIRMED** 2026-09-22. Matched A0/A1 seeds 0–4 at commit `8032a937`; late max/min task-norm ratio `8.962 ± 0.456 → 2.352 ± 0.270` (paired `−6.610`, `[−7.353, −5.867]`), below the pre-registered `3.0` threshold in `5/5` seeds with every exposure gate passing. Established F10 and refined F9. Diagnostic only: it does not reopen the mechanism gate.
 
 **Arms:** A0 matched baseline; A1 ER-weighted training composition (raise ER per-batch contribution to KS scale); A2 pre-registered reverse direction (reduce KS/SI contribution to ER scale), launched only if A1 is ambiguous.
 
@@ -465,7 +465,11 @@ Avoid methods whose main contribution becomes generic representation learning.
 
 **Not in this Study:** no MTRL arm, no Ω analysis, no GradNorm-style scale-normalization arm (unauthorized), no LOSO (no ER performance claim).
 
-**Screening result:** exposure gate passed (`439.23 / 1173.99 / 434.79` KS/SI/ER examples per sampled A1 batch; ER/KS `0.990`). A0 middle/late norm ratios `7.357 / 7.661` fell to `2.822 / 2.756` under A1, satisfying the pre-registered `< 3.0` late criterion. Single-seed only: `PROMISING`, not established. A2 is not triggered because the result was unambiguous.
+**Confirmation result:** ten runs, all exposure gates passed (A1 realized ER/KS sampled-batch count `0.990–1.008` vs A0's `0.089`), 2,820 steps and 142 diagnostic samples in every arm. A0 middle/late `7.243 ± 0.272` / `8.962 ± 0.456` (exactly reproducing DG-0002's baseline); A1 `2.818 ± 0.272` / `2.352 ± 0.270`. A1's late ratio was below `3.0` in `5/5` seeds; the middle ratio was below `3.0` in `4/5` (one seed `3.054`). The change is ER-localized (late ER norm `6.972 → 1.608`; KS `+0.066`, SI `−0.117`) with no conflict signal. A2 remains untriggered because A1 was unambiguous.
+
+**Remaining confound:** A1 also multiplies ER's optimizer updates per epoch and saturates its head harder (train ≈0.99 vs validation ≈0.82), so estimator variance and convergence/overfitting are not separated. That split is the highest-information follow-up if a new diagnostic is opened.
+
+**Outcome:** gradient scale is a training-mixture property (F10), not a task-intrinsic relation property; F9 is refined accordingly. No ER performance claim — ordinary-split deltas are speaker-leaky context and their ER direction is consistent with memorization.
 
 ### Reframed question for the F9 era
 

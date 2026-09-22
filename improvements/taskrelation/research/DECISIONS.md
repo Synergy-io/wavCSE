@@ -287,3 +287,25 @@ argument.
 3. DG-0005's outcome becomes the evidence base for any future Option 3 authorization: if ER norm dominance tracks the data regime, a reliability/scale-aware relation mechanism is causally motivated; if dominance persists under matched per-batch composition, the imbalance is task-intrinsic and the mechanism rationale must change accordingly.
 4. Any future Option 3 work must be labelled **project-original, not literature-derived**, and must not repeat the retracted-attribution pattern that archived GBC (DEC-0003).
 5. Plateau counter remains `1`; DG-0005 is a diagnostic study and does not increment it.
+
+---
+
+## DEC-0010 — F9's gradient-scale signal is a training-mixture property: the task-intrinsic-scale rationale is withdrawn
+
+**Status:** ACTIVE — 2026-09-22
+
+**Previous direction:** DEC-0007 targeted literature and future mechanism work at "unequal task-gradient scale or relation reliability", treating F9's reproducible ER norm dominance as a candidate task property; DEC-0009 authorized DG-0005 as the diagnostic that would decide whether that scale signal is a data-regime artefact or task-intrinsic.
+
+**Evidence causing the change:** DG-0005 matched seeds `0–4` at commit `8032a937`. Holding pooling, layers, epochs, global batch, splits, optimizer, checkpoint policy and optimizer exposure fixed, and changing only ER's per-task sampling weight in the training split, ER's sampled share rose from ≈`47/2048` to ≈`435/2048` and the late max/min task-norm ratio fell `8.962 ± 0.456 → 2.352 ± 0.270` (paired `−6.610`, 95% `[−7.353, −5.867]`), clearing the pre-registered `< 3.0` threshold in `5/5` seeds with every exposure gate passing. Middle fell `7.243 ± 0.272 → 2.818 ± 0.272` (below `3.0` in `4/5` seeds). The change is ER-localized — late ER norm `6.972 → 1.608` against KS `+0.066` and SI `−0.117` — and pairwise cosines stayed near zero in both arms. The A0 arms reproduce DG-0002's baseline numbers exactly, so the sampling knob is inert when unused.
+
+**Decision:**
+
+1. F9's dominance is **not** a task-intrinsic property of ER at this representation. It is a property of how many examples each task contributes to a batch. Recorded as **F10**; F9 is refined in place, not deleted.
+2. The rationale "ER has intrinsically larger task gradients, therefore a scale- or reliability-aware relation mechanism is warranted" is **withdrawn**. A mechanism justified by task-intrinsic scale would now rest on a refuted premise.
+3. **No mechanism Study is authorized.** The `TR-xxxx` gate stays closed; DG-0005 was a diagnostic and does not open it. Option 3 remains deferred behind the two gates of DEC-0009.
+4. The estimator-variance-versus-convergence confound is recorded as the highest-information open question, not as a result: A1 also multiplies ER's optimizer updates per epoch and saturates its ER head harder (train ≈0.99 vs validation ≈0.82; final train–val gap `0.134 → 0.174` at the screening seed). Separating these requires a **new pre-registered diagnostic**, not a reinterpretation of DG-0005.
+5. No ER performance claim is made from DG-0005. Its ordinary-split deltas are speaker-leaky context (F3) and their ER direction is consistent with memorization; any ER claim still requires LOSO.
+
+**New direction:** The programme is **blocked on a human scope decision**, not on compute. The honest options are: (a) open a new `DG-xxxx` diagnostic to separate estimator variance from ER convergence/overfitting under the same composition; (b) authorize nothing further and proceed to framework synthesis using the existing F1–F10 evidence; or (c) revisit Option 3 explicitly, which now needs a mechanism rationale that does not depend on F9's task-intrinsic reading.
+
+**Expected consequence:** No autonomous GPU work follows from DG-0005. Future relation-mechanism proposals must justify themselves from relation structure (F5, F6, F7) or from training-mixture effects, and must name the sampling regime when reporting gradient scale, exactly as relation claims must name pooling, layers and seed/fold axis.

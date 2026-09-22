@@ -46,10 +46,11 @@ findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 # Current Research Phase
 
-**Phase:** DG-0005 matched-seed confirmation — ER data-regime gradient-scale
-control (authorized by DEC-0009). Seed-42 screening is **PROMISING**, not
-confirmed. Strict Task Relation Learning scope retained; no mechanism Study or
-GradNorm-style control arm is authorized.
+**Phase:** DG-0005 is **CONFIRMED** (2026-09-22): F9's ER gradient-norm dominance
+is a training-mixture property, not task-intrinsic (F10). Strict Task Relation
+Learning scope is retained; no mechanism Study exists or is authorized. The
+programme waits on a human decision about the Option-3 gate (DEC-0009, DEC-0010)
+rather than on further autonomous GPU work.
 
 **Formal progression** (binding — DEC-0005; stages are not skipped):
 
@@ -82,9 +83,12 @@ entries.
 
 **Immediate research question:**
 
-> Does DG-0005's seed-42 collapse of ER norm dominance from `7.661` to `2.756`
-> reproduce across matched seeds 0–4, or is the threshold crossing another
-> single-seed result?
+> Given that ER's gradient scale is set by its per-batch sample count rather
+> than by task semantics, is the residual ER norm drop a reduced
+> gradient-estimate variance effect or an ER convergence/overfitting effect —
+> and does either justify a task-reliability-aware relation mechanism under
+> DEC-0009's Option 3? The first half is a diagnosable question; the second is a
+> human scope decision.
 
 ---
 
@@ -316,11 +320,22 @@ without a material KS or SI gain. See the revised F6 and the formal synthesis.
   matching. Equal epochs do not imply equal optimization opportunity when task
   sets change concatenated dataset size and effective task minibatches.
 
-* **F9 — ER gradient-norm dominance is reproducible (ESTABLISHED).** Across
-  matched baseline/MTRL seeds 0–4, ER dominated the smallest task norm by
+* **F9 — ER gradient-norm dominance is reproducible (ESTABLISHED, refined).**
+  Across matched baseline/MTRL seeds 0–4, ER dominated the smallest task norm by
   7.24×/8.96× in baseline middle/late training. MTRL remained at 7.13×/9.00×
   with no consistent paired reduction. No seed showed persistent pairwise
   conflict. Ω magnitude saturated in all seeds; one seed flipped both ER edges.
+  **Refined by F10: the dominance holds only under the standard training
+  mixture.** Raising ER's per-batch share to KS scale removes it in 5/5 seeds,
+  so it is a sampling-regime property, not task-intrinsic.
+
+* **F10 — Gradient scale is a training-mixture property (ESTABLISHED,
+  2026-09-22).** DG-0005 matched seeds 0–4: late max/min task-norm ratio
+  `8.962 ± 0.456 → 2.352 ± 0.270` (paired `−6.610`, `[−7.353, −5.867]`) when ER's
+  sampled share rose from ≈`47/2048` to ≈`435/2048` with exposure, data and
+  evaluation held fixed. ER-localized (late ER norm `6.972 → 1.608`; KS `+0.066`,
+  SI `−0.117`), no conflict signal. Gradient scale must therefore be reported
+  with its sampling regime, like relation magnitude (F5) and confidence (F6).
 
 * **R1 — DG-0001 created the first single/pairwise runs.** The dynamic task path
   is exercised; its raw matrix is preserved but is not a semantic transfer
@@ -355,8 +370,11 @@ DG-0001 weakens the asymmetry explanation: its raw directed matrix was dominated
 by task-count-dependent optimizer exposure (F8), and no positive semantic
 transfer residual survived step matching. DG-0002 rejects persistent pairwise
 gradient conflict under the matched protocol but establishes a reproducible
-optimization-scale limitation (F9). ER's data regime may cause the imbalance;
-parameter-summary inadequacy and causal Ω/transfer mismatch remain untested.
+optimization-scale limitation (F9). DG-0005 then resolved the data-regime
+branch: the imbalance is mixture-dependent (F10), so it cannot motivate a
+mechanism as a task-intrinsic property. Parameter-summary inadequacy and causal
+Ω/transfer mismatch remain untested; the ER convergence-vs-estimator-variance
+split remains unresolved.
 
 Each candidate is only admissible as motivation for a mechanism after a
 diagnostic study (`DG-xxxx`) has produced evidence for it, and the mechanism must
@@ -372,17 +390,19 @@ is retained; Option 2 (optimization-aware MTL) is declined; Option 3 is deferred
 behind two gates — environment support **and** explicit human authorization at
 that time. The GradNorm-style diagnostic control arm is not authorized.
 
-DG-0005's seed-42 screen passed its configuration and exposure gates. Raising
-ER's mean sampled-batch contribution from `47.22` to `434.79` examples (KS
-`439.23`) reduced middle/late max-min task-norm ratios from `7.357 / 7.661` to
-`2.822 / 2.756`. This satisfies the pre-registered H1 screening criterion but
-is single-seed evidence only (F1).
+DG-0005's matched confirmation is complete: ten runs at commit `8032a937`, five
+seed pairs, all exposure gates passed. A1's late ratio was below the
+pre-registered `3.0` dominance threshold in `5/5` seeds while A0's stayed above
+it (`8.962 ± 0.456 → 2.352 ± 0.270`, paired `−6.610 [−7.353, −5.867]`). Study
+decision **CONFIRMED**; see F10 and `studies/DG-0005/analysis.md`.
 
-The required next action is matched A0/A1 confirmation at seeds `0,1,2,3,4`.
-Report seed-level middle/late ratios, mean/SD, paired differences and sign
-consistency. A2 is not triggered because the screen was unambiguous. No ER
-performance claim is made; ordinary-split accuracy remains context only, and a
-later Study must still add LOSO before any ER performance claim.
+No further autonomous GPU work is justified by this result. F9 no longer
+supports a task-intrinsic-scale mechanism rationale, and the remaining
+estimator-variance-versus-convergence question is a *new* diagnostic that needs
+its own pre-registered Study and a human decision about whether it is worth
+running under DEC-0009. No ER performance claim is made: this diagnostic used
+the speaker-leaky split for context only, and its ER accuracy direction is
+consistent with memorization (ER train ≈0.99 vs validation ≈0.82).
 
 ---
 
@@ -533,9 +553,9 @@ No mechanism work:
   MTRL does not mitigate it, and persistent pairwise conflict is rejected (F9);
 * LT-0001 — **REJECTED**; the F9 literature gate found no eligible published
   mechanism (DEC-0008, superseded by DEC-0009);
-* DG-0005 — **CONFIRMING**; seed-42 exposure gate passed and middle/late ratios
-  moved from `7.357 / 7.661` to `2.822 / 2.756`. Matched A0/A1 seeds 0–4 are
-  required before the data-regime interpretation can become established;
+* DG-0005 — **CONFIRMED** (2026-09-22); matched seeds 0–4 removed late ER
+  norm dominance in 5/5 seeds under a passing exposure gate. Produced F10 and
+  refined F9. No mechanism is authorized by it;
 * DG-0003 — partial Ω/transfer discrepancy only; causal interpretation remains
   blocked by protocol mismatch;
 * DG-0004 — retrospective stability complete; prospective prediction remains;
@@ -568,51 +588,54 @@ Update this section after every completed research cycle.
 
 Last fully completed Study:
 
-`LT-0001 — scale- and reliability-aware task relation literature gate`
-(2026-09-22), decision **REJECTED**: no eligible published mechanism.
+`DG-0005 — ER data-regime gradient-scale control` (2026-09-22), decision
+**CONFIRMED**. Ten matched runs at commit `8032a937`; F10 established and F9
+refined. `LT-0001` remains the last completed literature Study (REJECTED).
 
 Most recent completed execution stage:
 
-DG-0005 seed-42 matched A0/A1 screening at commit
-`0162224e63c1f77d3aaa7228bc2a13f3f2d85b14`, decision **PROMISING**. Exposure
-gate passed; run IDs A0 `5cda2a0b01d54470bc5d04fba641d756`, A1
-`301215870efc46b9a7688eb8722c1d17`.
+DG-0005 matched A0/A1 confirmation, seeds `0,1,2,3,4`, ten runs at commit
+`8032a937050d8bbd3114b172cb813a8fc7370b37`, decision **CONFIRMED**.
 
 Current active Study:
 
-`DG-0005` — CONFIRMING, with matched seeds `0,1,2,3,4` prepared. No `TR-xxxx`
-is open and none may open without explicit human authorization under DEC-0009.
+`NONE`. No `TR-xxxx` is open and none may open without explicit human
+authorization under DEC-0009/DEC-0010.
 
-Important new screening observation:
+Result (CONFIRMED, F10):
 
-DG-0005 seed 42 (SCREENING): A1 changed sampled KS/SI/ER counts from
-`539.10 / 1461.68 / 47.22` to `439.23 / 1173.99 / 434.79` while preserving
-2,820 steps. Middle/late norm ratios fell from `7.357 / 7.661` to
-`2.822 / 2.756`; ER's late mean norm fell from `6.363` to `1.906`. This
-supports a data-regime-sensitive F9 interpretation at one seed only. It does
-not revise F9, establish causality, or authorize a mechanism.
+DG-0005 A1 removed ER's late norm dominance in `5/5` seeds under a passing
+exposure gate: late ratio `8.962 ± 0.456 → 2.352 ± 0.270` (paired `−6.610`,
+`[−7.353, −5.867]`); middle `7.243 ± 0.272 → 2.818 ± 0.272`, below `3.0` in
+`4/5` seeds (one seed `3.054`). The reduction is ER-localized (late ER norm
+`6.972 → 1.608`; KS `+0.066`, SI `−0.117`) and no conflict signal appears.
+A0 reproduced DG-0002's baseline numbers exactly, confirming the knob is
+default-off. Consequence: gradient scale is a training-mixture property (F10),
+so F9 cannot justify a task-intrinsic-scale mechanism.
 
-Unresolved question:
+Unresolved questions:
 
-Does the DG-0005 threshold crossing reproduce across seeds 0–4? Replacement
-sampling changes example repetition and redistributes a fixed global batch, so
-confirmation must also quantify seed variance before the effect is called
-data-regime causal.
+1. Is the residual ER norm drop reduced gradient-estimate variance or ER
+   convergence/overfitting? A1 draws the same ≈43k ER examples ≈9× more often
+   and its ER head saturates harder (train ≈0.99 vs validation ≈0.82; final
+   train−val gap `0.134 → 0.174` at the screening seed). The one-knob design and
+   the untriggered A2 arm cannot separate these.
+2. Whether any of this justifies Option-3 work is a human scope decision under
+   DEC-0009/DEC-0010, not an autonomous one.
 
 Next recommended action:
 
-Run DG-0005 matched confirmation at seeds `0,1,2,3,4` using
-`studies/DG-0005/run_confirmation.py`: GPU 0 seeds `0,2,4`, GPU 1 seeds `1,3`.
-Analyze only after all ten runs finish. If GPU 1 remains occupied by unrelated
-work, retain the assignment as pending rather than exceeding the two-job cap.
+**None requiring GPU work.** Record the confirmed diagnostic (done) and wait
+for human review of the Option-3 gate. If the human opens a further diagnostic,
+its highest-information target is the estimator-variance-versus-convergence
+split; it must be pre-registered as its own `DG-xxxx` Study before any run, and
+any ER performance claim would still require LOSO (F3).
 
-The additive sampler is committed and actual-data validation passes. The
-historical config keys `patience: 5` / `factor: 0.5` remain inert; effective
-scheduler patience is 1 in both arms and must stay matched.
-
-GPU jobs still running:
-
-`NONE`.
+GPU jobs still running: `NONE`. All DG-0005 queues finished; no tmux training
+session remains. The queueing helper `wait_for_gpu1_confirmation.py` was
+deleted after use; `run_confirmation.py` remains as the Study's stage runner.
+Every confirmation run records commit `8032a937050d8bbd3114b172cb813a8fc7370b37`;
+HEAD may advance again.
 
 Current consecutive unsuccessful mechanism studies:
 

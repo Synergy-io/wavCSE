@@ -296,6 +296,8 @@ MLflow experiment `taskrelation-diagnostics`.
 
 **Observation.** Under matched three-task `smp` 25-layer training, ER's shared-parameter gradient norm dominates KS/SI in the middle and late thirds across seeds `0–4`. Classical MTRL does not consistently reduce that scale imbalance. Persistent pairwise gradient conflict is not supported.
 
+*Refined 2026-09-22 by DG-0005 (F10): the dominance reproduces only under the standard training mixture. Raising ER's per-batch share removes it in 5/5 seeds, so it is a sampling-regime property rather than a task-intrinsic relation property.*
+
 **Evidence.** Each baseline/MTRL seed pair sampled the same 142 of 2,820 optimizer steps with identical per-step valid-example counts and the same 1,550,800 shared parameters. Seed-level phase summaries are the independent observations:
 
 | Method | Phase | Mean max/min task-norm ratio | Seed SD | 95% t interval | Seeds ≥ 3 |
@@ -313,11 +315,42 @@ Paired MTRL-minus-baseline ratio differences were −0.114 (95% CI [−0.717, +0
 
 **Interpretation.** Classical MTRL's head-parameter covariance neither represents nor regulates the dominant shared-optimization scale behavior measured here. This is a concrete limitation to drive targeted literature research. It is not causal evidence that norm imbalance explains all of MTRL's outcome null.
 
-**Alternative explanations.** ER contributes about 47 valid examples per sampled batch versus 539 KS and 1,462 SI. Data scarcity, task difficulty, label noise and gradient-estimate variance may cause the larger norms. The imbalance is protocol-reproducible, not yet task-intrinsic. A data-regime control is required before making that stronger claim.
+**Alternative explanations.** ER contributes about 47 valid examples per sampled batch versus 539 KS and 1,462 SI. Data scarcity, task difficulty, label noise and gradient-estimate variance may cause the larger norms. **DG-0005 resolved the strongest part of this question (2026-09-22): the dominance is training-mixture dependent, not task-intrinsic.**
 
-**Implication.** Enter targeted literature mode using the observed problem: unequal task-gradient scale or relation reliability not handled by static head covariance. Do not jump directly to generic gradient surgery or loss weighting; first verify a published method's Task Relation Learning taxonomy and assumption match.
+**DG-0005 data-regime control (CONFIRMED).** Five matched seed pairs at commit `8032a937`, same `smp` 25-layer protocol, changing only the training split's per-task composition (ER weight `11.5`, `num_samples` unchanged, validation/test untouched, 2,820 steps and 142 diagnostic samples in every arm):
 
-Provenance: `research/studies/DG-0002/{PLAN.md,analysis.md,confirmation_result.json}`; MLflow experiment `taskrelation-diagnostics`, stage `confirm`, ten runs at commit `7f6d5248`.
+| Phase | A0 standard composition | A1 ER-weighted | Paired A1−A0 | 95% t interval |
+| --- | ---: | ---: | ---: | --- |
+| middle | `7.243 ± 0.272` | `2.818 ± 0.272` | `−4.425` | `[−4.980, −3.869]` |
+| late | `8.962 ± 0.456` | `2.352 ± 0.270` | `−6.610` | `[−7.353, −5.867]` |
+
+A1 realized ER÷KS sampled-batch counts of `0.990–1.008` against A0's `48.1 ÷ 540.7 = 0.089`, every exposure check passed, and A1's late ratio was below the `3.0` dominance threshold in `5/5` seeds. Late mean norms moved ER `6.972 → 1.608`, KS `0.828 → 0.894`, SI `0.804 → 0.687`, so the collapse is ER-localized. Late cosines stayed near zero in both arms, so no conflict mechanism is involved. A0 exactly reproduces this finding's own baseline numbers (`7.243 ± 0.272`, `8.962 ± 0.456`), confirming the sampling knob is default-off.
+
+**Interpretation.** The reproducible dominance is a property of the sampling regime, not of ER's task semantics at this representation: ER's gradient *estimate* is inflated when it contributes ~47 of 2,048 examples and collapses toward the pool-mean gradient at ~435. A mechanism motivated by "ER is intrinsically a large-gradient task" now rests on a refuted premise; a mechanism motivated by estimator scale must be justified from the training mixture instead.
+
+**Remaining confound.** The same knob also multiplies ER's optimizer updates per epoch (the ~43k ER examples are drawn ~9× more often), and A1's ER head saturates harder (train ≈0.99 vs validation ≈0.82; final train−val gap `0.134 → 0.174` at the screening seed). Part of the norm reduction may be convergence/overfitting rather than estimator variance. The one-knob design cannot separate these, and the pre-registered A2 reverse arm would not either.
+
+**Outcome status.** DG-0005 makes no ER performance claim. Its ordinary-split deltas (aggregate `+0.00106 [+0.00026, +0.00186]`, ER `+0.01049 [+0.00249, +0.01849]`) are speaker-leaky context (F3) whose ER direction is consistent with memorization, not generalization.
+
+Provenance: `research/studies/DG-0002/{PLAN.md,analysis.md,confirmation_result.json}`; MLflow experiment `taskrelation-diagnostics`, stage `confirm`, ten runs at commit `7f6d5248`; `research/studies/DG-0005/{PLAN.md,analysis.md,NOTE.md,confirmation_result.json}`, stage `confirm`, ten runs at commit `8032a937050d8bbd3114b172cb813a8fc7370b37`.
+
+---
+
+## F10 — Gradient scale is a training-mixture property, not a task-intrinsic relation property  (ESTABLISHED, 2026-09-22)
+
+**Observation.** Under the matched `smp` 25-layer `ks_si_er` protocol at a fixed global batch of 2,048 and fixed optimizer exposure, the per-task shared-gradient norm ratio is governed by how many examples of each task the batch contains. It is not an intrinsic property of ER at this representation.
+
+**Evidence.** DG-0005's five matched seed pairs changed only ER's sampling weight in the training split. ER's sampled share rose from ~`47/2048` to ~`435/2048` while validation and test data were untouched and every arm kept 2,820 optimizer steps and 142 diagnostic samples. Late max/min task-norm ratio fell `8.962 ± 0.456 → 2.352 ± 0.270` (paired `−6.610`, `[−7.353, −5.867]`), middle fell `7.243 ± 0.272 → 2.818 ± 0.272`, A1's late ratio cleared the pre-registered `< 3.0` threshold in `5/5` seeds, and the change is ER-localized (late ER norm `6.972 → 1.608`; KS `+0.066`, SI `−0.117`). A0 reproduces the baseline numbers exactly, so the knob is inert when unused.
+
+**Interpretation.** `E‖g‖ ≥ ‖E g‖`: a batch gradient estimated from few examples has an inflated norm relative to the pool-mean gradient it approximates. ER at ~47 examples per batch is the smallest task, so it carries the largest estimate inflation. This is scale, not relation: the learned Ω had already failed to track the scale signal (F9), and the pairwise cosines stayed near zero here.
+
+**Framework consequence.** Gradient scale joins relation magnitude and relation confidence as a *conditioned* quantity rather than an intrinsic task property. Reported "task gradient scale" must therefore name the sampling regime, exactly as relation claims must name pooling, layers and seed/fold axis (F5, F6).
+
+**Alternative explanations.** The same knob multiplies ER's optimizer updates per epoch and its head saturates harder (train ≈0.99 vs validation ≈0.82; final train−val gap `0.134 → 0.174` at the screening seed). Part of the reduction may be convergence/overfitting rather than estimator variance, and the single-knob design plus the untriggered A2 arm cannot separate them. This bounds the mechanism attribution, not the observation that the ratio is mixture-controlled.
+
+**Confidence.** Strong for mixture dependence across five matched seeds with a passing exposure gate. Moderate for the pure estimator-variance mechanism.
+
+Provenance: `research/studies/DG-0005/{PLAN.md,analysis.md,NOTE.md,confirmation_result.json}`; MLflow experiment `taskrelation-diagnostics`, stages `screen` and `confirm`; screen commit `0162224`, confirmation commit `8032a937050d8bbd3114b172cb813a8fc7370b37`.
 
 ---
 
