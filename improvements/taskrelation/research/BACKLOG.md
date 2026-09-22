@@ -457,13 +457,15 @@ Avoid methods whose main contribution becomes generic representation learning.
 
 ## DG-0005 — Data-regime hypothesis
 
-**Status:** READY — PRE-REGISTERED 2026-09-22 (`studies/DG-0005/{PLAN.md,NOTE.md}`), authorized by DEC-0009. Stays inside existing Task Relation Learning scope, implements no mechanism, and is prerequisite to any relation-plus-reliability claim.
+**Status:** CONFIRMING — seed-42 screen PROMISING 2026-09-22; matched A0/A1 seeds 0–4 are now required. Authorized by DEC-0009; remains diagnostic-only and does not reopen the mechanism gate.
 
 **Arms:** A0 matched baseline; A1 ER-weighted training composition (raise ER per-batch contribution to KS scale); A2 pre-registered reverse direction (reduce KS/SI contribution to ER scale), launched only if A1 is ambiguous.
 
 **Gate:** the per-step realized valid-example counts must match each arm's design target, otherwise the arm is invalid, not merely noisy (F8).
 
 **Not in this Study:** no MTRL arm, no Ω analysis, no GradNorm-style scale-normalization arm (unauthorized), no LOSO (no ER performance claim).
+
+**Screening result:** exposure gate passed (`439.23 / 1173.99 / 434.79` KS/SI/ER examples per sampled A1 batch; ER/KS `0.990`). A0 middle/late norm ratios `7.357 / 7.661` fell to `2.822 / 2.756` under A1, satisfying the pre-registered `< 3.0` late criterion. Single-seed only: `PROMISING`, not established. A2 is not triggered because the result was unambiguous.
 
 ### Reframed question for the F9 era
 

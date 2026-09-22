@@ -46,10 +46,10 @@ findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 # Current Research Phase
 
-**Phase:** DG-0005 execution — ER data-regime gradient-scale control
-(authorized by DEC-0009). Strict Task Relation Learning scope retained; no
-mechanism Study is authorized. The GradNorm-style control arm is **not**
-authorized.
+**Phase:** DG-0005 matched-seed confirmation — ER data-regime gradient-scale
+control (authorized by DEC-0009). Seed-42 screening is **PROMISING**, not
+confirmed. Strict Task Relation Learning scope retained; no mechanism Study or
+GradNorm-style control arm is authorized.
 
 **Formal progression** (binding — DEC-0005; stages are not skipped):
 
@@ -80,12 +80,11 @@ previous ranked ordering (sparse → asymmetric → confidence → dynamic → l
 is removed for exactly this reason; the hypotheses survive as *gated* backlog
 entries.
 
-**Immediate research question** — this, not "which architecture do we try next":
+**Immediate research question:**
 
-> Which published Task Relation Learning methods explicitly account for unequal
-> task-gradient scale, task reliability or sample-size-dependent relation
-> confidence, and does their formal assumption match F9 without drifting into
-> generic loss weighting, gradient surgery, low-rank, clustering or decomposition?
+> Does DG-0005's seed-42 collapse of ER norm dominance from `7.661` to `2.756`
+> reproduce across matched seeds 0–4, or is the threshold crossing another
+> single-seed result?
 
 ---
 
@@ -373,19 +372,17 @@ is retained; Option 2 (optimization-aware MTL) is declined; Option 3 is deferred
 behind two gates — environment support **and** explicit human authorization at
 that time. The GradNorm-style diagnostic control arm is not authorized.
 
-The authorized next action is **`DG-0005` — ER data-regime gradient-scale
-control**, pre-registered in `studies/DG-0005/PLAN.md`: raise ER's per-batch
-training contribution to KS scale with exposure otherwise fixed, and test
-whether the F9 norm dominance collapses (H1, data-regime explanation) or
-persists (H2, task-intrinsic scale).
+DG-0005's seed-42 screen passed its configuration and exposure gates. Raising
+ER's mean sampled-batch contribution from `47.22` to `434.79` examples (KS
+`439.23`) reduced middle/late max-min task-norm ratios from `7.357 / 7.661` to
+`2.822 / 2.756`. This satisfies the pre-registered H1 screening criterion but
+is single-seed evidence only (F1).
 
-Implementation prerequisites do not yet exist: the training loader takes no
-per-task sampler, per-sample task membership is not exposed, and
-`dataset.subset_percentage` must not be reused because it also subsets
-validation and test. The knob must be additive and default-off so the
-established baseline evaluation protocol is unchanged.
-
-A later Study must still add LOSO before any ER performance claim.
+The required next action is matched A0/A1 confirmation at seeds `0,1,2,3,4`.
+Report seed-level middle/late ratios, mean/SD, paired differences and sign
+consistency. A2 is not triggered because the screen was unambiguous. No ER
+performance claim is made; ordinary-split accuracy remains context only, and a
+later Study must still add LOSO before any ER performance claim.
 
 ---
 
@@ -536,9 +533,9 @@ No mechanism work:
   MTRL does not mitigate it, and persistent pairwise conflict is rejected (F9);
 * LT-0001 — **REJECTED**; the F9 literature gate found no eligible published
   mechanism (DEC-0008, superseded by DEC-0009);
-* DG-0005 — **READY / PRE-REGISTERED** (`studies/DG-0005/{PLAN.md,NOTE.md}`);
-  authorized by DEC-0009. Tests whether ER's data regime produces the F9 scale
-  imbalance. No mechanism, no LOSO, no ER performance claim;
+* DG-0005 — **CONFIRMING**; seed-42 exposure gate passed and middle/late ratios
+  moved from `7.357 / 7.661` to `2.822 / 2.756`. Matched A0/A1 seeds 0–4 are
+  required before the data-regime interpretation can become established;
 * DG-0003 — partial Ω/transfer discrepancy only; causal interpretation remains
   blocked by protocol mismatch;
 * DG-0004 — retrospective stability complete; prospective prediction remains;
@@ -576,47 +573,42 @@ Last fully completed Study:
 
 Most recent completed execution stage:
 
-DG-0002 matched baseline/MTRL confirmation, seeds `0,1,2,3,4`, ten runs at
-commit `7f6d5248f40c0c1cbd30f15b8f7cd1fe2dbb04eb`.
+DG-0005 seed-42 matched A0/A1 screening at commit
+`0162224e63c1f77d3aaa7228bc2a13f3f2d85b14`, decision **PROMISING**. Exposure
+gate passed; run IDs A0 `5cda2a0b01d54470bc5d04fba641d756`, A1
+`301215870efc46b9a7688eb8722c1d17`.
 
 Current active Study:
 
-`DG-0005` — READY, pre-registered, not yet executed. No `TR-xxxx` is open and
-none may open without an explicit human authorization under DEC-0009.
+`DG-0005` — CONFIRMING, with matched seeds `0,1,2,3,4` prepared. No `TR-xxxx`
+is open and none may open without explicit human authorization under DEC-0009.
 
-Important new findings:
+Important new screening observation:
 
-F9 (ESTABLISHED): baseline ER-to-smallest-task norm ratios were
-`7.243 ± 0.272` middle and `8.962 ± 0.456` late; MTRL was
-`7.129 ± 0.421` and `9.004 ± 1.059`. Every seed exceeded ratio 3 in both
-phases. No pair met the persistent-conflict threshold in any seed.
-
-R3 (RECORD): the F9 literature gate found no published method that is both
-explicit Task Relation Learning and a direct optimization-scale/reliability
-mechanism for heterogeneous deep classification. Relation magnitude, relation
-confidence/noise and optimization weight are separate quantities.
+DG-0005 seed 42 (SCREENING): A1 changed sampled KS/SI/ER counts from
+`539.10 / 1461.68 / 47.22` to `439.23 / 1173.99 / 434.79` while preserving
+2,820 steps. Middle/late norm ratios fell from `7.357 / 7.661` to
+`2.822 / 2.756`; ER's late mean norm fell from `6.363` to `1.906`. This
+supports a data-regime-sensitive F9 interpretation at one seed only. It does
+not revise F9, establish causality, or authorize a mechanism.
 
 Unresolved question:
 
-Does ER's data regime (≈47 sampled examples per mixed batch versus 539 KS and
-1,462 SI) cause the F9 scale imbalance, or does it reflect task semantics?
-Either answer changes which mechanism category is appropriate.
+Does the DG-0005 threshold crossing reproduce across seeds 0–4? Replacement
+sampling changes example repetition and redistributes a fixed global batch, so
+confirmation must also quantify seed variance before the effect is called
+data-regime causal.
 
 Next recommended action:
 
-Implement DG-0005's additive, default-off per-task training sampling knob,
-commit it, record the SHA, then run screening: A0 (matched baseline) on GPU 0
-and A1 (ER-weighted composition) on GPU 1, seed 42, ~18 min per arm. Monitor to
-completion and analyse seed-level phase summaries before any confirmation
-batch. No GPU training has been launched yet.
+Run DG-0005 matched confirmation at seeds `0,1,2,3,4` using
+`studies/DG-0005/run_confirmation.py`: GPU 0 seeds `0,2,4`, GPU 1 seeds `1,3`.
+Analyze only after all ten runs finish. If GPU 1 remains occupied by unrelated
+work, retain the assignment as pending rather than exceeding the two-job cap.
 
-Verified codebase facts, exposure arithmetic and the invariants any change must
-preserve are recorded in `studies/DG-0005/PLAN.md` §"Verified codebase facts"
-(read from source on 2026-09-22). Two facts that are easy to get wrong: the
-training loader accepts no `sampler` today, and the protocol configs' top-level
-`patience: 5` is **inert** — the trainer reads `scheduler_patience` (default 1),
-so effective scheduler patience is 1. Do not rename that key inside a single
-arm.
+The additive sampler is committed and actual-data validation passes. The
+historical config keys `patience: 5` / `factor: 0.5` remain inert; effective
+scheduler patience is 1 in both arms and must stay matched.
 
 GPU jobs still running:
 

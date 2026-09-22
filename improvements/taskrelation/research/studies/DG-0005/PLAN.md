@@ -1,6 +1,6 @@
 # DG-0005 — ER data-regime gradient-scale control
 
-Status: READY — pre-registered, not yet executed
+Status: CONFIRMING — seed-42 screen PROMISING; matched seeds 0–4 required
 Type: diagnostic
 Created: 2026-09-22T09:40:00+00:00
 Research family: Task Relation Learning

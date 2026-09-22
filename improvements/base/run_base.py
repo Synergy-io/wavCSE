@@ -84,6 +84,7 @@ def main():
 
     device_type = cfg["device"]["type"]
     device_index = args.device_index if args.device_index is not None else cfg["device"]["index"]
+    cfg["device"]["index"] = device_index
 
     root_data_path = cfg["paths"]["root_data_path"]
     root_emb_path = cfg["paths"]["root_emb_path"]

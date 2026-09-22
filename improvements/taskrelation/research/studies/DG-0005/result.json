@@ -1,0 +1,1042 @@
+{
+  "study_id": "DG-0005",
+  "title": "ER data-regime gradient-scale control",
+  "type": "diagnostic",
+  "stage": "screen",
+  "generated_at": "2026-09-22T11:50:43.411195+00:00",
+  "implementation_commit": "0162224e63c1f77d3aaa7228bc2a13f3f2d85b14",
+  "seed": 42,
+  "protocol": {
+    "task_set": "ks_si_er",
+    "pooling": {
+      "type": "smp",
+      "parameter": 0.5
+    },
+    "layers": "all",
+    "epochs": 30,
+    "batch_size": 2048,
+    "er_protocol": "ordinary speaker-leaky split; outcome context only"
+  },
+  "configuration_check": {
+    "passed": true,
+    "a1_task_sampling_weights": {
+      "er": 11.5
+    },
+    "unmatched_after_allowed_fields": false
+  },
+  "exposure_check": {
+    "passed": true,
+    "mismatches": {},
+    "a1_er_to_ks_mean_count_ratio": 0.98989898989899,
+    "a1_mean_batch_total": 2048.0
+  },
+  "runs": {
+    "a0": {
+      "run_id": "5cda2a0b01d54470bc5d04fba641d756",
+      "run_name": "DG-0005__screen__wavcse-standard-composition__ks_si_er__smp25__s42",
+      "status": "FINISHED",
+      "git_commit": "0162224e63c1f77d3aaa7228bc2a13f3f2d85b14",
+      "seed": 42,
+      "duration_seconds": 1020.019,
+      "fixed_epoch_metrics": {
+        "aggregate": 0.9754460003836563,
+        "ks": 0.9862472567666423,
+        "si": 0.9796388316567689,
+        "er": 0.779385171790235
+      },
+      "final_train_accuracy": {
+        "ks": 0.9892002680225455,
+        "si": 0.9943075108826998,
+        "er": 0.9265241128298453
+      },
+      "final_val_accuracy": {
+        "ks": 0.9841129744042365,
+        "si": 0.975811123986095,
+        "er": 0.7920433996383364
+      },
+      "standard_tags": {
+        "study_id": "DG-0005",
+        "stage": "screen",
+        "family": "task_relation_learning",
+        "method": "wavcse-standard-composition",
+        "hypothesis_slug": "er-data-regime-gradient-scale",
+        "task_set": "ks_si_er",
+        "representation": "smp25",
+        "pooling": "smp:0.5",
+        "layers": "all",
+        "seed": "42",
+        "parent_study": "DG-0002",
+        "baseline_study": "DG-0002",
+        "agent_generated": "True",
+        "git_commit": "0162224e63c1f77d3aaa7228bc2a13f3f2d85b14",
+        "status": "active",
+        "mlflow.note.content": "# DG-0005 Run Note\n\n## Hypothesis\n\nER's shared-gradient norm dominance is primarily a data-regime / gradient-estimate-noise effect: raising ER's per-batch training contribution to KS/SI scale, with exposure otherwise held fixed, removes most of the imbalance (late max/min task-norm ratio below the pre-registered 3.0 threshold).\n\n## Motivation / prior evidence\n\nF9 (DG-0002 confirmation, seeds 0\u20134) established ER norm dominance of 7.24\u00d7/8.96\u00d7 with no persistent pairwise conflict and no MTRL mitigation, but could not separate task semantics from ER's much smaller per-batch sample count (\u224847 versus 539 KS and 1462 SI). DEC-0009 authorized this diagnostic and kept strict Task Relation Learning scope; no mechanism is implemented here.\n\n## Exact change\n\nArm A1 changes only one thing relative to the matched control A0: ER's sampling weight in the training loader, so ER contributes approximately KS-scale examples per 2048-example batch. Weighted sampling is training-only; validation and test data are untouched. `num_samples` is unchanged, so optimizer steps remain \u22482820 and epochs remain 30.\n\n## Matched control\n\nA0 \u2014 fresh plain wavCSE `ks_si_er` at the same commit and seed, standard concatenated sampler, protocol identical to DG-0002's baseline configuration.\n\n## Evaluation protocol\n\nPrimary evidence is the seed-level phase summary of shared-parameter gradient norms: max/min mean-norm ratio, ER-to-smallest ratio, task norm means/medians, pairwise cosines, negative-conflict frequencies, and per-step realized valid-example counts. Fixed-final-epoch accuracy is context only. Ordinary-split ER is speaker-leaky; no ER performance claim is made and LOSO is not required for this diagnostic.\n\n## Promotion/rejection criterion\n\nPromote when the exposure check passes (same steps, same total samples, realized ER per-batch count \u2265 0.5\u00d7 KS's) and A1's late ratio is `< 3.0` while A0's is `\u2265 3.0`. Reject H1 if A1's middle and late ratios both stay `\u2265 3.0`. If ambiguous, run the pre-registered reverse-direction arm A2 (reduce KS/SI training contribution to ER scale) before concluding.\n\n## Git commit\n\n`0162224e63c1f77d3aaa7228bc2a13f3f2d85b14` \u2014 additive, default-off task-weighted training sampler, deterministic run-seed plumbing, matched A0/A1 configs, actual-data validation, and support for IEMOCAP's subset-wrapped training dataset.\n\n## Pre-registered run names\n\n`DG-0005__screen__wavcse-standard-composition__ks_si_er__smp25__s42` (A0) and `DG-0005__screen__wavcse-er-weighted-composition__ks_si_er__smp25__s42` (A1).\n\n## Results\n\nScreening in progress. The first A1 launch at commit `8159696` failed before training because IEMOCAP's component is a `Subset` and the sampler initially looked for `index_pattern` only on the wrapper. No optimizer step ran. Commit `0162224` unwraps component subsets; actual-data validation then produced 193,874 draws, preserved sampler length, and gave expected per-batch counts KS `437.87`, SI `1173.36`, ER `436.77` (ER/KS `0.9975`). The pre-fix A0 is retained but superseded for paired inference; both arms are rerun at `0162224`.\n\n## Interpretation\n\nPending execution.\n\n## Decision\n\nPending execution.\n\n## Next step\n\nImplement the additive, default-off per-task sampling knob, commit it, then run screening (A0 on GPU 0, A1 on GPU 1), monitor to completion, and analyze seed-level phase summaries. Report the outcome to the human before any Option-3 discussion."
+      },
+      "train_val_accuracy_gap": {
+        "ks": 0.005087293618308952,
+        "si": 0.01849638689660471,
+        "er": 0.1344807131915089
+      }
+    },
+    "a1": {
+      "run_id": "301215870efc46b9a7688eb8722c1d17",
+      "run_name": "DG-0005__screen__wavcse-er-weighted-composition__ks_si_er__smp25__s42",
+      "status": "FINISHED",
+      "git_commit": "0162224e63c1f77d3aaa7228bc2a13f3f2d85b14",
+      "seed": 42,
+      "duration_seconds": 974.739,
+      "fixed_epoch_metrics": {
+        "aggregate": 0.9752541722616536,
+        "ks": 0.9863935625457205,
+        "si": 0.9783056599200097,
+        "er": 0.7920433996383364
+      },
+      "final_train_accuracy": {
+        "ks": 0.9910265525780273,
+        "si": 0.9949191561302855,
+        "er": 0.9911901882881327
+      },
+      "final_val_accuracy": {
+        "ks": 0.9851426890261842,
+        "si": 0.9737833140208575,
+        "er": 0.8173598553345389
+      },
+      "standard_tags": {
+        "study_id": "DG-0005",
+        "stage": "screen",
+        "family": "task_relation_learning",
+        "method": "wavcse-er-weighted-composition",
+        "hypothesis_slug": "er-data-regime-gradient-scale",
+        "task_set": "ks_si_er",
+        "representation": "smp25",
+        "pooling": "smp:0.5",
+        "layers": "all",
+        "seed": "42",
+        "parent_study": "DG-0002",
+        "baseline_study": "DG-0005-a0",
+        "agent_generated": "True",
+        "git_commit": "0162224e63c1f77d3aaa7228bc2a13f3f2d85b14",
+        "status": "active",
+        "mlflow.note.content": "# DG-0005 Run Note\n\n## Hypothesis\n\nER's shared-gradient norm dominance is primarily a data-regime / gradient-estimate-noise effect: raising ER's per-batch training contribution to KS/SI scale, with exposure otherwise held fixed, removes most of the imbalance (late max/min task-norm ratio below the pre-registered 3.0 threshold).\n\n## Motivation / prior evidence\n\nF9 (DG-0002 confirmation, seeds 0\u20134) established ER norm dominance of 7.24\u00d7/8.96\u00d7 with no persistent pairwise conflict and no MTRL mitigation, but could not separate task semantics from ER's much smaller per-batch sample count (\u224847 versus 539 KS and 1462 SI). DEC-0009 authorized this diagnostic and kept strict Task Relation Learning scope; no mechanism is implemented here.\n\n## Exact change\n\nArm A1 changes only one thing relative to the matched control A0: ER's sampling weight in the training loader, so ER contributes approximately KS-scale examples per 2048-example batch. Weighted sampling is training-only; validation and test data are untouched. `num_samples` is unchanged, so optimizer steps remain \u22482820 and epochs remain 30.\n\n## Matched control\n\nA0 \u2014 fresh plain wavCSE `ks_si_er` at the same commit and seed, standard concatenated sampler, protocol identical to DG-0002's baseline configuration.\n\n## Evaluation protocol\n\nPrimary evidence is the seed-level phase summary of shared-parameter gradient norms: max/min mean-norm ratio, ER-to-smallest ratio, task norm means/medians, pairwise cosines, negative-conflict frequencies, and per-step realized valid-example counts. Fixed-final-epoch accuracy is context only. Ordinary-split ER is speaker-leaky; no ER performance claim is made and LOSO is not required for this diagnostic.\n\n## Promotion/rejection criterion\n\nPromote when the exposure check passes (same steps, same total samples, realized ER per-batch count \u2265 0.5\u00d7 KS's) and A1's late ratio is `< 3.0` while A0's is `\u2265 3.0`. Reject H1 if A1's middle and late ratios both stay `\u2265 3.0`. If ambiguous, run the pre-registered reverse-direction arm A2 (reduce KS/SI training contribution to ER scale) before concluding.\n\n## Git commit\n\n`0162224e63c1f77d3aaa7228bc2a13f3f2d85b14` \u2014 additive, default-off task-weighted training sampler, deterministic run-seed plumbing, matched A0/A1 configs, actual-data validation, and support for IEMOCAP's subset-wrapped training dataset.\n\n## Pre-registered run names\n\n`DG-0005__screen__wavcse-standard-composition__ks_si_er__smp25__s42` (A0) and `DG-0005__screen__wavcse-er-weighted-composition__ks_si_er__smp25__s42` (A1).\n\n## Results\n\nScreening in progress. The first A1 launch at commit `8159696` failed before training because IEMOCAP's component is a `Subset` and the sampler initially looked for `index_pattern` only on the wrapper. No optimizer step ran. Commit `0162224` unwraps component subsets; actual-data validation then produced 193,874 draws, preserved sampler length, and gave expected per-batch counts KS `437.87`, SI `1173.36`, ER `436.77` (ER/KS `0.9975`). The pre-fix A0 is retained but superseded for paired inference; both arms are rerun at `0162224`.\n\n## Interpretation\n\nPending execution.\n\n## Decision\n\nPending execution.\n\n## Next step\n\nImplement the additive, default-off per-task sampling knob, commit it, then run screening (A0 on GPU 0, A1 on GPU 1), monitor to completion, and analyze seed-level phase summaries. Report the outcome to the human before any Option-3 discussion."
+      },
+      "train_val_accuracy_gap": {
+        "ks": 0.005883863551843116,
+        "si": 0.021135842109427982,
+        "er": 0.17383033295359374
+      }
+    }
+  },
+  "excluded_execution_runs": [
+    {
+      "run_id": "d81749ced4424022be19b0839868483a",
+      "method": "wavcse-er-weighted-composition",
+      "mlflow_status": "FAILED",
+      "study_status": "failed",
+      "reason": "sampler did not unwrap IEMOCAP's Subset component; no optimizer step"
+    },
+    {
+      "run_id": "b421df9dd1f54b61b0e890ca70f04b5e",
+      "method": "wavcse-standard-composition",
+      "mlflow_status": "FINISHED",
+      "study_status": "superseded",
+      "reason": "pre-fix matched control; excluded because paired A1 did not execute"
+    }
+  ],
+  "gradient_diagnostics": {
+    "a0": {
+      "artifact": "improvements/taskrelation/research/studies/DG-0005/outputs/a0/results/DG-0005/screen/ks_si_er/2026_09_22_11_10_16/gradient_diagnostics.json",
+      "task_array": [
+        "ks",
+        "si",
+        "er"
+      ],
+      "sample_interval_steps": 20,
+      "total_training_steps": 2820,
+      "sampled_steps": 142,
+      "skipped_sample_steps_missing_tasks": 0,
+      "shared_parameter_names": [
+        "projector_layer.weight",
+        "projector_layer.bias",
+        "hidden_layer.weight",
+        "hidden_layer.bias"
+      ],
+      "shared_parameter_count": 1550800,
+      "valid_examples_per_sampled_batch": {
+        "ks": {
+          "mean": 539.0985915492957,
+          "min": 477,
+          "max": 586
+        },
+        "si": {
+          "mean": 1461.6830985915492,
+          "min": 1409,
+          "max": 1515
+        },
+        "er": {
+          "mean": 47.21830985915493,
+          "min": 32,
+          "max": 64
+        }
+      },
+      "er_to_smallest_ratio": {
+        "early": 2.604631141516718,
+        "middle": 7.357447991929677,
+        "late": 7.660914512340469
+      },
+      "summary": {
+        "all": {
+          "sample_count": 142,
+          "task_norms": {
+            "ks": {
+              "count": 142,
+              "mean": 2.2640243130474396,
+              "median": 1.1344716399554253,
+              "std": 10.62464574862636,
+              "min": 0.5426377035102604,
+              "max": 127.5402127149512
+            },
+            "si": {
+              "count": 142,
+              "mean": 2.3173137585161987,
+              "median": 1.3282235766867214,
+              "std": 5.224491826402884,
+              "min": 0.3581048454152329,
+              "max": 61.51774229592224
+            },
+            "er": {
+              "count": 142,
+              "mean": 8.948011166990483,
+              "median": 7.450941397185686,
+              "std": 6.277061708841901,
+              "min": 2.692938425254676,
+              "max": 68.95783216711138
+            }
+          },
+          "pairwise_cosines": {
+            "ks_si": {
+              "count": 142,
+              "mean": 0.022258609983867812,
+              "median": 0.011311325775989894,
+              "std": 0.048751086920786064,
+              "min": -0.06811137303074591,
+              "max": 0.24582119540565872,
+              "negative_count": 48,
+              "negative_frequency": 0.3380281690140845
+            },
+            "ks_er": {
+              "count": 142,
+              "mean": 0.026850559318847812,
+              "median": 0.024395699847030435,
+              "std": 0.06409676718377827,
+              "min": -0.09908855472700409,
+              "max": 0.23710449383691962,
+              "negative_count": 52,
+              "negative_frequency": 0.36619718309859156
+            },
+            "si_er": {
+              "count": 142,
+              "mean": 0.0722181833881761,
+              "median": 0.05150581572844966,
+              "std": 0.0932500787132843,
+              "min": -0.11594041654830989,
+              "max": 0.5247953370507824,
+              "negative_count": 28,
+              "negative_frequency": 0.19718309859154928
+            }
+          },
+          "max_min_mean_norm_ratio": 3.9522593089763296
+        },
+        "early": {
+          "sample_count": 48,
+          "task_norms": {
+            "ks": {
+              "count": 48,
+              "mean": 4.758520764800476,
+              "median": 1.7799666816700475,
+              "std": 18.13487482117807,
+              "min": 0.9981475898704024,
+              "max": 127.5402127149512
+            },
+            "si": {
+              "count": 48,
+              "mean": 4.6815056386835385,
+              "median": 3.1579064334944436,
+              "std": 8.542982516433419,
+              "min": 1.5539964836699423,
+              "max": 61.51774229592224
+            },
+            "er": {
+              "count": 48,
+              "mean": 12.193595375701257,
+              "median": 9.982877006801868,
+              "std": 9.462490111108536,
+              "min": 4.902852819995327,
+              "max": 68.95783216711138
+            }
+          },
+          "pairwise_cosines": {
+            "ks_si": {
+              "count": 48,
+              "mean": 0.05105272155498777,
+              "median": 0.037811810496012586,
+              "std": 0.06499880523099352,
+              "min": -0.06503113120031143,
+              "max": 0.24582119540565872,
+              "negative_count": 10,
+              "negative_frequency": 0.20833333333333334
+            },
+            "ks_er": {
+              "count": 48,
+              "mean": 0.043029682480681446,
+              "median": 0.04382873945522046,
+              "std": 0.07619966903386939,
+              "min": -0.08784429350624101,
+              "max": 0.23710449383691962,
+              "negative_count": 16,
+              "negative_frequency": 0.3333333333333333
+            },
+            "si_er": {
+              "count": 48,
+              "mean": 0.13638602644727668,
+              "median": 0.14162224649522104,
+              "std": 0.10652772258330215,
+              "min": -0.030369318847935776,
+              "max": 0.5247953370507824,
+              "negative_count": 5,
+              "negative_frequency": 0.10416666666666667
+            }
+          },
+          "max_min_mean_norm_ratio": 2.604631141516718
+        },
+        "middle": {
+          "sample_count": 47,
+          "task_norms": {
+            "ks": {
+              "count": 47,
+              "mean": 1.1169581217410447,
+              "median": 1.1126874444330823,
+              "std": 0.28397938581479526,
+              "min": 0.6733723080051757,
+              "max": 1.970408876075221
+            },
+            "si": {
+              "count": 47,
+              "mean": 1.3894989265502955,
+              "median": 1.3246703601546328,
+              "std": 0.30421564332629636,
+              "min": 0.9136465381437944,
+              "max": 2.0053621175345433
+            },
+            "er": {
+              "count": 47,
+              "mean": 8.217961289873193,
+              "median": 7.813287313844388,
+              "std": 2.8576177268398695,
+              "min": 3.8920617572162013,
+              "max": 19.416216712726165
+            }
+          },
+          "pairwise_cosines": {
+            "ks_si": {
+              "count": 47,
+              "mean": 0.009708821872680002,
+              "median": 0.0040405439440179755,
+              "std": 0.026520983563442783,
+              "min": -0.039852543156198586,
+              "max": 0.11768460941935355,
+              "negative_count": 17,
+              "negative_frequency": 0.3617021276595745
+            },
+            "ks_er": {
+              "count": 47,
+              "mean": 0.033925749062944315,
+              "median": 0.024539146148756758,
+              "std": 0.05405178796397558,
+              "min": -0.07254844395742084,
+              "max": 0.14463280476264717,
+              "negative_count": 14,
+              "negative_frequency": 0.2978723404255319
+            },
+            "si_er": {
+              "count": 47,
+              "mean": 0.05373274831069642,
+              "median": 0.041873170346517934,
+              "std": 0.07193978274748915,
+              "min": -0.09544975913353963,
+              "max": 0.21633444795978618,
+              "negative_count": 8,
+              "negative_frequency": 0.1702127659574468
+            }
+          },
+          "max_min_mean_norm_ratio": 7.357447991929677
+        },
+        "late": {
+          "sample_count": 47,
+          "task_norms": {
+            "ks": {
+              "count": 47,
+              "mean": 0.8635196600103084,
+              "median": 0.8003583582289336,
+              "std": 0.25690924337954946,
+              "min": 0.5426377035102604,
+              "max": 1.9427457981400438
+            },
+            "si": {
+              "count": 47,
+              "mean": 0.830634755417584,
+              "median": 0.857462436698523,
+              "std": 0.18482826376831205,
+              "min": 0.3581048454152329,
+              "max": 1.2271093133703062
+            },
+            "er": {
+              "count": 47,
+              "mean": 6.363421852232945,
+              "median": 6.384379947341145,
+              "std": 1.661713781126961,
+              "min": 2.692938425254676,
+              "max": 11.016112577861803
+            }
+          },
+          "pairwise_cosines": {
+            "ks_si": {
+              "count": 47,
+              "mean": 0.0054016458522097065,
+              "median": 0.004490839209665507,
+              "std": 0.030798531077004348,
+              "min": -0.06811137303074591,
+              "max": 0.061044355090574466,
+              "negative_count": 21,
+              "negative_frequency": 0.44680851063829785
+            },
+            "ks_er": {
+              "count": 47,
+              "mean": 0.003252009749899949,
+              "median": 0.004811214535903658,
+              "std": 0.053344398429084165,
+              "min": -0.09908855472700409,
+              "max": 0.13124697864585155,
+              "negative_count": 22,
+              "negative_frequency": 0.46808510638297873
+            },
+            "si_er": {
+              "count": 47,
+              "mean": 0.025170502149978586,
+              "median": 0.02806719396356751,
+              "std": 0.0545561146393406,
+              "min": -0.11594041654830989,
+              "max": 0.14654714619582254,
+              "negative_count": 15,
+              "negative_frequency": 0.3191489361702128
+            }
+          },
+          "max_min_mean_norm_ratio": 7.660914512340469
+        }
+      },
+      "record_steps": [
+        1,
+        20,
+        40,
+        60,
+        80,
+        100,
+        120,
+        140,
+        160,
+        180,
+        200,
+        220,
+        240,
+        260,
+        280,
+        300,
+        320,
+        340,
+        360,
+        380,
+        400,
+        420,
+        440,
+        460,
+        480,
+        500,
+        520,
+        540,
+        560,
+        580,
+        600,
+        620,
+        640,
+        660,
+        680,
+        700,
+        720,
+        740,
+        760,
+        780,
+        800,
+        820,
+        840,
+        860,
+        880,
+        900,
+        920,
+        940,
+        960,
+        980,
+        1000,
+        1020,
+        1040,
+        1060,
+        1080,
+        1100,
+        1120,
+        1140,
+        1160,
+        1180,
+        1200,
+        1220,
+        1240,
+        1260,
+        1280,
+        1300,
+        1320,
+        1340,
+        1360,
+        1380,
+        1400,
+        1420,
+        1440,
+        1460,
+        1480,
+        1500,
+        1520,
+        1540,
+        1560,
+        1580,
+        1600,
+        1620,
+        1640,
+        1660,
+        1680,
+        1700,
+        1720,
+        1740,
+        1760,
+        1780,
+        1800,
+        1820,
+        1840,
+        1860,
+        1880,
+        1900,
+        1920,
+        1940,
+        1960,
+        1980,
+        2000,
+        2020,
+        2040,
+        2060,
+        2080,
+        2100,
+        2120,
+        2140,
+        2160,
+        2180,
+        2200,
+        2220,
+        2240,
+        2260,
+        2280,
+        2300,
+        2320,
+        2340,
+        2360,
+        2380,
+        2400,
+        2420,
+        2440,
+        2460,
+        2480,
+        2500,
+        2520,
+        2540,
+        2560,
+        2580,
+        2600,
+        2620,
+        2640,
+        2660,
+        2680,
+        2700,
+        2720,
+        2740,
+        2760,
+        2780,
+        2800,
+        2820
+      ]
+    },
+    "a1": {
+      "artifact": "improvements/taskrelation/research/studies/DG-0005/outputs/a1/results/DG-0005/screen/ks_si_er/2026_09_22_11_28_17/gradient_diagnostics.json",
+      "task_array": [
+        "ks",
+        "si",
+        "er"
+      ],
+      "sample_interval_steps": 20,
+      "total_training_steps": 2820,
+      "sampled_steps": 142,
+      "skipped_sample_steps_missing_tasks": 0,
+      "shared_parameter_names": [
+        "projector_layer.weight",
+        "projector_layer.bias",
+        "hidden_layer.weight",
+        "hidden_layer.bias"
+      ],
+      "shared_parameter_count": 1550800,
+      "valid_examples_per_sampled_batch": {
+        "ks": {
+          "mean": 439.22535211267603,
+          "min": 390,
+          "max": 493
+        },
+        "si": {
+          "mean": 1173.9859154929577,
+          "min": 1110,
+          "max": 1220
+        },
+        "er": {
+          "mean": 434.7887323943662,
+          "min": 375,
+          "max": 489
+        }
+      },
+      "er_to_smallest_ratio": {
+        "early": 2.0176127753363953,
+        "middle": 2.8217670098055563,
+        "late": 2.756318786172376
+      },
+      "summary": {
+        "all": {
+          "sample_count": 142,
+          "task_norms": {
+            "ks": {
+              "count": 142,
+              "mean": 2.1342740006981424,
+              "median": 1.0718990005085471,
+              "std": 10.362657048837612,
+              "min": 0.30147619593691755,
+              "max": 124.37045767459207
+            },
+            "si": {
+              "count": 142,
+              "mean": 1.7294543535460127,
+              "median": 0.9039843726395274,
+              "std": 5.130840934689367,
+              "min": 0.4263726947479423,
+              "max": 61.357166690590226
+            },
+            "er": {
+              "count": 142,
+              "mean": 3.89506687179153,
+              "median": 2.5753030468971883,
+              "std": 4.722747318995505,
+              "min": 0.9986246903624695,
+              "max": 43.85107604286567
+            }
+          },
+          "pairwise_cosines": {
+            "ks_si": {
+              "count": 142,
+              "mean": 0.011732881255338558,
+              "median": 0.005239947532484219,
+              "std": 0.052935939779414555,
+              "min": -0.10657875598064352,
+              "max": 0.244600144637915,
+              "negative_count": 62,
+              "negative_frequency": 0.43661971830985913
+            },
+            "ks_er": {
+              "count": 142,
+              "mean": 0.016128639752946365,
+              "median": 0.009887095863519702,
+              "std": 0.07295087748995087,
+              "min": -0.2696826838594121,
+              "max": 0.21083959728466517,
+              "negative_count": 66,
+              "negative_frequency": 0.4647887323943662
+            },
+            "si_er": {
+              "count": 142,
+              "mean": 0.039269211574216804,
+              "median": 0.03842406668637483,
+              "std": 0.11105916314388228,
+              "min": -0.5732135251884836,
+              "max": 0.5128285698541307,
+              "negative_count": 49,
+              "negative_frequency": 0.34507042253521125
+            }
+          },
+          "max_min_mean_norm_ratio": 2.252194088733953
+        },
+        "early": {
+          "sample_count": 48,
+          "task_norms": {
+            "ks": {
+              "count": 48,
+              "mean": 4.386690778494816,
+              "median": 1.6296468892711622,
+              "std": 17.725386401371395,
+              "min": 0.5167671327689767,
+              "max": 124.37045767459207
+            },
+            "si": {
+              "count": 48,
+              "mean": 3.5687059408211415,
+              "median": 2.095765448024438,
+              "std": 8.583806668310636,
+              "min": 1.081190202415578,
+              "max": 61.357166690590226
+            },
+            "er": {
+              "count": 48,
+              "mean": 7.200266697619624,
+              "median": 5.536385646909556,
+              "std": 6.9776890416511135,
+              "min": 2.8403016026955488,
+              "max": 43.85107604286567
+            }
+          },
+          "pairwise_cosines": {
+            "ks_si": {
+              "count": 48,
+              "mean": 0.02420900328330082,
+              "median": 0.009075275806961294,
+              "std": 0.06915703623902425,
+              "min": -0.10578267430191737,
+              "max": 0.244600144637915,
+              "negative_count": 19,
+              "negative_frequency": 0.3958333333333333
+            },
+            "ks_er": {
+              "count": 48,
+              "mean": 0.029781297328467436,
+              "median": 0.0483215057522891,
+              "std": 0.08744659283535741,
+              "min": -0.2696826838594121,
+              "max": 0.21083959728466517,
+              "negative_count": 20,
+              "negative_frequency": 0.4166666666666667
+            },
+            "si_er": {
+              "count": 48,
+              "mean": 0.09030611216750907,
+              "median": 0.11226284061868216,
+              "std": 0.14808037595588425,
+              "min": -0.5732135251884836,
+              "max": 0.5128285698541307,
+              "negative_count": 7,
+              "negative_frequency": 0.14583333333333334
+            }
+          },
+          "max_min_mean_norm_ratio": 2.0176127753363953
+        },
+        "middle": {
+          "sample_count": 47,
+          "task_norms": {
+            "ks": {
+              "count": 47,
+              "mean": 1.090688741148271,
+              "median": 1.0582111976515576,
+              "std": 0.268256065870075,
+              "min": 0.482330607070525,
+              "max": 1.8510727375480422
+            },
+            "si": {
+              "count": 47,
+              "mean": 0.888981013792724,
+              "median": 0.888052353434722,
+              "std": 0.20952520265566582,
+              "min": 0.5628026307134004,
+              "max": 1.4604320773818529
+            },
+            "er": {
+              "count": 47,
+              "mean": 2.5084972970638066,
+              "median": 2.1625087407106363,
+              "std": 0.9617006964862491,
+              "min": 1.1940787436911138,
+              "max": 5.596128331085129
+            }
+          },
+          "pairwise_cosines": {
+            "ks_si": {
+              "count": 47,
+              "mean": 0.008836625613376354,
+              "median": 0.009720576418674083,
+              "std": 0.046921391901171706,
+              "min": -0.10657875598064352,
+              "max": 0.10802206395784875,
+              "negative_count": 18,
+              "negative_frequency": 0.3829787234042553
+            },
+            "ks_er": {
+              "count": 47,
+              "mean": 0.004180607446647115,
+              "median": -0.005865632849160891,
+              "std": 0.06395079073695574,
+              "min": -0.12006641495656155,
+              "max": 0.14551754089862093,
+              "negative_count": 26,
+              "negative_frequency": 0.5531914893617021
+            },
+            "si_er": {
+              "count": 47,
+              "mean": 0.03737455804054799,
+              "median": 0.04510193398418105,
+              "std": 0.07281740554785743,
+              "min": -0.12638422627845047,
+              "max": 0.16457936129451067,
+              "negative_count": 16,
+              "negative_frequency": 0.3404255319148936
+            }
+          },
+          "max_min_mean_norm_ratio": 2.8217670098055563
+        },
+        "late": {
+          "sample_count": 47,
+          "task_norms": {
+            "ks": {
+              "count": 47,
+              "mean": 0.8775187212216237,
+              "median": 0.9135736315596389,
+              "std": 0.212992035091101,
+              "min": 0.30147619593691755,
+              "max": 1.3915402261701977
+            },
+            "si": {
+              "count": 47,
+              "mean": 0.6915430935289575,
+              "median": 0.679726369338312,
+              "std": 0.11703318758538721,
+              "min": 0.4263726947479423,
+              "max": 0.9989166948526339
+            },
+            "er": {
+              "count": 47,
+              "mean": 1.906113220141626,
+              "median": 1.8109242396819574,
+              "std": 0.5390586445167962,
+              "min": 0.9986246903624695,
+              "max": 3.1854040697412964
+            }
+          },
+          "pairwise_cosines": {
+            "ks_si": {
+              "count": 47,
+              "mean": 0.001887565464488239,
+              "median": -0.0033712639782246473,
+              "std": 0.035086759080276954,
+              "min": -0.08152901681264581,
+              "max": 0.10252657082190798,
+              "negative_count": 25,
+              "negative_frequency": 0.5319148936170213
+            },
+            "ks_er": {
+              "count": 47,
+              "mean": 0.01413353240764962,
+              "median": 0.014842374228346144,
+              "std": 0.06375966684760372,
+              "min": -0.0918658952213114,
+              "max": 0.16858152944787447,
+              "negative_count": 20,
+              "negative_frequency": 0.425531914893617
+            },
+            "si_er": {
+              "count": 47,
+              "mean": -0.010958926987391596,
+              "median": -0.011657252591497712,
+              "std": 0.06928604075745795,
+              "min": -0.1722396957839775,
+              "max": 0.1453454379175643,
+              "negative_count": 26,
+              "negative_frequency": 0.5531914893617021
+            }
+          },
+          "max_min_mean_norm_ratio": 2.756318786172376
+        }
+      },
+      "record_steps": [
+        1,
+        20,
+        40,
+        60,
+        80,
+        100,
+        120,
+        140,
+        160,
+        180,
+        200,
+        220,
+        240,
+        260,
+        280,
+        300,
+        320,
+        340,
+        360,
+        380,
+        400,
+        420,
+        440,
+        460,
+        480,
+        500,
+        520,
+        540,
+        560,
+        580,
+        600,
+        620,
+        640,
+        660,
+        680,
+        700,
+        720,
+        740,
+        760,
+        780,
+        800,
+        820,
+        840,
+        860,
+        880,
+        900,
+        920,
+        940,
+        960,
+        980,
+        1000,
+        1020,
+        1040,
+        1060,
+        1080,
+        1100,
+        1120,
+        1140,
+        1160,
+        1180,
+        1200,
+        1220,
+        1240,
+        1260,
+        1280,
+        1300,
+        1320,
+        1340,
+        1360,
+        1380,
+        1400,
+        1420,
+        1440,
+        1460,
+        1480,
+        1500,
+        1520,
+        1540,
+        1560,
+        1580,
+        1600,
+        1620,
+        1640,
+        1660,
+        1680,
+        1700,
+        1720,
+        1740,
+        1760,
+        1780,
+        1800,
+        1820,
+        1840,
+        1860,
+        1880,
+        1900,
+        1920,
+        1940,
+        1960,
+        1980,
+        2000,
+        2020,
+        2040,
+        2060,
+        2080,
+        2100,
+        2120,
+        2140,
+        2160,
+        2180,
+        2200,
+        2220,
+        2240,
+        2260,
+        2280,
+        2300,
+        2320,
+        2340,
+        2360,
+        2380,
+        2400,
+        2420,
+        2440,
+        2460,
+        2480,
+        2500,
+        2520,
+        2540,
+        2560,
+        2580,
+        2600,
+        2620,
+        2640,
+        2660,
+        2680,
+        2700,
+        2720,
+        2740,
+        2760,
+        2780,
+        2800,
+        2820
+      ]
+    }
+  },
+  "phase_max_min_mean_norm_ratios": {
+    "a0": {
+      "early": 2.604631141516718,
+      "middle": 7.357447991929677,
+      "late": 7.660914512340469
+    },
+    "a1": {
+      "early": 2.0176127753363953,
+      "middle": 2.8217670098055563,
+      "late": 2.756318786172376
+    }
+  },
+  "a1_minus_a0_ratio_delta": {
+    "early": -0.5870183661803225,
+    "middle": -4.53568098212412,
+    "late": -4.904595726168093
+  },
+  "fixed_epoch_outcome_delta_a1_minus_a0": {
+    "aggregate": -0.00019182812200269073,
+    "ks": 0.0001463057790782596,
+    "si": -0.0013331717367591756,
+    "er": 0.012658227848101333
+  },
+  "decision": "PROMISING",
+  "next_action": "Run matched seeds 0-4 confirmation for A0 and A1."
+}

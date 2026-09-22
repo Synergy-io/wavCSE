@@ -26,24 +26,24 @@ Promote when the exposure check passes (same steps, same total samples, realized
 
 ## Git commit
 
-Pending: implementation commit to be recorded here and in every MLflow run tag.
+`0162224e63c1f77d3aaa7228bc2a13f3f2d85b14` — additive, default-off task-weighted training sampler, deterministic run-seed plumbing, matched A0/A1 configs, actual-data validation, and support for IEMOCAP's subset-wrapped training dataset.
 
 ## Pre-registered run names
 
-`DG-0005__screen__wavcse__ks_si_er__smp25__s42` (A0/A1 method tag distinguishes arms; confirmation uses `__confirm__` with the standard seed suffix).
+`DG-0005__screen__wavcse-standard-composition__ks_si_er__smp25__s42` (A0) and `DG-0005__screen__wavcse-er-weighted-composition__ks_si_er__smp25__s42` (A1).
 
 ## Results
 
-Pending execution.
+The decisive A0/A1 screen completed at commit `0162224`, seed 42. Configuration and exposure checks passed: both arms used 2,820 steps and 142 samples; A1 realized KS/SI/ER counts `439.23 / 1173.99 / 434.79` per sampled batch (ER/KS `0.990`). A0 middle/late max-min norm ratios were `7.357 / 7.661`; A1 reduced them to `2.822 / 2.756`, crossing the pre-registered `< 3.0` late threshold. Fixed-epoch A1-minus-A0 deltas were aggregate `-0.00019`, KS `+0.00015`, SI `-0.00133`, ER `+0.01266`; the ER value is speaker-leaky context only. Screen run IDs: A0 `5cda2a0b01d54470bc5d04fba641d756`, A1 `301215870efc46b9a7688eb8722c1d17`.
 
 ## Interpretation
 
-Pending execution.
+The screening direction supports a data-regime-sensitive explanation for F9: ER's late mean norm fell from `6.363` to `1.906`, while KS/SI did not inflate enough to explain the ratio collapse. One seed cannot establish the effect. Replacement sampling also increases ER repetition and reduces KS/SI counts under the fixed global batch, so confirmation must quantify seed stability before F9 is revised.
 
 ## Decision
 
-Pending execution.
+`PROMISING` screening result; matched multi-seed confirmation is required. No mechanism is authorized.
 
 ## Next step
 
-Implement the additive, default-off per-task sampling knob, commit it, then run screening (A0 on GPU 0, A1 on GPU 1), monitor to completion, and analyze seed-level phase summaries. Report the outcome to the human before any Option-3 discussion.
+Run A0/A1 confirmation at seeds `0,1,2,3,4`, report mean/SD and paired differences, then decide `CONFIRMED`, `REJECTED`, or `INCONCLUSIVE`. A2 is not launched because the screen was not ambiguous.
