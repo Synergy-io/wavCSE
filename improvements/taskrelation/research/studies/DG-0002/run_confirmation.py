@@ -34,7 +34,8 @@ def main():
         for arm, model, config_path in ARMS:
             command = [
                 sys.executable,
-                "improvements/run_improvements.py",
+                "-m",
+                "improvements.run_improvements",
                 "--model",
                 model,
                 "--task_type",
