@@ -59,10 +59,14 @@ The reproducible F9 ER gradient-norm dominance is **not task-intrinsic at this r
 
 Alternative explanation not yet excluded: the same knob removes ER gradient-estimate variance **and** multiplies ER's optimizer updates per epoch, so part of the norm drop may reflect faster ER convergence/overfitting (ER train accuracy rises to ~0.99 while validation plateaus near 0.82) rather than only estimator scale. The single-knob design cannot separate these two.
 
+## Post-hoc bound (no compute, 2026-09-22)
+
+A pre-registered post-hoc analysis of these runs (`analyze_noise_shape.py`, pre-registered at `2ac7f3d`, results in `noise_shape_result.json`) bounded how much of ER's mean-norm drop estimator size can carry. Since a noise-dominated norm satisfies `E‖g‖ ∝ 1/√n`, the arm-to-arm mean ratio is capped at `√(n_A1/n_A0) ≈ 3.0`; the observed late ratio was `3.99–4.69`, so estimator-size scaling explains at most `0.758` `[0.715, 0.801]` of the late log-drop and **≥20% must be something else** (a smaller ER mean gradient, or noise growing faster than `1/√n`). The middle phase is fully estimator-consistent (share `1.028` `[0.975, 1.082]`). Per-step dispersion cannot proxy estimator variance here: observed `CV ≈ 0.32` against an isotropic-noise ceiling of `≈ 0.00057`. DG-0002's matched baseline reproduces the A0 statistics value for value. This is a bound, not an identification, and it carries no `CONFIRMED` claim; it is recorded in F10 and DEC-0012.
+
 ## Decision
 
-`CONFIRMED` diagnostic. No mechanism is authorized; the `TR-xxxx` gate stays closed under DEC-0009.
+`CONFIRMED` diagnostic. No mechanism is authorized; the `TR-xxxx` gate stays closed under DEC-0009 (narrowed by DEC-0012).
 
 ## Next step
 
-Update F9's interpretation and add the framework consequence (gradient scale is a training-mixture property), then let a human decide the Option-3 gate. If a further diagnostic is opened, its highest-information target is separating estimator variance from ER convergence/overfitting under the same composition.
+F9's interpretation is updated and the framework consequence is recorded (gradient scale is a training-mixture property). A human decides the Option-3 gate. If a further diagnostic is opened, its target is now the late-phase mean gradient specifically — measured as `‖E g‖` on the existing arms rather than inferred from per-batch dispersion, per DEC-0012 and `FRAMEWORK.md` §7.

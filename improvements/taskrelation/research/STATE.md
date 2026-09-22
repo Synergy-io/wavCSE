@@ -650,7 +650,10 @@ most `0.758` `[0.715, 0.801]` of the late drop, so ≥20% is not estimator size;
 per-step dispersion is proven unusable as a noise proxy (`CV ≈ 0.32` vs an
 isotropic ceiling of `≈ 0.00057`); DG-0002's baseline reproduces the A0
 statistics value for value. Recorded as DEC-0012 and inside F10 — post-hoc, no
-new finding, no GPU work. No metric of any run was changed.
+new finding, no GPU work. No metric of any run was changed. Commits:
+`2ac7f3d` (pre-registration), `27dee9f` (results and ledger updates). The ten
+DG-0005 confirmation runs on DagsHub keep `study_decision=CONFIRMED` and their
+run note was re-pushed with the post-hoc bound (DEC-0012).
 
 Previous iteration (2026-09-22, no compute): analysis/synthesis pass. Created
 `FRAMEWORK.md`, refreshed `MTRL_DIAGNOSTIC_SYNTHESIS.md` so it no longer

@@ -3,7 +3,7 @@
   "title": "ER data-regime gradient-scale control confirmation",
   "type": "diagnostic",
   "stage": "confirm",
-  "generated_at": "2026-09-22T15:06:05.267496+00:00",
+  "generated_at": "2026-09-22T15:17:21.866148+00:00",
   "confirmation_commit": "8032a937050d8bbd3114b172cb813a8fc7370b37",
   "seeds": [
     0,
@@ -89,7 +89,7 @@
               "er": 0.7884267631103075
             }
           },
-          "runtime_device_index": null,
+          "runtime_device_index": "0",
           "train_val_accuracy_gap": {
             "ks": 0.0030496161081930984,
             "si": 0.018367754918652057,
@@ -157,7 +157,7 @@
               "er": 0.783001808318264
             }
           },
-          "runtime_device_index": null,
+          "runtime_device_index": "0",
           "train_val_accuracy_gap": {
             "ks": 0.006248787940380307,
             "si": 0.019844289243351243,
@@ -1107,7 +1107,7 @@
               "er": 0.786618444846293
             }
           },
-          "runtime_device_index": null,
+          "runtime_device_index": "0",
           "train_val_accuracy_gap": {
             "ks": 0.005504582477097175,
             "si": 0.01971919119912946,
@@ -1175,7 +1175,7 @@
               "er": 0.7902350813743219
             }
           },
-          "runtime_device_index": null,
+          "runtime_device_index": "0",
           "train_val_accuracy_gap": {
             "ks": 0.004350848624411707,
             "si": 0.01888263715077798,
@@ -2125,7 +2125,7 @@
               "er": 0.7739602169981917
             }
           },
-          "runtime_device_index": null,
+          "runtime_device_index": "0",
           "train_val_accuracy_gap": {
             "ks": 0.004124615147989896,
             "si": 0.016310949779037465,
@@ -2193,7 +2193,7 @@
               "er": 0.783001808318264
             }
           },
-          "runtime_device_index": null,
+          "runtime_device_index": "0",
           "train_val_accuracy_gap": {
             "ks": 0.006051664695503667,
             "si": 0.018546803554208124,
@@ -3143,7 +3143,7 @@
               "er": 0.7902350813743219
             }
           },
-          "runtime_device_index": null,
+          "runtime_device_index": "0",
           "train_val_accuracy_gap": {
             "ks": 0.0028999280480237477,
             "si": 0.020430198996441606,
@@ -3211,7 +3211,7 @@
               "er": 0.8047016274864376
             }
           },
-          "runtime_device_index": null,
+          "runtime_device_index": "0",
           "train_val_accuracy_gap": {
             "ks": 0.005523192233303109,
             "si": 0.019937956809916835,
@@ -4161,7 +4161,7 @@
               "er": 0.786618444846293
             }
           },
-          "runtime_device_index": null,
+          "runtime_device_index": "0",
           "train_val_accuracy_gap": {
             "ks": 0.0035681799212505805,
             "si": 0.02012317758890969,
@@ -4229,7 +4229,7 @@
               "er": 0.7884267631103075
             }
           },
-          "runtime_device_index": null,
+          "runtime_device_index": "0",
           "train_val_accuracy_gap": {
             "ks": 0.006033639251884715,
             "si": 0.019621145765795323,
