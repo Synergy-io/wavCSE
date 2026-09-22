@@ -610,6 +610,14 @@ and A1 (ER-weighted composition) on GPU 1, seed 42, ~18 min per arm. Monitor to
 completion and analyse seed-level phase summaries before any confirmation
 batch. No GPU training has been launched yet.
 
+Verified codebase facts, exposure arithmetic and the invariants any change must
+preserve are recorded in `studies/DG-0005/PLAN.md` §"Verified codebase facts"
+(read from source on 2026-09-22). Two facts that are easy to get wrong: the
+training loader accepts no `sampler` today, and the protocol configs' top-level
+`patience: 5` is **inert** — the trainer reads `scheduler_patience` (default 1),
+so effective scheduler patience is 1. Do not rename that key inside a single
+arm.
+
 GPU jobs still running:
 
 `NONE`.

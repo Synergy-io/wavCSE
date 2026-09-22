@@ -87,12 +87,88 @@ Seeds `0,1,2,3,4` for the decisive arm plus a matched baseline (10 runs), distri
 
 Screening: GPU 0 = A0, GPU 1 = A1. Confirmation: GPU 0 = seeds 0,2,4; GPU 1 = seeds 1,3, as project policy requires. Check `df -h` and `nvidia-smi` before launch; root currently has ≈19 GB free and GPU 1 is shared with another user's job, so at most one of our jobs plus that occupancy is realistic at times.
 
-## Implementation prerequisites (not yet present)
+## Verified codebase facts (read 2026-09-22, current HEAD)
 
-1. `downstream/dataset/custom_emb_dataloader.py` takes no `sampler`; weighted per-sample sampling must be added.
-2. Per-sample task membership is derivable from the `[B, T]` label matrix with `ignore_index=-1`, but no existing helper exposes it.
-3. `dataset.subset_percentage` is a global `PercentageSubset` applied to train **and** validation **and** test; it must not be reused for this Study. Any new knob must be **additive and default-off** so the established baseline evaluation protocol is unchanged (project rule).
-4. The implementation must be committed before any run, and that commit SHA recorded per run.
+These were confirmed by reading the sources, not inferred. They define the
+implementation surface and the invariants any change must preserve.
+
+### Data plumbing
+
+1. `downstream/dataset/load_embedding.py::load_embedding()` builds
+   `CombinedDataset([...])` in `dataset_id_array` order, which follows
+   `task_type`. For `ks_si_er` the order is `[speechcommand, voxceleb, iemocap]`.
+   `CombinedDataset.__getitem__` therefore dispatches by index range.
+2. `subset_percentage` is applied whenever it is not `None`, and it wraps
+   **training, validation and testing**. The DG-0002/DG-0005 protocol sets it to
+   `100`, so a `PercentageSubset` wrapper is always present around
+   `CombinedDataset` and must be unwrapped (`.dataset`) to reach the per-task
+   sub-datasets.
+3. A sample's task membership is derivable two ways: from the index ranges of
+   `CombinedDataset.datasets` (no embedding reads), or from its label row, where
+   absent tasks carry `ignore_index = -1`. No helper exposes either today.
+4. Per-task batch composition is currently **determined**, never controlled:
+   `downstream/dataset/custom_emb_dataloader.py::CustomEmbDataLoader` extends
+   `DataLoader` with a fixed argument list and accepts **no** `sampler`;
+   its `defined_collate` stacks `(embedding, label)` into a `[B, T]` long tensor.
+
+### Exposure arithmetic (must be preserved)
+
+5. 193,874 training samples / batch 2048 with `drop_last_train: true` = 94
+   batches per epoch; × 30 epochs = **2,820 optimizer steps**, which matches
+   DG-0002's logged `total_training_steps=2820` and its 142 sampled steps at
+   `sample_interval_steps: 20`.
+6. Consequently, a replacement sampler must use `num_samples == len(dataset)`
+   to keep 94 batches/epoch. `WeightedRandomSampler` also requires
+   `shuffle=False`, so the training loader's shuffle flag must be disabled when
+   a sampler is supplied.
+7. With `replacement=True` oversampling, ER's *per-batch count* rises while its
+   distinct-sample pool stays the same, so the per-epoch repetition of ER
+   examples increases. This is the quantity under test (gradient-estimate
+   noise), not additional ER information. Record it as a caveat, not as a flaw.
+
+### Trainer and config wiring
+
+8. `improvements/run_improvements.py::build_trainer()` passes
+   `training_cfg = cfg["training"]` verbatim with no key rewriting. A new knob
+   therefore belongs under the config's `training:` block and is read in the
+   trainer as `training_cfg.get(...)`. The existing
+   `training.gradient_diagnostics` block is read the same way.
+9. `MultiTasksModelTrainer.__init__` receives no seed argument and stores no
+   seed attribute; if the sampler needs deterministic seeding, that must be
+   plumbed explicitly rather than assumed available.
+10. **Scheduler key caveat:** the trainer reads `scheduler_patience`
+    (default `1`) and `scheduler_factor` (default `0.5`). The existing protocol
+    configs set `patience: 5` / `factor: 0.5`, so `patience` is **inert** and the
+    effective scheduler patience is `1`. DG-0002's logged LR path
+    (halving repeatedly after epoch 6) is consistent with this. Both arms of
+    DG-0005 inherit the same effective setting, so the comparison stays valid —
+    but do **not** "fix" the key name in an arm, and do not describe the
+    protocol as using patience 5.
+
+### Gradient diagnostics (reused, unchanged)
+
+11. `improvements/gradient_diagnostics.py` samples the first, final and every
+    20th step; computes each task's unweighted masked cross-entropy and its
+    `torch.autograd.grad` on shared parameters (all trainable parameters
+    excluding `classifiers.`, 1,550,800 parameters); and writes
+    `results/gradient_diagnostics.json` containing per-record
+    `valid_examples`, `phase`, `progress`, and a `summary` with
+    `task_norms`, `pairwise_cosines` and `max_min_mean_norm_ratio` for
+    `all`/`early`/`middle`/`late`, plus `total_training_steps` and
+    `sampled_steps`.
+
+### Invariants any implementation must satisfy
+
+12. Training split only; validation and test composition unchanged; do not
+    reuse or alter `dataset.subset_percentage`.
+13. New config keys must be additive and default-off so that with the knob
+    absent the pipeline is byte-equivalent to the DG-0002 baseline protocol
+    (project rule: never silently modify the baseline evaluation protocol).
+14. The implementation must be committed before any run and that SHA recorded
+    for every run (`.omp/RULES.md`).
+15. The per-step realized `valid_examples` counts are the exposure gate. An arm
+    whose realized composition misses its design target is invalid, not noisy
+    (F8).
 
 ## Expected information gain
 
