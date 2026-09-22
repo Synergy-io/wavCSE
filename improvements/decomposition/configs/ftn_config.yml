@@ -31,6 +31,13 @@ model:
   dropout_prob_shared1: 0.4
   dropout_prob_shared2: 0.6
   ftn_rank: 16 
+  decomposition_mode: factor_shared_private
+  shared_rank: 4
+  private_rank: 12
+
+diagnostics:
+  shared_gradient_analysis: true
+  shared_gradient_every_n_batches: 10
 
 training:
   num_epochs: 30

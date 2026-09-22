@@ -43,6 +43,44 @@ from utils.setup_logging import setup_logging
 class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
     """Add MLflow diagnostics and configurable clipping to the standard trainer."""
 
+    def _process_data_loader(self, data_loader, train_mode):
+        if not train_mode:
+            self._activation_ratio_sums = {
+                component: {task: 0.0 for task in self.task_array}
+                for component in ("shared", "private")
+            }
+            self._activation_ratio_counts = {task: 0 for task in self.task_array}
+        return super()._process_data_loader(data_loader, train_mode)
+
+    def _process_batch(self, batch, train_mode):
+        stats = super()._process_batch(batch, train_mode)
+        if not train_mode:
+            with torch.no_grad():
+                input_seq, labels = self._unpack_batch(batch)
+                base, shared, private = self.model.get_component_activations(input_seq)
+                denominator = torch.linalg.vector_norm(base, dim=1).clamp_min(1e-12)
+                for index, task in enumerate(self.task_array):
+                    valid = labels[index] != self.ignore_index
+                    if not valid.any():
+                        continue
+                    shared_ratio = (
+                        torch.linalg.vector_norm(shared[task], dim=1) / denominator
+                    )[valid]
+                    private_ratio = (
+                        torch.linalg.vector_norm(private[task], dim=1) / denominator
+                    )[valid]
+                    finite = torch.isfinite(shared_ratio) & torch.isfinite(private_ratio)
+                    count = int(finite.sum().item())
+                    if count:
+                        self._activation_ratio_sums["shared"][task] += float(
+                            shared_ratio[finite].sum().item()
+                        )
+                        self._activation_ratio_sums["private"][task] += float(
+                            private_ratio[finite].sum().item()
+                        )
+                        self._activation_ratio_counts[task] += count
+        return stats
+
     def _epoch_report_line(self, epoch, phase, stats):
         learning_rate = None
         if phase == "val":
@@ -57,6 +95,7 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
         diagnostics = {f"{phase}_balanced_task_acc": balanced_accuracy}
 
         if phase == "train":
+            diagnostics.update(self.consume_shared_gradient_stats())
             gradient_stats = self.consume_gradient_norm_stats()
             if gradient_stats is not None:
                 diagnostics.update(
@@ -67,9 +106,8 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
                 )
 
         if phase == "val":
-            diagnostics["shared_fc2_weight_norm"] = (
-                self.model.get_shared_weight_norm()
-            )
+            shared_weight_norm = self.model.get_shared_weight_norm()
+            diagnostics["shared_fc2_weight_norm"] = shared_weight_norm
             diagnostics.update(
                 {
                     f"delta_norm_{task}": norm
@@ -90,6 +128,28 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
                     )
                 }
             )
+            for component, task_norms in self.model.get_component_norms().items():
+                for task, norm in task_norms.items():
+                    diagnostics[f"{component}_delta_norm_{task}"] = norm
+                    diagnostics[f"relative_{component}_delta_norm_{task}"] = (
+                        norm / shared_weight_norm if shared_weight_norm else 0.0
+                    )
+            diagnostics.update(
+                {
+                    f"shared_factor_cosine_{pair}": similarity
+                    for pair, similarity in (
+                        self.model.get_shared_factor_cosine_similarities().items()
+                    )
+                }
+            )
+            for task, count in self._activation_ratio_counts.items():
+                if count:
+                    diagnostics[f"shared_activation_ratio_{task}"] = (
+                        self._activation_ratio_sums["shared"][task] / count
+                    )
+                    diagnostics[f"private_activation_ratio_{task}"] = (
+                        self._activation_ratio_sums["private"][task] / count
+                    )
 
         mlflow.log_metrics(diagnostics, step=epoch)
         return super()._epoch_report_line(epoch, phase, stats)
@@ -113,13 +173,15 @@ def _config_path(path: str) -> str:
 
 
 def _parameter_counts(model: DownstreamMultiTaskModelFTN) -> dict[str, int]:
-    updates = [
-        sum(p.numel() for p in module.parameters())
-        for module in model.task_updates
-    ]
-    if len(set(updates)) != 1:
-        raise ValueError(f"Expected equal per-task update sizes, got {updates}")
-    return {
+    private_down = sum(update.down.weight.numel() for update in model.task_updates)
+    private_up = sum(update.up.weight.numel() for update in model.task_updates)
+    private_total = private_down + private_up
+    shared_down = model.shared_down.weight.numel() if model.shared_rank else 0
+    shared_task_up = (
+        sum(up.weight.numel() for up in model.shared_task_ups)
+        if model.shared_rank else 0
+    )
+    counts = {
         "total_parameters": sum(p.numel() for p in model.parameters()),
         "trainable_parameters": sum(
             p.numel() for p in model.parameters() if p.requires_grad
@@ -127,10 +189,20 @@ def _parameter_counts(model: DownstreamMultiTaskModelFTN) -> dict[str, int]:
         "shared_fc2_parameters": sum(
             p.numel() for p in model.hidden_layer.parameters()
         ),
-        "task_update_parameters_total": sum(updates),
-        "task_update_parameters_per_task": updates[0],
+        "shared_down_parameters": shared_down,
+        "shared_task_up_parameters_total": shared_task_up,
+        "private_down_parameters_total": private_down,
+        "private_up_parameters_total": private_up,
+        "private_parameters_total": private_total,
+        "ftn_specific_parameters_total": shared_down + shared_task_up + private_total,
+        "shared_rank": model.shared_rank,
+        "private_rank": model.private_rank,
         "ftn_rank": model.ftn_rank,
     }
+    if model.decomposition_mode == "independent":
+        counts["task_update_parameters_total"] = private_total
+        counts["task_update_parameters_per_task"] = private_total // len(model.TASK_ORDER)
+    return counts
 
 
 def _set_seed(seed: int) -> None:
@@ -200,15 +272,24 @@ def main() -> None:
     task_type = args.task_type
 
     mlflow_utils.setup_mlflow(cfg)
-    ftn_rank = cfg["model"]["ftn_rank"]
+    model_cfg = cfg["model"]
+    decomposition_mode = model_cfg.get("decomposition_mode", "independent")
+    if decomposition_mode == "factor_shared_private":
+        architecture_name = (
+            f"ftn_factor_shared_rs{model_cfg.get('shared_rank', 0)}_"
+            f"rp{model_cfg.get('private_rank', 0)}"
+        )
+    else:
+        architecture_name = f"ftn_independent_r{model_cfg['ftn_rank']}"
     run_name = (
-        f"ftn_r{ftn_rank}_{task_type}_"
+        f"{architecture_name}_seed{seed}_{task_type}_"
         f"{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}"
     )
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
         mlflow.log_param("task_type", task_type)
+        mlflow.log_param("decomposition_mode", decomposition_mode)
 
         loader = LoadEmbedding(
             root_data_path=cfg["paths"]["root_data_path"],
@@ -224,7 +305,6 @@ def main() -> None:
             subset_percentage=cfg["dataset"]["subset_percentage"],
         )
 
-        model_cfg = cfg["model"]
         model = DownstreamMultiTaskModelFTN(
             upstream_model_type=cfg["upstream"]["model_type"],
             task_type=task_type,
@@ -235,6 +315,9 @@ def main() -> None:
             dropout_prob_shared1=model_cfg["dropout_prob_shared1"],
             dropout_prob_shared2=model_cfg["dropout_prob_shared2"],
             ftn_rank=model_cfg["ftn_rank"],
+            decomposition_mode=decomposition_mode,
+            shared_rank=model_cfg.get("shared_rank", 0),
+            private_rank=model_cfg.get("private_rank", 0),
         ).to(device)
         mlflow.log_params(_parameter_counts(model))
 
@@ -248,6 +331,7 @@ def main() -> None:
             training_data=train_data,
             validation_data=val_data,
             ignore_index=cfg["dataset"]["ignore_index"],
+            diagnostics_cfg=cfg.get("diagnostics", {}),
         )
         trainer.train()
 
