@@ -30,4 +30,10 @@ The literature separates the two properties F9 connects:
 
 The closest explicit-relation paper, Rakitsch et al. (2013), learns separate signal and residual task covariance matrices. Its fully observed aligned Gaussian multi-output regression assumptions do not hold for disjoint KS/SI/ER datasets and heterogeneous multiclass heads. Porting only the idea would require a novel deep-classification hybrid, not a faithful published implementation.
 
-No mechanism Study is authorized by LT-0001. The programme is in `NEEDS-HUMAN-REVIEW`: either retain the strict category and return to causal diagnostics such as the ER data-regime control, or explicitly broaden scope to optimization-aware MTL / authorize a novel relation-plus-reliability hybrid. The latter changes the claimed contribution and cannot be chosen autonomously.
+No mechanism Study is authorized by LT-0001. The programme was left in `NEEDS-HUMAN-REVIEW`; that has since resolved as follows (2026-09-22):
+
+* **DEC-0009 (human):** strict Task Relation Learning scope retained; broadening to optimization-aware MTL declined; a project-original hybrid deferred behind explicit authorization.
+* **DG-0005 (CONFIRMED, F10):** the ER data-regime control was run. It showed the gradient-scale signal is a **training-mixture property**, so the F9-era rationale for a scale- or reliability-aware relation mechanism is withdrawn (DEC-0010).
+* **DEC-0011:** this literature mandate is closed. Do not re-run this search against the same evidence.
+
+Consequence for the cards above: the direct-scale methods (GradNorm, uncertainty weighting) remain excluded by taxonomy; the explicit-relation methods remain ineligible as published mechanisms; and Rakitsch et al.'s retained "diagnostic principle" is now less well supported than when LT-0001 closed it, because the measured signal turned out to be mixture-driven gradient-estimate scale rather than demonstrated residual/output noise. The open decisions are listed in `../FRAMEWORK.md` §6.

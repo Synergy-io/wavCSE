@@ -46,6 +46,7 @@ Accuracy is shown as mean ± population standard deviation for the five-seed and
 | `LEGACY-PRE-ID`, LNP control | wavCSE baseline, control | unseeded single run | KS/SI/ER | `lnp` p=16 / selected 16 | 30 epochs, ordinary split, `opt` | 0.98669 | 0.97406 | 0.78843 | 0.97302 | reference | none | `ae0b15ef` | single seed, leaky ER. Level C |
 | `LEGACY-PRE-ID`, LNP MTRL | MTRL λ=0.01, `normalize_w`, control | unseeded single run | KS/SI/ER | same | same | 0.98742 | 0.97334 | 0.77939 | 0.97263 | +0.00073 / −0.00073 / −0.00904 / −0.00038 | uniform saturated Ω ≈ +1/3 | `ae0b15ef` | single seed, leaky ER. Comparing MTRL final epoch against baseline `opt` changes checkpoint policy and is not a controlled architecture claim. Level C |
 | `DG-0002`, gradient confirmation | wavCSE baseline vs MTRL, confirmation | seeds 0–4 | KS/SI/ER | `smp` 0.5 / all 25 | 30 epochs; fixed-epoch outcome context | 0.98604 / 0.98587 | 0.97821 / 0.97785 | 0.78300 / 0.78192 | 0.97473 / 0.97442 | −0.00018 / −0.00036 / −0.00109 / −0.00031 | baseline norm ratio 7.24 middle, 8.96 late; MTRL 7.13, 9.00; no persistent conflict | `7f6d5248` | all outcome CIs include zero; ER outcome leaky. Level A for the matched gradient diagnostic |
+| `DG-0005`, data-regime control | wavCSE baseline A0 vs A1 ER-weighted composition | seeds 0–4 | KS/SI/ER | `smp` 0.5 / all 25 | 30 epochs; fixed-epoch outcome context | 0.98604 / 0.98669 | 0.97821 / 0.97898 | 0.78300 / 0.79349 | 0.97473 / 0.97579 | +0.00064 / +0.00078 / +0.01049 / +0.00106 | A0 7.24 middle, 8.96 late; A1 2.82, 2.35; change ER-localized; no conflict signal | `8032a937` | exposure gate passed 5/5; only composition changed. ER leaky, no performance claim. Level A for the mixture control |
 
 MLflow metadata confirms the five-seed and LOSO comparisons share commit `bfb1ad44ef987e6484183eda7d782f28cec5c667`. The legacy runs have no Study ID or DagsHub run note; the LOSO fold children also omit full pooling/layer parameters, which are present on their parent runs. Two abandoned duplicate seed runs remain marked `RUNNING` in MLflow but have no test metrics and were excluded.
 
@@ -74,6 +75,7 @@ The 25L ordinary-split ER interval excludes zero, but this does not survive the 
 - Within the 25L LOSO condition, KS↔SI is fold-stable while ER-involving Ω entries are fold-sensitive and can change sign.
 - At fixed `smp` pooling, final Ω stability changes materially between the five-seed 16L and 25L settings. This is strong evidence for those configurations, not a universal ranking of task pairs.
 - DG-0002 establishes ER shared-gradient norm dominance under matched 25L training: every seed 0–4 exceeds ratio 3 in the middle/late phases, and MTRL does not consistently mitigate it. No seed supports persistent pairwise conflict.
+- DG-0005 establishes that this dominance is mixture-controlled: changing only ER's per-batch sampling weight (≈47 → ≈435 examples of 2,048) removed the late-phase ratio (8.962 → 2.352) in 5/5 seeds with exposure, data and evaluation held fixed. Gradient scale is therefore a training-mixture property, not a task-intrinsic one (F10).
 
 ### Level B — moderate
 
@@ -111,7 +113,7 @@ At 16L the aggregate difference is −0.010 points; at 25L it is −0.056 points
 | Object | Available evidence | What can be concluded |
 | --- | --- | --- |
 | Empirical directed transfer `T(A <- B)` | DG-0001 single/pairwise screen, ten-fold ER LOSO and optimizer-exposure controls | The raw matrix is not a semantic transfer target: update count and effective task batch size dominate it. Controlled KS/ER residual is unresolved; SI/ER is negative in both directions. |
-| Gradient interaction | DG-0002 exposure-matched baseline/MTRL confirmation, seeds 0–4, 142 sampled steps per arm | ER shared-gradient norm dominance is reproducible in middle/late training; MTRL does not consistently mitigate it. No seed supports persistent pairwise conflict. |
+| Gradient interaction | DG-0002 exposure-matched baseline/MTRL confirmation, seeds 0–4, 142 sampled steps per arm; DG-0005 composition control, same seeds | ER shared-gradient norm dominance is reproducible **under the standard training mixture** and is removed by matching ER's per-batch share to KS scale (DG-0005, F10). MTRL does not consistently mitigate the standard-mixture signal. No seed supports persistent pairwise conflict. |
 | Learned relation Ω | five-seed/fold/epoch diagnostics plus DG-0001 controlled transfer | Ω is symmetric, representation-sensitive and conditionally unstable. Its signs/magnitudes show moderate disagreement with controlled transfer, but protocols are not identical. |
 | Downstream outcome | matched five-seed aggregate/task metrics, ER LOSO and DG-0001 controls | MTRL has no reproducible meaningful advantage; raw transfer asymmetry is an optimizer-exposure artifact. |
 
@@ -174,7 +176,7 @@ KS↔SI strengthens consistently and largely stabilizes by epochs 4–5. ER-edge
 7. **Optimizer-exposure dominance.** DG-0001's raw ER gains of 28–34 points were reproduced by ER-only step controls; KS left no resolved residual and SI became negative.
 8. **Aggregate masking.** SI’s larger test set dominates aggregate movement; task-wise trade-offs must be checked even when aggregate differences are small.
 
-9. **Optimization-scale mismatch.** ER shared-gradient norms dominate KS/SI across seeds; MTRL leaves the ratio essentially unchanged while Ω magnitude saturates. The data-regime cause remains unresolved.
+9. **Optimization-scale mismatch** (cause resolved 2026-09-22). ER shared-gradient norms dominate KS/SI under the standard training mixture; MTRL leaves the ratio essentially unchanged while Ω magnitude saturates. DG-0005 then showed the signal is mixture-controlled: matching ER's per-batch sample count to KS scale removes it in 5/5 seeds with exposure fixed (F10). What remains unresolved is whether the residual ER norm drop is reduced gradient-estimate variance or ER convergence/overfitting — the one-knob design cannot separate them. The mismatch therefore no longer licenses a mechanism motivated by a task-intrinsic scale property (DEC-0010).
 
 There is established evidence against persistent pairwise gradient conflict and
 no supported beneficial asymmetry. SI/ER negative interaction remains moderate
@@ -189,27 +191,27 @@ causation remain untested.
 | Useful transfer is asymmetric | weakened / not supported | raw ER-directed outcomes were asymmetric | F8 shows optimizer exposure explained them; no positive controlled residual remained |
 | Useful relations are sparse/selective | insufficient evidence | controlled KS/ER is neutral and SI/ER negative | KS/SI is one seed; no replicated beneficial edge pattern |
 | Relation confidence should be distinct from magnitude | supported as a diagnostic principle; mechanism value unknown | stable saturated KS↔SI coexists with no gain; ER-edge variance is high | no confidence-aware intervention has been tested |
-| ER instability is caused by smaller/noisier data | insufficient evidence | ER edges vary across LOSO folds and ER accuracy has high fold variance | no matched-data/bootstrap control |
+| ER instability is caused by smaller/noisier data | **supported for gradient scale**, unmeasured for relation estimates | DG-0005's matched-composition control removes ER's gradient-norm dominance in 5/5 seeds (F10) | ER-edge Ω instability under matched composition has not been measured; the residual drop may be convergence rather than estimator variance |
 | Relations vary by representation depth | supported descriptively, not causally | matched `smp` 16L and 25L final Ω stability patterns differ | layer selection also changes represented information; no layer-wise diagnostic |
 | Relations change during training | supported descriptively, predictive value unknown | LOSO Ω trajectories differ by pair | no gradient alignment or prospective outcome prediction |
 | One global structure creates negative transfer | insufficient / moderate for SI↔ER | step-controlled SI/ER residual is negative in both directions | batch-size matching is approximate and MTRL edge ablation is absent |
 | Current task summaries are inadequate | plausible, strengthened but unproven | Ω sign/magnitude disagrees with controlled transfer; normalization changes Ω radically | triple-task Ω and pairwise transfer protocols differ |
 | Ω saturation causes MTRL failure | insufficient evidence | saturation co-occurs with neutral/below-baseline outcomes | no intervention that changes saturation while holding the rest fixed; direction of causality unknown |
-| ER gradient-scale dominance is a limitation of current MTRL | supported under matched `smp` 25L | ratio exceeds 3 in middle/late for 5/5 baseline and 5/5 MTRL seeds; paired mitigation intervals include zero | causation remains unproven; ER sample scarcity/difficulty may generate the signal |
+| ER gradient-scale dominance is a limitation of current MTRL | reframed: MTRL does not mitigate a signal that is itself mixture-dependent | ratio exceeds 3 in middle/late for 5/5 baseline and 5/5 MTRL seeds under the standard mixture; paired mitigation intervals include zero | the dominance is not task-intrinsic (F10), so it cannot motivate a relation mechanism as a task property (DEC-0010); only the estimator-vs-convergence split remains open |
 | Stronger λ fixes under-coupling | weakened / contradicted for tested setting | initial weak-Ω run motivated it | λ=0.05 worsened KS, SI and ER and reduced off-diagonal magnitude |
 
 ## Emerging selection framework
 
-This is an evidence boundary, not a completed method-selection framework.
+This is an evidence boundary, not a completed method-selection framework. The cross-study version of these rules, and the conditioned-quantity table they belong to, is `research/FRAMEWORK.md`.
 
 | Observable | Current KS/SI/ER evidence | Assumption it could test | Selection implication now |
 | --- | --- | --- | --- |
 | Transfer symmetry and sign | beneficial asymmetry not supported after exposure controls | symmetric vs directional | do not select an asymmetric method from DG-0001 |
 | Pair selectivity | unknown empirically | dense vs sparse/selective | unknown; Ω weakness alone is insufficient |
 | Gradient cosine/conflict | no persistent conflict in 5/5 seeds; late gradients near-orthogonal | conflict-aware relation vs covariance relation | conflict-only surgery is not indicated |
-| Gradient norm scale | ER dominates KS/SI by roughly 7–9× in middle/late training; MTRL does not mitigate it | scale-aware or reliability-aware explicit relations | targeted literature search is justified; taxonomy must remain Task Relation Learning |
-| Relation stability | condition-specific; exact tables above | deterministic dense vs confidence-aware | confidence must be reported; F9 makes reliability-aware literature relevant but selects no mechanism |
-| Data-size imbalance | norm dominance is seed-stable; cause remains untested | sample-aware/uncertainty-aware | literature may be screened now; task-intrinsic claims require a matched-data control |
+| Gradient norm scale | ER dominates KS/SI by roughly 7–9× under the standard mixture, and returns to ≈2.4× once ER's per-batch share reaches KS scale (F10) | scale-aware or reliability-aware explicit relations | the search was run and found no eligible method (LT-0001/FL-0003); a mixture-controlled scale signal cannot justify a relation mechanism |
+| Relation stability | condition-specific; exact tables above | deterministic dense vs confidence-aware | confidence must be reported; it remains unmeasured under matched composition, so it selects no mechanism |
+| Data-size imbalance | norm dominance tracks per-batch composition (DG-0005); relation-estimate noise under matched composition is still unmeasured | sample-aware/uncertainty-aware | a sample-aware *relation* mechanism must show relation-estimate noise, not gradient scale; task-intrinsic claims are now excluded (F10) |
 | Representation sensitivity | strong | global vs representation- or layer-specific | any claimed relation must name pooling/layers; mechanism choice still unknown |
 | Temporal dynamics | present in LOSO Ω | static vs dynamic | existence alone does not justify a dynamic method |
 | Stable relation with no task gain | observed for 25L KS↔SI | learned covariance vs useful transfer | Ω magnitude cannot be used as a utility proxy |
@@ -224,13 +226,16 @@ This is an evidence boundary, not a completed method-selection framework.
 - Learned Ω is not task-intrinsic: its strength and stability depend on representation and perturbation axis.
 - DG-0001's same-epoch raw transfer matrix is dominated by task-count-dependent optimizer exposure (F8).
 - DG-0002 confirms ER gradient-scale dominance across seeds and rejects persistent pairwise conflict under the matched protocol (F9).
+- DG-0005 shows that dominance is mixture-controlled, so gradient scale is not a task-intrinsic property (F10).
+- LT-0001 (eight primary sources) found no published method that is both an explicit Task Relation Learning method and a direct mechanism for that scale signal, so no mechanism is authorized (FL-0003, DEC-0010).
 
 ### What appears likely but remains uncertain
 
 - Ω encodes head-parameter geometry rather than useful transfer.
 - SI and ER interfere under approximate exposure matching.
-- ER's small/noisy data regime may cause the norm dominance.
 - The confirmed scale imbalance may contribute to MTRL's null outcome, but no causal intervention has isolated it.
+- The residual ER norm drop under matched composition is either reduced gradient-estimate variance or ER convergence/overfitting; DG-0005 cannot separate them.
+- ER's *relation-estimate* noise (Ω edge dispersion) under matched composition is unmeasured, so "reliability-aware relations" remains an untested assumption rather than a motivated mechanism.
 
 ### What is contradicted
 
@@ -240,36 +245,29 @@ This is an evidence boundary, not a completed method-selection framework.
 - DG-0001 justifies an asymmetric replacement method.
 - Persistent pairwise gradient conflict is the DG-0002-supported explanation.
 
-### Single highest-information next action
+### Status of the DEC-0007 mandate (closed)
 
-**Targeted literature research under DEC-0007.** Search primary sources for
-published Task Relation Learning methods whose explicit learned relation
-mechanism accounts for unequal task scale, task reliability,
-sample-size-dependent confidence or optimization-aware relations. Verify the
-formal assumption and taxonomy before creating an `LT-xxxx` Study.
+The literature sequence this section previously prescribed **has been executed**:
 
-Generic loss weighting, gradient surgery, mixtures, low-rank, clustering and
-decomposition are not admissible substitutes merely because they address
-imbalance. If no explicit task-relation method maps to F9, record the negative
-search and enter `NEEDS-HUMAN-REVIEW`.
+1. **Targeted literature** — `LT-0001` screened eight primary sources against pre-registered eligibility gates.
+2. **Taxonomy and assumption gate** — applied; explicit relation methods either lacked a direct scale mechanism or required aligned Gaussian/mean-estimation assumptions, while the direct scale methods (uncertainty weighting, GradNorm) learn per-task scalars with no relation object.
+3. **Candidate `LT-xxxx` Study** — not registered: no source satisfied the gates (FL-0003, `literature/INDEX.md`).
+4. **Outcome** — `NEEDS-HUMAN-REVIEW`; DEC-0009 retained strict scope, DEC-0010 then withdrew the task-intrinsic-scale rationale once DG-0005 showed the signal is mixture-controlled.
 
-### Minimum sequence before the next mechanism
+Re-running this search against F9 is therefore prohibited without new evidence or an explicit scope change. The remaining open questions are not literature questions; they are the diagnostic ones listed below.
 
-1. **Targeted literature:** structured primary-source cards mapped to F9.
-2. **Taxonomy and assumption gate:** retain explicit learned task relations and
-   stay outside the low-rank/clustering/decomposition branches.
-3. **Register one candidate `LT-xxxx` Study:** only if the published assumption
-   addresses the measured scale/reliability limitation.
-4. **Screen under the same matched protocol:** no pooling, layer, split, epoch,
-   optimizer or checkpoint drift.
+### Highest-information remaining evidence
 
-The ER data-regime control remains valuable for causal framework synthesis, but
-it does not block literature screening because F9 already establishes the
-current mechanism's non-mitigation.
+1. **Estimator variance versus ER convergence/overfitting** under DG-0005's matched composition — decides whether "scale" is an estimator property or a saturation artifact. Bounded: two arms, one screening seed, existing sampler.
+2. **Relation-estimate noise under matched composition** — would require an MTRL arm under the A1 composition, which DG-0005 deliberately excluded; it is the only route that would make a confidence/reliability-aware relation assumption checkable rather than assumed.
+3. **Layer-wise gradient relation** (TR-0005) and **parameter-summary adequacy** (TR-0006/DG-0003) — instrumentation-level, no architecture change.
+
+The cross-study view of these priorities, with the selection rules they feed, is `FRAMEWORK.md`.
 
 ## Concise synthesis
 
-1. **Strongest conclusion:** MTRL is outcome-neutral; raw directed transfer is dominated by optimizer exposure; ER gradient-scale dominance is reproducible and not mitigated by MTRL.
-2. **Most important uncertainty:** whether ER's data regime causes the scale imbalance and whether that imbalance causes the outcome null.
-3. **Next scientific question:** which published explicit task-relation assumption legitimately addresses unequal task scale or reliability?
-4. **Literature:** mandatory now under DEC-0007; no architecture implementation precedes source and taxonomy verification.
+1. **Strongest conclusion:** MTRL is outcome-neutral; raw directed transfer is dominated by optimizer exposure; ER gradient-scale dominance is reproducible only under the standard training mixture and is not mitigated by MTRL.
+2. **Most important resolved question:** the dominance is a training-mixture property, not a task-intrinsic one (F10) — so it cannot justify a scale- or reliability-aware *relation* mechanism (DEC-0010).
+3. **Most important open question:** is the residual ER norm drop reduced gradient-estimate variance or ER convergence/overfitting?
+4. **Literature:** the F9-era search is complete and negative (`LT-0001`, FL-0003); do not repeat it without new evidence or an explicit scope change.
+5. **Framework:** the emerging selection rules and the conditioned-quantity table are in `FRAMEWORK.md`; no mechanism is authorized today.

@@ -38,6 +38,12 @@ The formal progression is binding (DEC-0005). In practice, for every entry here:
 * targeted literature mode is **mandatory** once a diagnostic identifies a
   concrete MTRL limitation — it is a stage of the progression, not a
   plateau-only fallback.
+* **Current stage (2026-09-22): framework synthesis.** `DG-0005` is CONFIRMED,
+  the F9-era literature gate is closed and negative (`LT-0001`/FL-0003), and
+  DEC-0010 withdrew the task-intrinsic-scale rationale. No mechanism is
+  authorized; the next move is a human scope decision (DEC-0009/DEC-0011). The
+  cross-study framework lives in `FRAMEWORK.md`; mechanism entries below stay
+  BLOCKED until both gates of DEC-0005 hold.
 
 ---
 
@@ -306,6 +312,8 @@ reduce negative transfer under matched evaluation, reject the hypothesis.
 
 **Status:** BLOCKED — gate: DG-0001 must show usable empirical asymmetry + an LT-xxxx published method
 
+**Gate status (2026-09-22):** DG-0001 did **not** deliver usable asymmetry — its raw ER-directed signal was reproduced by optimizer-exposure controls (F8). The existing evidence therefore cannot satisfy this gate; reopening it would require a new controlled transfer design, not a re-reading of DG-0001.
+
 ### Hypothesis
 
 Transfer between these tasks is directional.
@@ -349,6 +357,8 @@ Require evidence first.
 
 **Status:** BLOCKED — gate: DG-0004 stability evidence + an LT-xxxx published method
 
+**Gate status (2026-09-22):** F10 re-conditions this entry. The demonstrated data-regime effect is on *gradient scale*, which a relation method does not address, so "ER is data-poor therefore its relation needs confidence weighting" is no longer motivated. What would motivate it is measured *relation-estimate* noise under matched composition, which is unmeasured (see `FRAMEWORK.md` §7 item 2). The stability evidence (F6, DG-0004) alone does not satisfy the gate.
+
 ### Hypothesis
 
 The magnitude of a learned relation and the confidence in that estimate should
@@ -376,6 +386,8 @@ regimes.
 ## TR-0004 — Dynamic relation learning over training
 
 **Status:** BLOCKED on DG-0002, and then an LT-xxxx published method (DEC-0005)
+
+**Gate status (2026-09-22):** DG-0002 completed and did not motivate this entry: under the matched protocol gradients were near-orthogonal with no persistent conflict in any seed, and no phase-specific negative transfer was found (F9, FL-0002). Existence of Ω dynamics in LOSO trajectories is descriptive only.
 
 ### Hypothesis
 

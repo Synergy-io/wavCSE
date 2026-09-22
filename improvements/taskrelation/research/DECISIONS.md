@@ -309,3 +309,24 @@ argument.
 **New direction:** The programme is **blocked on a human scope decision**, not on compute. The honest options are: (a) open a new `DG-xxxx` diagnostic to separate estimator variance from ER convergence/overfitting under the same composition; (b) authorize nothing further and proceed to framework synthesis using the existing F1–F10 evidence; or (c) revisit Option 3 explicitly, which now needs a mechanism rationale that does not depend on F9's task-intrinsic reading.
 
 **Expected consequence:** No autonomous GPU work follows from DG-0005. Future relation-mechanism proposals must justify themselves from relation structure (F5, F6, F7) or from training-mixture effects, and must name the sampling regime when reporting gradient scale, exactly as relation claims must name pooling, layers and seed/fold axis.
+
+---
+
+## DEC-0011 — Framework synthesis is the active stage; the F9-era literature mandate is closed
+
+**Status:** ACTIVE — 2026-09-22
+
+**Previous direction:** DEC-0010 closed the mechanism question by withdrawing F9's task-intrinsic-scale rationale and left the programme "blocked on a human scope decision", with the MTRL diagnostic synthesis as the only analysis artifact. That synthesis still prescribed the DEC-0007 literature sequence and still listed the ER data-regime cause as unresolved — i.e. the written analysis record lagged `FINDINGS.md` after DG-0005.
+
+**Evidence causing the change:** A synthesis pass over the current ledger found: (a) the per-diagnostic synthesis contradicted the updated findings on three points (it treated the ER gradient-scale cause as unresolved, directed the next action at the already-executed literature search, and listed the data-regime hypothesis as unevidenced); (b) no cross-study artifact existed for the programme's larger objective, the method-selection framework; (c) TR-0002/TR-0003/TR-0004 remained motivated by premises that F8, F9 and F10 have since removed. No new experimental evidence was produced — this is a record-consistency and synthesis decision.
+
+**Decision:**
+
+1. **Active stage is framework synthesis.** `research/FRAMEWORK.md` is created as the maintained cross-study framework: conditioned-quantity table, relational-versus-optimization classification, evidence levels, selection rules R1–R8, the current KS/SI/ER answers, the open decision points and the ranked missing evidence. `FINDINGS.md` remains authoritative for numbers.
+2. **The DEC-0007 literature mandate is closed**, not merely unexecuted: it was executed by `LT-0001` and returned a negative result (FL-0003). `MTRL_DIAGNOSTIC_SYNTHESIS.md` is updated in place so no reader follows the superseded sequence; its historical text is retained per DEC-0006.
+3. **Mechanism entries are annotated, not deleted:** TR-0002 (asymmetry) cannot be satisfied by DG-0001's rejected evidence; TR-0003 (confidence/reliability) loses its data-regime motivation and would need measured relation-estimate noise instead; TR-0004 (dynamic) is not motivated by DG-0002's near-orthogonal gradients. All stay BLOCKED.
+4. **No new Study and no GPU work this stage.** One bounded diagnostic remains available if the human wants it (estimator variance versus ER convergence under DG-0005's composition); it is option (a) of the decision points and is not authorized by this decision.
+
+**New direction:** Maintain the framework as the active artifact; consume zero compute until the human chooses (a) the bounded scale diagnostic, (b) close-out with the framework as the characterisation result, or (c) explicit Option-3 authorization with a rationale that does not rest on F9.
+
+**Expected consequence:** A fresh agent restarting from `STATE.md` treats framework synthesis as the current deliverable, does not re-run the closed literature search, does not re-litigate the annotated mechanism gates, and can identify the single bounded diagnostic that would still change what the framework may claim.

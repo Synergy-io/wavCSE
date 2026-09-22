@@ -46,11 +46,18 @@ findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 # Current Research Phase
 
-**Phase:** DG-0005 is **CONFIRMED** (2026-09-22): F9's ER gradient-norm dominance
-is a training-mixture property, not task-intrinsic (F10). Strict Task Relation
-Learning scope is retained; no mechanism Study exists or is authorized. The
-programme waits on a human decision about the Option-3 gate (DEC-0009, DEC-0010)
-rather than on further autonomous GPU work.
+**Phase:** **framework synthesis** (DEC-0011). DG-0005 is CONFIRMED (2026-09-22)
+and F9's gradient-norm dominance is a training-mixture property, not
+task-intrinsic (F10). The F9-era literature gate is closed and negative
+(`LT-0001`/FL-0003). No mechanism Study exists or is authorized; the programme
+waits on a human decision about the Option-3 gate (DEC-0009/DEC-0010) and
+consumes no compute meanwhile.
+
+**Active artifact:** `FRAMEWORK.md` — the cross-study method-selection framework
+(conditioned-quantity table, relational-vs-optimization classification, evidence
+levels, selection rules R1–R8, open decision points, ranked missing evidence).
+`FINDINGS.md` remains authoritative for numbers; `MTRL_DIAGNOSTIC_SYNTHESIS.md`
+holds the per-quantity MTRL evidence and is kept consistent with it.
 
 **Formal progression** (binding — DEC-0005; stages are not skipped):
 
@@ -81,14 +88,14 @@ previous ranked ordering (sparse → asymmetric → confidence → dynamic → l
 is removed for exactly this reason; the hypotheses survive as *gated* backlog
 entries.
 
-**Immediate research question:**
+**Immediate research question (human-gated):**
 
-> Given that ER's gradient scale is set by its per-batch sample count rather
-> than by task semantics, is the residual ER norm drop a reduced
-> gradient-estimate variance effect or an ER convergence/overfitting effect —
-> and does either justify a task-reliability-aware relation mechanism under
-> DEC-0009's Option 3? The first half is a diagnosable question; the second is a
-> human scope decision.
+> Which of the three documented options does the programme take — (a) a bounded
+> diagnostic separating gradient-estimate variance from ER convergence under
+> DG-0005's matched composition, (b) close-out with the framework as the
+> characterisation result, or (c) explicit Option-3 authorization with a
+> rationale that does not rest on F9? Only (a) or (c) would consume compute; the
+> framework does not require either.
 
 ---
 
@@ -625,11 +632,21 @@ Unresolved questions:
 
 Next recommended action:
 
-**None requiring GPU work.** Record the confirmed diagnostic (done) and wait
-for human review of the Option-3 gate. If the human opens a further diagnostic,
-its highest-information target is the estimator-variance-versus-convergence
-split; it must be pre-registered as its own `DG-xxxx` Study before any run, and
-any ER performance claim would still require LOSO (F3).
+**None requiring GPU work.** The 2026-09-22 synthesis iteration created
+`FRAMEWORK.md`, refreshed `MTRL_DIAGNOSTIC_SYNTHESIS.md` and annotated the
+mechanism backlog entries (DEC-0011). What remains is a human choice among the
+three documented options in `FRAMEWORK.md` §6: (a) the bounded
+estimator-variance-versus-convergence diagnostic, (b) close-out with the
+framework as the characterisation result, or (c) explicit Option-3
+authorization with a rationale that does not rest on F9. Option (a) would be
+pre-registered as its own `DG-xxxx` Study before any run, and any ER performance
+claim afterwards would still require LOSO (F3).
+
+Latest iteration (2026-09-22, no compute): analysis/synthesis pass. Created
+`FRAMEWORK.md`, refreshed `MTRL_DIAGNOSTIC_SYNTHESIS.md` so it no longer
+prescribes the closed DEC-0007 sequence, annotated the TR-0002/TR-0003/TR-0004
+gates, and recorded DEC-0011. No Study was created, no run was launched and no
+metric was changed; every change is documentation.
 
 GPU jobs still running: `NONE`. All DG-0005 queues finished; no tmux training
 session remains. The queueing helper `wait_for_gpu1_confirmation.py` was
@@ -648,6 +665,7 @@ the plateau counter.
 
 Literature-search trigger:
 
-**SATISFIED AND COMPLETE for F9 (LT-0001).** Re-enter literature mode only for a
-new, separately evidenced limitation, or if the human reopens scope under
-DEC-0009. Do not repeat the F9 search.
+**CLOSED for F9 (LT-0001, FL-0003, DEC-0011).** The mandate was executed and
+returned a negative result; do not re-run it against the same evidence. Re-enter
+literature mode only for a new, separately evidenced limitation, or if the human
+reopens scope under DEC-0009.
