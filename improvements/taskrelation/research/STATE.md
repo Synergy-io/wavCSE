@@ -39,7 +39,7 @@ Terminology — older docs are ambiguous about the word "baseline":
 * **MTRL** — the formal Task Relation Learning baseline *method* under study
   (`01-mtrl/`). The thing we diagnose and extend, not the thing we beat.
 
-Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0009). Established
+Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0011). Established
 findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 ---
