@@ -1,5 +1,5 @@
 log_level: INFO
-seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
+seed: 42
 
 device:
   type: cuda
@@ -22,33 +22,32 @@ dataset:
 pooling:
   frame_pooling_type: mean
   frame_pooling_param: null
-  layer_pooling_type: mix
-  layer_pooling_param: 0.5
+  layer_pooling_type: smp
+  layer_pooling_param: 1.0
 
 model:
   embedding_dim_shared1: 512
   embedding_dim_shared2: 2000
   dropout_prob_shared1: 0.4
   dropout_prob_shared2: 0.6
-  ftn_rank: 16
+  ftn_rank: 16 
 
 training:
-  # Lower LR + immediate plateau reduction stabilize the shared adapter.
-  num_epochs: 50
+  num_epochs: 30
   batch_size: 2048
-  learning_rate: 0.001
+  learning_rate: 0.00075
   weight_decay: 0.00000005
-  saved_checkpoint_count: 5
+  saved_checkpoint_count: 1
   shuffle_train: true
   shuffle_val: false
   pin_memory: false
   drop_last_train: true
   drop_last_val: false
   num_workers: 0
-  scheduler_patience: 0
+  scheduler_patience: 1
   scheduler_factor: 0.5
-  scheduler_min_lr: 0.00001
-  max_grad_norm: 1.0
+  # scheduler_min_lr: 0.00001
+  # max_grad_norm: 1.0
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
 
