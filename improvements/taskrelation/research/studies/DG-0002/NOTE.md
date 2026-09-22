@@ -12,9 +12,9 @@ Classical MTRL is outcome-neutral under matched multi-seed and ER LOSO evaluatio
 
 Instrument the existing plain wavCSE and classical MTRL trainers identically. On the first, final, and every twentieth training step with all tasks present, compute observational per-task gradients of unweighted masked cross-entropy over shared parameters only; record task norms, pairwise cosine, negative-conflict indicators, valid-example counts, normalized progress, and early/middle/late phase. Training losses and optimizer gradients remain unchanged.
 
-## Matched control
+## Matched controls
 
-Plain wavCSE versus MTRL at `ks_si_er`, seed 42, fixed WavLM-Large embeddings, frame-mean plus `smp(0.5)` pooling, all 25 layers, full data, 30 epochs, batch 2048, and identical optimizer, scheduler, data, checkpoint, evaluation, and diagnostic schedules.
+The seed-42 screen compared plain wavCSE with MTRL at `ks_si_er`, fixed WavLM-Large embeddings, frame-mean plus `smp(0.5)` pooling, all 25 layers, full data, 30 epochs, batch 2048, and identical optimizer, scheduler, data, checkpoint, evaluation, and diagnostic schedules. Confirmation repeats both arms at matched seeds `0,1,2,3,4` without changing this protocol.
 
 ## Evaluation protocol
 
@@ -23,6 +23,10 @@ Use fixed-final-epoch KS/SI/ER/aggregate outcomes as context, with `opt` and `be
 ## Promotion/rejection criterion
 
 Promote to matched seeds 0–4 only for an exposure-matched persistent signal: pairwise mean cosine at most -0.05 with conflict frequency at least 0.60 in at least two thirds, norm ratio at least 3 in at least two thirds, or a material compatibility sign/order change across training. Weaken the hypothesis if gradients are near-neutral and similarly scaled, or if MTRL coherently mitigates the measured conflict. One seed cannot confirm the hypothesis.
+
+## Confirmation continuation
+
+The `PROMISING` screen is now being confirmed with baseline and MTRL seeds `0,1,2,3,4`. Each MLflow run uses stage `confirm`; seed-level phase summaries are the independent observations. The primary confirmation question is whether ER gradient-norm dominance reproduces and whether MTRL consistently fails to reduce it while Ω saturates.
 
 ## Git commit
 
@@ -38,8 +42,8 @@ The persistent pairwise-conflict explanation is weakened. A stronger screening s
 
 ## Decision
 
-`PROMISING` diagnostic screen. No mechanism promotion and no literature search yet.
+`PROMISING` diagnostic screen; matched-seed confirmation active. No mechanism promotion and no literature search unless the signal confirms.
 
 ## Next step
 
-Continue DG-0002 with matched baseline and MTRL seeds `0,1,2,3,4`. Analyze seed-level phase summaries; do not treat within-run gradient samples as independent confirmation evidence.
+Complete and analyze all ten matched confirmation runs, update each DagsHub note with the Study decision, then either enter targeted literature mode for the confirmed limitation or return to Ω estimation/parameter-summary diagnostics.
