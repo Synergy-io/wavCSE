@@ -46,8 +46,9 @@ findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 # Current Research Phase
 
-**Phase:** Targeted literature — identify a published Task Relation Learning
-method whose stated assumption addresses DG-0002/F9's confirmed gradient-scale limitation.
+**Phase:** NEEDS-HUMAN-REVIEW. The F9 literature gate (LT-0001) found no
+published explicit-relation mechanism that directly addresses the confirmed
+gradient-scale limitation; no mechanism Study is authorized.
 
 **Formal progression** (binding — DEC-0005; stages are not skipped):
 
@@ -366,21 +367,30 @@ gating rules.
 
 # Next Research Action
 
-Targeted literature only. DG-0002 is **CONFIRMED**: ER shared-gradient norms
-dominate KS/SI across seeds, classical MTRL does not consistently mitigate the
-imbalance, and persistent pairwise conflict is not supported.
+**Mechanism work is blocked pending a human scope decision.** LT-0001 screened
+eight primary sources against pre-registered gates and found no published
+method that both learns explicit task relations and directly addresses F9
+without category drift or an incompatible math setting (DEC-0008).
 
-Execute DEC-0007. Search primary literature for published Task Relation
-Learning methods that explicitly model unequal task scale, task reliability,
-sample-size-dependent confidence or optimization-aware relations. Build queries
-from F9, create structured paper cards, verify taxonomy and map assumptions
-before registering an `LT-xxxx` candidate.
+The human must choose:
 
-Do not implement generic gradient surgery, loss weighting or an arbitrary
-architecture. They are not automatically Task Relation Learning methods. If no
-published explicit-relation method addresses F9, record the negative search and
-enter `NEEDS-HUMAN-REVIEW`. A later data-regime control is still required before
-calling the imbalance task-intrinsic.
+1. **retain strict Task Relation Learning scope** (conservative default) and
+   resume causal diagnostics, beginning with an ER data-regime/gradient-noise
+   control;
+2. **broaden scope explicitly** to optimization-aware MTL, admitting methods
+   such as GradNorm or uncertainty weighting as a separate branch or control;
+3. **authorize a project-original hybrid** combining explicit task covariance
+   with reliability/scale, accepting that the mechanism is no longer a faithful
+   published method.
+
+Do not implement any mechanism, and do not relabel an adjacent MTL category,
+before that decision is recorded. Option 1 preserves the current contribution
+claim and category boundaries.
+
+The autonomous diagnostic continuation under option 1 is the ER data-regime
+question (`DG-0005`): does ER's much smaller effective batch, rather than task
+semantics, produce the F9 scale signal? A later Study must still add LOSO
+before any ER performance claim.
 
 ---
 
@@ -529,16 +539,19 @@ No mechanism work:
 * DG-0001 — complete; optimizer exposure dominates its raw transfer matrix (F8);
 * DG-0002 — **CONFIRMED**; ER gradient-scale dominance reproduces across seeds,
   MTRL does not mitigate it, and persistent pairwise conflict is rejected (F9);
-* targeted literature action — **READY** under DEC-0007; no `LT-xxxx` Study has
-  yet been registered;
+* LT-0001 — **REJECTED**; the F9 literature gate found no eligible published
+  mechanism (DEC-0008). Programme state is `NEEDS-HUMAN-REVIEW`;
+* DG-0005 — **READY** (reprioritized): test whether ER's data regime produces
+  the F9 scale imbalance. This is a diagnostic inside existing scope and is the
+  conservative autonomous continuation;
 * DG-0003 — partial Ω/transfer discrepancy only; causal interpretation remains
   blocked by protocol mismatch;
 * DG-0004 — retrospective stability complete; prospective prediction remains;
-* DG-0005/DG-0006 — ER data-regime and cross-diagnostic fold controls remain.
+* DG-0006 — cross-diagnostic ER fold controls remain.
 
 Future transfer diagnostics must control optimizer steps, effective per-task
-batch size, loss scaling, epoch budget and checkpoint policy (F8). Literature
-candidates must retain explicit learned task relations and map to F9.
+batch size, loss scaling, epoch budget and checkpoint policy (F8). No new
+relation mechanism may cite F9 until a human records one of DEC-0008's options.
 
 ---
 
@@ -562,39 +575,42 @@ Update this section after every completed research cycle.
 
 Last fully completed Study:
 
-`DG-0002 — exposure-controlled gradient compatibility baseline` (2026-09-22),
-decision **CONFIRMED** for gradient-norm dominance and **REJECTED** for
-persistent pairwise conflict.
+`LT-0001 — scale- and reliability-aware task relation literature gate`
+(2026-09-22), decision **REJECTED**: no eligible published mechanism.
 
-Most recent completed cycle/stage:
+Most recent completed execution stage:
 
-Matched baseline/MTRL confirmation, seeds `0,1,2,3,4`, ten runs at commit
-`7f6d5248f40c0c1cbd30f15b8f7cd1fe2dbb04eb`.
+DG-0002 matched baseline/MTRL confirmation, seeds `0,1,2,3,4`, ten runs at
+commit `7f6d5248f40c0c1cbd30f15b8f7cd1fe2dbb04eb`.
 
 Current active Study:
 
-`NONE`. The next stage is targeted literature research; no `LT-xxxx` Study has
-been opened.
+`NONE`. LT-0001 closed. No `TR-xxxx` may open without the DEC-0008 decision.
 
-Important new finding:
+Important new findings:
 
 F9 (ESTABLISHED): baseline ER-to-smallest-task norm ratios were
 `7.243 ± 0.272` middle and `8.962 ± 0.456` late; MTRL was
 `7.129 ± 0.421` and `9.004 ± 1.059`. Every seed exceeded ratio 3 in both
 phases. No pair met the persistent-conflict threshold in any seed.
 
+R3 (RECORD): the F9 literature gate found no published method that is both
+explicit Task Relation Learning and a direct optimization-scale/reliability
+mechanism for heterogeneous deep classification. Relation magnitude, relation
+confidence/noise and optimization weight are separate quantities.
+
 Unresolved question:
 
-Which published explicit task-relation method legitimately addresses unequal
-optimization scale or relation reliability? ER's smaller effective batch
-remains a competing cause, so the imbalance is not yet task-intrinsic.
+Does ER's data regime (≈47 sampled examples per mixed batch versus 539 KS and
+1,462 SI) cause the F9 scale imbalance, or does it reflect task semantics?
+Either answer changes which mechanism category is appropriate.
 
 Next recommended action:
 
-Execute DEC-0007 targeted literature mode. Produce primary-source paper cards
-and register an `LT-xxxx` candidate only if its formal assumption maps to F9 and
-its taxonomy remains Task Relation Learning. No GPU run or mechanism
-implementation comes first.
+Obtain the DEC-0008 human scope decision. Under the conservative default,
+open the DG-0005-style ER data-regime/gradient-noise diagnostic next; it is
+within existing scope, requires no new architecture, and is prerequisite to any
+relation-plus-reliability claim. No GPU training has been launched.
 
 GPU jobs still running:
 
@@ -602,11 +618,11 @@ GPU jobs still running:
 
 Current consecutive unsuccessful mechanism studies:
 
-`1` — classical MTRL (F4). Diagnostic studies do not increment the plateau
-counter.
+`1` — classical MTRL (F4). Diagnostic and literature studies do not increment
+the plateau counter.
 
 Literature-search trigger:
 
-**ACTIVE — diagnostic trigger.** F9 identifies a concrete MTRL limitation, so
-DEC-0005 requires targeted literature mode now. The plateau trigger remains
-independently configured at five consecutive failed mechanism studies.
+**SATISFIED AND COMPLETE for F9 (LT-0001).** Re-enter literature mode only for a
+new, separately evidenced limitation or after a human broadens scope under
+DEC-0008.

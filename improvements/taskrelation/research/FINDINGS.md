@@ -345,3 +345,29 @@ The runs behind F1–F7 (`taskrelation-mtrl*`, `taskrelation-gbc`,
 logged before the Study ID convention and remain legacy evidence. DG-0001 is
 the first registered Study in `research/STUDIES.jsonl`; all of its runs carry
 Study ID, stage, seed, task set, pooling/layers, git SHA and DagsHub run notes.
+
+### R3 — The F9 literature gate found no eligible published mechanism  (RECORD, 2026-09-22)
+
+`LT-0001` screened eight primary sources against pre-registered gates for a
+published Task Relation Learning method that directly addresses F9's
+shared-gradient scale imbalance in heterogeneous deep classification without
+category drift.
+
+Outcome: explicit relation methods either lacked a direct optimization-scale or
+reliability mechanism or required aligned Gaussian/mean-estimation assumptions;
+the methods that directly address scale (uncertainty weighting, GradNorm) learn
+per-task scalars with no relation object and belong to optimization/loss
+weighting; the 2024 informative-relation method depends on parameter
+decomposition.
+
+Consequences:
+
+* no mechanism Study may cite F9 for authorization; the programme is
+  `NEEDS-HUMAN-REVIEW` (DEC-0008);
+* relation magnitude, relation confidence/noise and optimization weight are
+  distinct quantities and must not be conflated in the framework;
+* this gate is complete for F9 — do not repeat the same search without new
+  evidence or an explicit scope change.
+
+Provenance: `research/studies/LT-0001/{PLAN.md,analysis.md,result.json}`;
+`research/literature/INDEX.md` (eight paper cards).

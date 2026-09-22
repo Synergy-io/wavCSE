@@ -22,16 +22,16 @@ A candidate advances only if one published mechanism satisfies every eligibility
 
 ## Result
 
-Pending.
+Eight primary sources were screened. Explicit relation methods either lacked a direct optimization-scale/reliability mechanism or required aligned Gaussian/mean-estimation settings that do not admit a faithful KS/SI/ER classifier implementation. The methods that directly address F9—GradNorm and homoscedastic uncertainty weighting—learn per-task loss weights, not task relations. The 2024 informative-relation method relies on parameter decomposition, which crosses the project boundary.
 
 ## Interpretation
 
-Pending.
+The literature supports a distinction among relation magnitude, relation confidence/noise, and optimization weight. Rakitsch et al.’s separate signal/noise task covariances are the closest relation-level principle, but F9 does not establish residual-noise causation and the paper’s aligned Gaussian regression assumptions do not hold here. Combining that principle with MTRL or GradNorm would be a project-original hybrid, not a faithful published method.
 
 ## Study decision
 
-Pending.
+`REJECTED`. No mechanism is authorized. The candidate-method hypothesis failed every-paper eligibility checking; this is a negative literature result, not an architecture failure.
 
 ## Next step
 
-Complete primary-source paper cards and either register one defensible literature-derived candidate or record a negative literature result and enter `NEEDS-HUMAN-REVIEW`.
+Set the programme to `NEEDS-HUMAN-REVIEW`. The conservative option is to retain strict Task Relation Learning scope and run the ER data-regime/gradient-noise diagnostic next. Alternatives—broadening into optimization-aware MTL or authorizing an original relation-plus-reliability hybrid—require an explicit human scope decision.

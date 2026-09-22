@@ -64,6 +64,32 @@ Provenance: FINDINGS.md F9; `research/studies/DG-0002/{analysis.md,confirmation_
 
 ---
 
+## FL-0003 — No literature-eligible Task Relation Learning mechanism for F9
+
+**Status:** ESTABLISHED NEGATIVE LITERATURE RESULT
+
+**Observation:** Eight primary sources were screened against pre-registered eligibility gates. None is simultaneously an explicit Task Relation Learning method and a direct mechanism for the F9 shared-gradient scale imbalance in heterogeneous deep classification.
+
+**Evidence:**
+
+* Bayesian covariance methods (MTGTP; GP-kronsum) learn explicit task relations but assume aligned Gaussian multi-output regression and do not regulate shared-gradient magnitude.
+
+* Multi-task averaging and SPATS are legitimate relation methods with sample-variance or sparsity assumptions that do not match F9; SPATS's own evidence warns sparsity can hurt with few tasks.
+
+* Uncertainty weighting (Kendall et al. 2018) and GradNorm (Chen et al. 2018) directly address task scale and gradient-magnitude dominance, but learn per-task scalars with no relation object, placing them in optimization/loss weighting under the binding taxonomy.
+
+* The 2024 informative-relation method rests on `W = H + P` parameter decomposition and does not target F9.
+
+**Rejected explanation:** “A published explicit Task Relation Learning method already exists that directly addresses the confirmed F9 limitation and can be implemented faithfully here.”
+
+**What remains:** Relation magnitude, relation confidence/noise and optimization weight are distinct quantities. Rakitsch et al.'s separate signal/residual task covariances encode the right distinction but are not portable to disjoint heterogeneous multiclass heads; F9 does not establish that residual noise causes the scale signal.
+
+**Consequence:** No mechanism Study is authorized. The programme state is `NEEDS-HUMAN-REVIEW` (DEC-0008): retain strict scope and diagnose ER's data regime, broaden scope to optimization-aware MTL, or authorize a project-original hybrid. Do not relitigate the same literature gate for F9.
+
+Provenance: FINDINGS.md R3; `research/studies/LT-0001/{PLAN.md,analysis.md,result.json}`; `research/literature/INDEX.md`.
+
+---
+
 ## Repeated failure clusters
 
 ### No meaningful architecture effect

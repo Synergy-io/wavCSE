@@ -5,7 +5,7 @@
 ```
 improvements/
 ├── base/            # plain wavCSE downstream model, MLflow-tracked (no new architecture)
-├── taskrelation/     # Kevin -- GBC, TSM, PMR
+├── taskrelation/     # Kevin -- MTRL; 02-lnp = control, 03-gbc = archived
 ├── lowrank/          # Chehan -- not yet implemented
 ├── clustering/        # Induwara -- NCMTL three-task candidate-network clustering
 ├── decomposition/    # Pathumi -- not yet implemented
@@ -109,7 +109,7 @@ prefix:
 | base | `wavcse-baseline` | -- |
 | base + kfold | `wavcse-baseline-er-kfold` | -- |
 | base + small improvement (not a full new architecture) | `wavcse-base-<improvement-slug>` | `wavcse-base-poolingsweep` |
-| taskrelation (Kevin -- GBC/TSM/PMR) | `taskrelation-<model>` | `taskrelation-gbc`, `-tsm`, `-pmr` |
+| taskrelation (Kevin -- MTRL) | `taskrelation-<model>` | `taskrelation-mtrl`, `-mtrl-er-kfold` |
 | lowrank (Chehan) | `lowrank-<variant>` | once a variant is named |
 | clustering (Induwara) | `clustering-<variant>` | once a variant is named |
 | decomposition (Pathumi) | `decomposition-<variant>` | once a variant is named |

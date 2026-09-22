@@ -1,6 +1,6 @@
 # LT-0001 — Scale- and reliability-aware task relation literature gate
 
-Status: ACTIVE — targeted literature review
+Status: REJECTED — no eligible published mechanism; completed 2026-09-22T09:15:21+00:00
 Type: literature
 Created: 2026-09-22T09:09:01+00:00
 Started: 2026-09-22T09:09:01+00:00

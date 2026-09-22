@@ -1,5 +1,30 @@
 # wavCSE-MTRL — Multi-Task Relationship Learning
 
+**Status (2026-09-21 scope reset): ACTIVE — the formal starting method of the
+Task Relation Learning programme and its primary existing baseline method**
+(`../research/DECISIONS.md` DEC-0001). Everything below is retained as evidence:
+the retractions and the LOSO analysis *are* the finding, not a mess to clean up.
+
+What that means in practice:
+
+* no further generic MTRL tuning — the method has been swept at 16L/25L, five
+  seeds and under LOSO, and shows no reproducible advantage over the matched
+  wavCSE baseline (F4 in `../research/FINDINGS.md`);
+* per-task deltas from single splits below are superseded by the multi-seed
+  results at the same configs (F1) — do not quote them as gains;
+* diagnosis now identifies one concrete limitation: DG-0002/F9 confirms that
+  ER shared-gradient norms dominate KS/SI across seeds while MTRL does not
+  mitigate the imbalance; persistent pairwise conflict is not supported;
+* the F9 literature gate closed with no eligible published mechanism
+  (LT-0001, DEC-0008): explicit relation methods do not regulate heterogeneous
+  deep gradient scale, and the methods that do (GradNorm, uncertainty weighting)
+  learn per-task scalars, not relations. Mechanism work is blocked pending a
+  human scope decision; do not implement a hybrid and attribute it to a paper;
+* `02-lnp/` is a control, `03-gbc/` is archived, TSM/PMR are quarantined
+  (DEC-0002 … DEC-0004). None of them is the next method.
+
+---
+
 **2026-09-01 — retracted: MTRL's one apparent win was seed noise.** The
 claim below (MTRL 0.9728 vs. baseline 0.9724 at `smp`+16L, "the only config
 where MTRL beats its matched baseline outright") does NOT survive a

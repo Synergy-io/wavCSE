@@ -1,5 +1,17 @@
 # taskrelation/02-lnp — Fair MTRL-vs-baseline comparison on shared `lnp` pooling
 
+**Status (2026-09-21 scope reset): DIAGNOSTIC / CONTROL — not an active Task
+Relation Learning method** (`../research/DECISIONS.md` DEC-0002). LNP is removed
+from the method progression and from architecture search. This folder exists
+because it proved the pooling confound: its findings (F2, F5 in
+`../research/FINDINGS.md`) stay binding on experimental methodology, and its
+configs are control configs only.
+
+No new runs are scheduled here. Read the pair below as the control experiment it
+is — not as an architecture result.
+
+---
+
 ## Why this folder exists
 
 The first MTRL tuning campaign (`01-mtrl/`) compared MTRL against a baseline

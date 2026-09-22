@@ -457,11 +457,16 @@ Avoid methods whose main contribution becomes generic representation learning.
 
 ## DG-0005 — Data-regime hypothesis
 
-**Status:** BLOCKED on DG-0001 — needs the empirical transfer structure as its matched reference
+**Status:** READY — reprioritized 2026-09-22 after F9/LT-0001. This is the conservative autonomous continuation under DEC-0008 option 1: it stays inside existing Task Relation Learning scope, needs no new architecture, and is prerequisite to any relation-plus-reliability claim.
+
+### Reframed question for the F9 era
+
+Does ER's much smaller effective batch (≈47 sampled examples per mixed batch versus 539 KS and 1,462 SI) produce the ER gradient-norm dominance, or does the dominance persist under matched data regimes?
 
 ### Hypothesis
 
-ER relation instability is primarily caused by its smaller/noisier data regime.
+ER relation instability and its gradient-norm dominance are primarily caused by
+its smaller/noisier data regime rather than by task semantics.
 
 ### Potential experiment
 
@@ -601,15 +606,17 @@ concrete MTRL limitation, and it must be completed before a mechanism study is
 implemented. The OBJECTIVE.md plateau criterion is a second, independent
 trigger.
 
-## Current targeted literature action — READY
+## Current targeted literature action — COMPLETE (`LT-0001`, 2026-09-22)
 
-**Observed limitation:** F9 establishes that ER shared-gradient norms dominate KS/SI by roughly `7–9×` in the middle/late phases across seeds, while classical MTRL's head-covariance relation mechanism does not mitigate the imbalance. Pairwise conflict is not persistent, and Ω magnitude saturates.
+**Status:** DONE — REJECTED. Eight primary sources were screened against the gates below; none satisfied all of them. See `literature/INDEX.md` for the cards and `studies/LT-0001/analysis.md` for the eligibility matrix.
 
-**Search target:** published Task Relation Learning methods that explicitly model unequal task scale, task reliability, sample-size-dependent relation confidence, or optimization-aware task relations. Candidate queries should combine `"task relationship learning"` / `"task covariance"` with `"gradient magnitude"`, `"task uncertainty"`, `"unequal sample size"`, `"heteroscedastic"`, or `"reliability"`.
+**Result:** Explicit Task Relation Learning methods either lacked a direct optimization-scale/reliability mechanism or required aligned Gaussian/mean-estimation assumptions incompatible with disjoint heterogeneous multiclass tasks. The methods that directly address scale (homoscedastic uncertainty weighting, GradNorm) learn per-task loss weights with no relation object and are optimization/loss weighting, not relation learning. The closest relation-level principle — Rakitsch et al.'s separate signal and residual task covariances — would require a novel deep-classification hybrid and presupposes residual-noise causation that F9 has not established.
 
-**Taxonomy gate:** generic loss weighting, gradient surgery, mixture-of-experts, low-rank, clustering or decomposition methods are not admissible merely because they address imbalance. A candidate must retain explicit learned task relations and map its stated assumption to F9. If no such published method exists, record that negative literature result and request human review rather than relabeling another MTL category.
+**Consequence:** No mechanism Study is authorized. Programme state is `NEEDS-HUMAN-REVIEW` (DEC-0008) with three options: retain strict scope and diagnose ER's data regime; broaden scope to optimization-aware MTL; or authorize a project-original relation-plus-reliability hybrid. The conservative default is the first.
 
-**Remaining causal uncertainty:** ER's smaller effective batch may cause the imbalance. Literature screening may proceed now because the mechanism limitation is measured, but any claim that the relation is task-intrinsic still requires a data-regime control.
+**Taxonomy gate (retained for any future cycle):** generic loss weighting, gradient surgery, mixture-of-experts, low-rank, clustering or decomposition methods are not admissible merely because they address imbalance.
+
+**Remaining causal uncertainty:** ER's smaller effective batch may cause the imbalance. Any claim that the relation is task-intrinsic still requires a matched-data control, which is the conservative autonomous continuation.
 
 Expected output per literature cycle: paper cards (`literature/INDEX.md`) and,
 for each method worth pursuing, an `LT-xxxx` study entry whose assumption maps

@@ -242,3 +242,23 @@ argument.
 **New direction:** Build literature queries from F9, verify taxonomy against primary papers, and produce structured paper cards before registering any mechanism Study. Generic loss weighting, gradient surgery, mixtures, low-rank, clustering and decomposition remain outside this gate unless the published method retains explicit learned task relations and belongs to the formal Task Relation Learning category.
 
 **Expected consequence:** The next controller iteration performs literature work rather than GPU training or architecture implementation. A defensible candidate may become an `LT-xxxx` Study only when its stated assumption maps to F9. If no eligible published method exists, record the negative search and enter `NEEDS-HUMAN-REVIEW`. Separately, a data-regime diagnostic is still required before claiming the imbalance is task-intrinsic.
+
+---
+
+## DEC-0008 — No literature-eligible F9 mechanism; human scope decision required
+
+**Status:** ACTIVE — 2026-09-22
+
+**Previous direction:** DEC-0007 required targeted primary-source research for an explicit Task Relation Learning method that models unequal task scale, task reliability, sample-size-dependent confidence, or optimization-aware relations.
+
+**Evidence causing the change:** LT-0001 screened eight primary sources against pre-registered gates. Explicit relation methods did not directly control heterogeneous deep shared-gradient scale or required aligned Gaussian/mean-estimation assumptions. GradNorm and homoscedastic uncertainty weighting directly address scale but learn per-task loss weights rather than task relations. The 2024 informative-relation method relies on `W = H + P` parameter decomposition. Rakitsch et al.’s separate signal/noise covariances are the closest relation principle, but a KS/SI/ER implementation would be a novel classification hybrid and F9 does not establish residual-noise causation.
+
+**Decision:** No mechanism Study is authorized. The programme enters **NEEDS-HUMAN-REVIEW** rather than relabelling an adjacent MTL category or inventing a literature attribution.
+
+**New direction:** A human must choose among:
+
+1. retain strict Task Relation Learning scope and resume causal diagnostics, beginning with an ER data-regime/gradient-noise control;
+2. explicitly broaden scope to optimization-aware MTL, allowing methods such as GradNorm as a separate branch/control; or
+3. authorize a project-original relation-plus-reliability hybrid, explicitly abandoning the requirement that the mechanism itself be a faithful published method.
+
+**Expected consequence:** No architecture implementation or GPU training begins until the scope decision is recorded. The conservative default is option 1 because it preserves the formal contribution and existing category boundaries.

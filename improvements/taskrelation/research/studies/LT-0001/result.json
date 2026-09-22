@@ -1,0 +1,85 @@
+{
+  "study_id": "LT-0001",
+  "type": "literature",
+  "title": "Scale- and reliability-aware task relation literature gate",
+  "status": "rejected",
+  "decision": "REJECTED",
+  "created_at": "2026-09-22T09:09:01+00:00",
+  "started_at": "2026-09-22T09:09:01+00:00",
+  "completed_at": "2026-09-22T09:15:21+00:00",
+  "parent_study": "DG-0002",
+  "motivating_finding": "F9",
+  "hypothesis": "At least one published explicit Task Relation Learning method models unequal task scale or reliability, maps directly to F9, and is faithfully implementable for heterogeneous deep classification without category drift.",
+  "outcome": "No reviewed method satisfied all eligibility gates. Explicit relation models did not directly regulate heterogeneous deep shared-gradient scale; direct scale-balancing methods did not learn task relations; the recent informative-relation model crossed the decomposition boundary.",
+  "primary_sources_reviewed": [
+    {
+      "key": "zhang_yang_2021_survey",
+      "role": "taxonomy_anchor",
+      "url": "https://arxiv.org/pdf/1707.08114",
+      "decision": "retain"
+    },
+    {
+      "key": "zhang_yeung_2010_mtgtp",
+      "role": "bayesian_relation_uncertainty",
+      "url": "https://proceedings.mlr.press/v9/zhang10c/zhang10c.pdf",
+      "decision": "reject_implementation"
+    },
+    {
+      "key": "rakitsch_2013_structured_residuals",
+      "role": "signal_noise_relation_separation",
+      "url": "https://papers.nips.cc/paper_files/paper/2013/file/59c33016884a62116be975a9bb8257e3-Paper.pdf",
+      "decision": "retain_diagnostic_principle_reject_implementation"
+    },
+    {
+      "key": "feldman_2014_mta",
+      "role": "sample_variance_aware_relation",
+      "url": "https://www.jmlr.org/papers/volume15/feldman14a/feldman14a.pdf",
+      "decision": "retain_framework_evidence_reject_implementation"
+    },
+    {
+      "key": "zhang_yang_2017_spats",
+      "role": "sparse_task_covariance",
+      "url": "https://ojs.aaai.org/index.php/AAAI/article/download/10820/10679",
+      "decision": "reject_for_F9"
+    },
+    {
+      "key": "kendall_2018_uncertainty_weighting",
+      "role": "task_reliability_loss_scale",
+      "url": "https://openaccess.thecvf.com/content_cvpr_2018/papers/Kendall_Multi-Task_Learning_Using_CVPR_2018_paper.pdf",
+      "decision": "exclude_taxonomy"
+    },
+    {
+      "key": "chen_2018_gradnorm",
+      "role": "direct_gradient_scale_balancing",
+      "url": "https://proceedings.mlr.press/v80/chen18a/chen18a.pdf",
+      "decision": "exclude_taxonomy"
+    },
+    {
+      "key": "chang_2024_informative_relations",
+      "role": "recent_explicit_relation_method",
+      "url": "https://eprints.whiterose.ac.uk/213770/1/KBS_clean.pdf",
+      "decision": "exclude_decomposition_boundary"
+    }
+  ],
+  "closest_candidate": {
+    "paper": "Rakitsch et al. 2013",
+    "positive": "Separates signal task covariance from residual/noise task covariance.",
+    "blocking_mismatch": "Fully observed aligned Gaussian multi-output regression; no faithful heterogeneous multiclass deep-classification adaptation and no direct gradient-scale mechanism."
+  },
+  "direct_symptom_method": {
+    "paper": "Chen et al. 2018 GradNorm",
+    "positive": "Directly balances dominant task gradient magnitudes.",
+    "blocking_mismatch": "Learns per-task loss weights, not task relations; optimization category outside formal scope."
+  },
+  "framework_update": "Relation magnitude, relation confidence/noise, and optimization weight are distinct quantities and should not be conflated.",
+  "mechanism_authorized": false,
+  "gpu_runs": 0,
+  "mlflow_runs": 0,
+  "programme_state": "NEEDS-HUMAN-REVIEW",
+  "human_decision_options": [
+    "retain strict Task Relation Learning scope and return to causal data-regime diagnostics",
+    "explicitly broaden scope to optimization-aware multi-task learning",
+    "authorize a project-original relation-plus-reliability hybrid"
+  ],
+  "conservative_default": "retain strict Task Relation Learning scope"
+}
