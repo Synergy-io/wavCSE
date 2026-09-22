@@ -176,7 +176,7 @@ KS↔SI strengthens consistently and largely stabilizes by epochs 4–5. ER-edge
 7. **Optimizer-exposure dominance.** DG-0001's raw ER gains of 28–34 points were reproduced by ER-only step controls; KS left no resolved residual and SI became negative.
 8. **Aggregate masking.** SI’s larger test set dominates aggregate movement; task-wise trade-offs must be checked even when aggregate differences are small.
 
-9. **Optimization-scale mismatch** (cause resolved 2026-09-22). ER shared-gradient norms dominate KS/SI under the standard training mixture; MTRL leaves the ratio essentially unchanged while Ω magnitude saturates. DG-0005 then showed the signal is mixture-controlled: matching ER's per-batch sample count to KS scale removes it in 5/5 seeds with exposure fixed (F10). What remains unresolved is whether the residual ER norm drop is reduced gradient-estimate variance or ER convergence/overfitting — the one-knob design cannot separate them. The mismatch therefore no longer licenses a mechanism motivated by a task-intrinsic scale property (DEC-0010).
+9. **Optimization-scale mismatch** (cause resolved 2026-09-22). ER shared-gradient norms dominate KS/SI under the standard training mixture; MTRL leaves the ratio essentially unchanged while Ω magnitude saturates. DG-0005 then showed the signal is mixture-controlled: matching ER's per-batch sample count to KS scale removes it in 5/5 seeds with exposure fixed (F10). A pre-registered post-hoc bound then localized what remains: estimator-size scaling covers the middle phase entirely (share `1.03`) but at most `0.758` of the late drop, so ≥20% of the late change is a smaller mean gradient or steeper-than-`1/√n` noise growth, and per-step dispersion cannot proxy estimator variance at all (DEC-0012). The mismatch therefore no longer licenses a mechanism motivated by a task-intrinsic scale property (DEC-0010).
 
 There is established evidence against persistent pairwise gradient conflict and
 no supported beneficial asymmetry. SI/ER negative interaction remains moderate
@@ -258,7 +258,7 @@ Re-running this search against F9 is therefore prohibited without new evidence o
 
 ### Highest-information remaining evidence
 
-1. **Estimator variance versus ER convergence/overfitting** under DG-0005's matched composition — decides whether "scale" is an estimator property or a saturation artifact. Bounded: two arms, one screening seed, existing sampler.
+1. **The late-phase mean-gradient component** of ER's drop under DG-0005's matched composition (DEC-0012) — the middle phase is already accounted for by estimator size, and the late residual is not. Discriminating measurement: `‖E g‖`, the pool-mean gradient, which is estimator-noise-free; per-batch dispersion is unusable here. Bounded: instrument the existing arms, no new architecture.
 2. **Relation-estimate noise under matched composition** — would require an MTRL arm under the A1 composition, which DG-0005 deliberately excluded; it is the only route that would make a confidence/reliability-aware relation assumption checkable rather than assumed.
 3. **Layer-wise gradient relation** (TR-0005) and **parameter-summary adequacy** (TR-0006/DG-0003) — instrumentation-level, no architecture change.
 

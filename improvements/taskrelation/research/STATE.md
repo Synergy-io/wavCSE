@@ -39,7 +39,7 @@ Terminology — older docs are ambiguous about the word "baseline":
 * **MTRL** — the formal Task Relation Learning baseline *method* under study
   (`01-mtrl/`). The thing we diagnose and extend, not the thing we beat.
 
-Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0011). Established
+Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0012). Established
 findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 ---
@@ -622,27 +622,37 @@ so F9 cannot justify a task-intrinsic-scale mechanism.
 
 Unresolved questions:
 
-1. Is the residual ER norm drop reduced gradient-estimate variance or ER
-   convergence/overfitting? A1 draws the same ≈43k ER examples ≈9× more often
-   and its ER head saturates harder (train ≈0.99 vs validation ≈0.82; final
-   train−val gap `0.134 → 0.174` at the screening seed). The one-knob design and
-   the untriggered A2 arm cannot separate these.
+1. Which mechanism carries the late-phase part of the ER norm drop? The
+   pre-registered bound (DEC-0012) already excludes estimator size for ≥20% of
+   the late log-drop, while the middle phase is fully estimator-consistent; what
+   is not separated is a smaller mean gradient (ER head saturating under ~9× more
+   updates: train ≈0.99 vs validation ≈0.82, final train−val gap `0.134 → 0.174`
+   at the screening seed) versus noise growing faster than `1/√n`. Per-step
+   dispersion cannot answer it, and the untriggered A2 arm would not either.
 2. Whether any of this justifies Option-3 work is a human scope decision under
    DEC-0009/DEC-0010, not an autonomous one.
 
 Next recommended action:
 
-**None requiring GPU work.** The 2026-09-22 synthesis iteration created
-`FRAMEWORK.md`, refreshed `MTRL_DIAGNOSTIC_SYNTHESIS.md` and annotated the
-mechanism backlog entries (DEC-0011). What remains is a human choice among the
-three documented options in `FRAMEWORK.md` §6: (a) the bounded
-estimator-variance-versus-convergence diagnostic, (b) close-out with the
-framework as the characterisation result, or (c) explicit Option-3
-authorization with a rationale that does not rest on F9. Option (a) would be
-pre-registered as its own `DG-xxxx` Study before any run, and any ER performance
-claim afterwards would still require LOSO (F3).
+**None requiring GPU work.** What remains is a human choice among the three
+documented options in `FRAMEWORK.md` §6: (a) the bounded late-phase
+mean-gradient diagnostic (narrowed by DEC-0012 to measuring `‖E g‖` on the
+existing arms), (b) close-out with the framework as the characterisation result,
+or (c) explicit Option-3 authorization with a rationale that does not rest on
+F9. Option (a) would be pre-registered as its own `DG-xxxx` Study before any run,
+and any ER performance claim afterwards would still require LOSO (F3).
 
-Latest iteration (2026-09-22, no compute): analysis/synthesis pass. Created
+Latest iteration (2026-09-22, no compute): pre-registered post-hoc bound on
+DG-0005's ER norm drop (`studies/DG-0005/analyze_noise_shape.py`, pre-registered
+at `2ac7f3d`, results in `noise_shape_result.json`). Estimator-size scaling
+explains the middle-phase drop on its own (share `1.03` `[0.975, 1.082]`) but at
+most `0.758` `[0.715, 0.801]` of the late drop, so ≥20% is not estimator size;
+per-step dispersion is proven unusable as a noise proxy (`CV ≈ 0.32` vs an
+isotropic ceiling of `≈ 0.00057`); DG-0002's baseline reproduces the A0
+statistics value for value. Recorded as DEC-0012 and inside F10 — post-hoc, no
+new finding, no GPU work. No metric of any run was changed.
+
+Previous iteration (2026-09-22, no compute): analysis/synthesis pass. Created
 `FRAMEWORK.md`, refreshed `MTRL_DIAGNOSTIC_SYNTHESIS.md` so it no longer
 prescribes the closed DEC-0007 sequence, annotated the TR-0002/TR-0003/TR-0004
 gates, and recorded DEC-0011. No Study was created, no run was launched and no

@@ -330,3 +330,28 @@ argument.
 **New direction:** Maintain the framework as the active artifact; consume zero compute until the human chooses (a) the bounded scale diagnostic, (b) close-out with the framework as the characterisation result, or (c) explicit Option-3 authorization with a rationale that does not rest on F9.
 
 **Expected consequence:** A fresh agent restarting from `STATE.md` treats framework synthesis as the current deliverable, does not re-run the closed literature search, does not re-litigate the annotated mechanism gates, and can identify the single bounded diagnostic that would still change what the framework may claim.
+
+---
+
+## DEC-0012 — The remaining scale question is narrowed to the late-phase mean gradient
+
+**Status:** ACTIVE — 2026-09-22
+
+**Previous direction:** DEC-0010 listed option (a) as "a bounded diagnostic separating gradient-estimate variance from ER convergence/overfitting", with the two explanations treated as equally open and the per-batch gradient-norm instrumentation assumed adequate to separate them.
+
+**Evidence causing the change:** A pre-registered post-hoc analysis of DG-0005's and DG-0002's existing artifacts (`studies/DG-0005/analyze_noise_shape.py`, committed at `2ac7f3d` before any statistic was computed) produced three results:
+
+1. Under `σ ∝ 1/√n`, a noise-dominated norm has `E‖g‖ ∝ 1/√n`, so the arm-to-arm mean-norm ratio is bounded by `√(n_A1/n_A0) ≈ 3.0`. The observed late ratio was `3.99–4.69`, bounding estimator size at `0.758` `[0.715, 0.801]` of the late log-drop — at least ~20% (mean 24%) is not estimator size. No compute was used; the inputs already existed.
+2. The same bound is ≈ `1.03` `[0.975, 1.082]` in the middle phase, so estimator scaling is sufficient there. The unexplained component is late-specific, which is itself new information about *when* the ER head state matters.
+3. The instrumentation cannot measure gradient-estimate variance at all: anisotropic gradient noise aside, the isotropic ceiling on relative norm dispersion at `d = 1,550,800` is `≈ 0.00057`, while the observed within-phase dispersion is `CV ≈ 0.32`. Per-step dispersion is dominated by variation in the mean gradient, so no shape statistic may be used as a noise proxy.
+
+**Decision:**
+
+1. **Option (a) is narrowed, not closed:** what remains open is the late-phase mean-gradient component, not a generic "variance versus convergence" question.
+2. **The discriminating measurement is `‖E g‖`** — the pool-mean gradient over the task's training data (or a large fixed subset), which is free of estimator noise — rather than per-batch `‖g‖` or any dispersion statistic. `FRAMEWORK.md` §7 item 1 now records that design.
+3. **No new Study is created and no GPU work is authorized by this decision.** Re-instrumenting the existing arms is a bounded future option for the human, and it stays a diagnostic.
+4. **No finding is promoted by this analysis.** It is post-hoc and model-dependent; it is recorded inside F10 as a constraint on an existing claim, explicitly not as a new finding.
+
+**New direction:** The framework's missing-evidence list is re-ranked around a noise-free mean-gradient measurement; everything else in DEC-0010/DEC-0011 stands.
+
+**Expected consequence:** A future diagnostic of this question will measure `‖E g‖` and will test the late phase specifically, instead of re-running a composition sweep or trying to infer variance from norm dispersion. The framework's claim about scale is correspondingly sharper: gradient *scale* is a training-mixture property (F10), and the part of it that persists at matched composition is a late-training property of the task's mean gradient.

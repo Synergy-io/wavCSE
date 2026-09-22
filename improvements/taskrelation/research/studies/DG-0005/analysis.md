@@ -71,3 +71,32 @@ The single-knob design cannot separate these. A2 (the pre-registered reverse dir
 * **Not** a revision of F4/F8/FL-0001–0003, which are untouched.
 
 Provenance: `confirmation_result.json` (ten runs, seeds 0–4), MLflow experiment `taskrelation-diagnostics`, stage `confirm`, commit `8032a937050d8bbd3114b172cb813a8fc7370b37`.
+
+---
+
+## Post-hoc: how much of the ER drop is estimator size?
+
+**Status: post-hoc exploratory analysis, pre-registered in `analyze_noise_shape.py` at commit `2ac7f3d622610624b5609815c91a93f3a70ebb3a` (committed before any statistic was computed). It carries no `CONFIRMED` claim and creates no new finding.**
+
+The question left open above is whether the ER norm drop is a smaller *gradient estimate* (fewer samples → noisier → `E‖g‖ ≥ ‖E g‖`) or a smaller *mean gradient* (ER head state after ~9× more updates). Two things were fixed before computing anything.
+
+**A shape test is not usable here.** Under isotropic gradient noise, the relative dispersion of `‖g‖` over 1,550,800 shared parameters is bounded by `0.707/√d ≈ 0.00057`. The observed late-phase ER dispersion is `CV = 0.316` `[0.290, 0.342]` across the ten runs — about `560×` the ceiling. Within-phase dispersion is therefore dominated by step-to-step variation of the mean gradient, not by estimator noise, so mean/median, CV and skew cannot proxy estimator variance with this instrumentation. Shape statistics are reported in `noise_shape_result.json` for completeness and deliberately not used as a test.
+
+**What is identifiable is a bound.** With `σ ∝ 1/√n`, a noise-dominated norm has `E‖g‖ ∝ 1/√n`, so the mean-norm ratio between arms is predicted to be `√(n_A1/n_A0)`. Any larger observed drop cannot be estimator size.
+
+| Phase | A0 mean norm | A1 mean norm | Observed ratio | Noise-scaling prediction | Estimator share bound |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| late | `6.288 – 7.299` | `1.556 – 1.772` | `3.99 – 4.69` | `2.99 – 3.10` | `0.758` `[0.715, 0.801]` |
+| middle | `6.929 – 8.000` | `2.272 – 2.744` | `2.85 – 3.23` | `3.02 – 3.09` | `1.028` `[0.975, 1.082]` |
+
+Per-seed late shares: `0.797, 0.746, 0.716, 0.790, 0.739` (seeds 0–4). Sample counts moved `44.9–48.8 → 428.4–436.4`.
+
+**Result.** In the late phase, estimator-size scaling explains **at most 76%** of the ER log-drop in every seed (95% CI `[0.72, 0.80]`), leaving **at least ~20%** (mean 24%) that requires either a smaller mean gradient — ER head state under ~9× more updates — or noise growing faster than `1/√n`. In the middle phase the estimator account is sufficient on its own (share ≈ `1.03`, CI spanning 1.0). The phase difference is the informative part: early in training the ER norm behaves like a sampling artifact, and late in training it acquires a component that sampling cannot explain.
+
+Descriptively, and consistent with that reading, ER's late *median* falls by the same factor as its mean (`5.911–6.698 → 1.475–1.674`, ratios `3.85–4.45` against mean ratios `4.00–4.61`): the distribution is rescaled rather than reshaped.
+
+**Independent replication.** DG-0002's matched baseline confirmation (standard composition, same seeds, commit `7f6d5248`) gives identical A0 statistics — late ER mean/median `1.080 ± 0.020`, CV `0.341 ± 0.033`, mean norm `6.972 ± 0.407`, matching this Study's A0 arm value for value. This is a further check that the sampling knob is inert when unused.
+
+**Bound, not identification.** The estimator share lies in `[0, bound]`: a signal-dominated norm would make the share 0, so this analysis cannot prove a mean-gradient change — it only rules out "estimator size alone" and, more usefully, *locates the residual in the late phase*. It also does not separate "ER head saturates faster" from "noise scaling steeper than `1/√n`", and one-knob confounding (optimizer path, LR schedule) remains as stated above. KS/SI bounds are unstable by construction — their counts move only ~1.2×, so the ratio of two small log-changes is dominated by noise — and are not evidence either way.
+
+Provenance: `noise_shape_result.json`; script `analyze_noise_shape.py` at `2ac7f3d`; inputs are the ten confirmation artifacts plus DG-0002's five baseline confirmation artifacts (run IDs in `STUDIES.jsonl`).
