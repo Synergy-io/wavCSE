@@ -62,11 +62,11 @@ class LowRankTaskUpdate(nn.Module):
 
 
 class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
-    """Three-task wavCSE model with selectable FTN-inspired FC2 updates.
+    """Three-task wavCSE model with independent low-rank FC2 updates.
 
-    Independent mode uses ``W_t = W_shared + U_t V_t``. Factor-shared-private
-    mode uses ``W_t = W_shared + U_shared_t V_shared + U_private_t V_private_t``.
-    FC2 and its bias stay shared. This is not an exact reproduction of FTN.
+    The existing FC2 and its bias are shared; each task uses the bias-free
+    residual ``U_t V_t`` on the pre-FC2 input. This is FTN-inspired, not an
+    exact reproduction of FTN.
     """
 
     SUPPORTED_TASK_TYPE = "ks_si_er"
@@ -83,9 +83,6 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
         dropout_prob_shared2: float,
         ftn_rank: int = 8,
         layer_pooling_param: Optional[Union[int, float]] = None,
-        decomposition_mode: str = "independent",
-        shared_rank: int = 0,
-        private_rank: int = 0,
     ):
         if task_type != self.SUPPORTED_TASK_TYPE:
             raise ValueError(
@@ -104,57 +101,21 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
             layer_pooling_param=layer_pooling_param,
         )
 
-        if decomposition_mode not in {"independent", "factor_shared_private"}:
-            raise ValueError(f"Unsupported decomposition_mode: {decomposition_mode}")
-        self.decomposition_mode = decomposition_mode
+        self.ftn_rank = int(ftn_rank)
         fc2_input_dim = self.hidden_layer.in_features
         fc2_output_dim = self.hidden_layer.out_features
-        max_rank = min(fc2_input_dim, fc2_output_dim)
-        if decomposition_mode == "independent":
-            self.ftn_rank = int(ftn_rank)
-            self.shared_rank = 0
-            self.private_rank = self.ftn_rank
-            self.task_updates = nn.ModuleList(
-                [
-                    LowRankTaskUpdate(fc2_input_dim, fc2_output_dim, self.ftn_rank)
-                    for _ in self.TASK_ORDER
-                ]
-            )
-        else:
-            self.shared_rank = int(shared_rank)
-            self.private_rank = int(private_rank)
-            if self.shared_rank < 0 or self.private_rank < 0:
-                raise ValueError("shared_rank and private_rank must be nonnegative")
-            if self.shared_rank + self.private_rank == 0:
-                raise ValueError("At least one rank must be positive")
-            if self.shared_rank > max_rank or self.private_rank > max_rank:
-                raise ValueError(f"Each rank must be <= FC2 matrix rank ({max_rank})")
-            self.ftn_rank = self.shared_rank + self.private_rank
-            if self.shared_rank:
-                self.shared_down = nn.Linear(fc2_input_dim, self.shared_rank, bias=False)
-                self.shared_task_ups = nn.ModuleList(
-                    [
-                        nn.Linear(self.shared_rank, fc2_output_dim, bias=False)
-                        for _ in self.TASK_ORDER
-                    ]
-                )
-                nn.init.kaiming_uniform_(self.shared_down.weight, a=5 ** 0.5)
-                for up in self.shared_task_ups:
-                    nn.init.zeros_(up.weight)
-            self.task_updates = nn.ModuleList(
-                [
-                    LowRankTaskUpdate(fc2_input_dim, fc2_output_dim, self.private_rank)
-                    for _ in self.TASK_ORDER
-                ] if self.private_rank else []
-            )
+        self.task_updates = nn.ModuleList(
+            [
+                LowRankTaskUpdate(fc2_input_dim, fc2_output_dim, self.ftn_rank)
+                for _ in self.TASK_ORDER
+            ]
+        )
 
         logging.info(
-            "FTN-inspired FC2 decomposition: task_type=%s, mode=%s, "
-            "shared_rank=%d, private_rank=%d, fc2_shape=%dx%d, task_order=%s",
+            "FTN-inspired FC2 decomposition: task_type=%s, rank=%d, "
+            "fc2_shape=%dx%d, task_order=%s",
             task_type,
-            self.decomposition_mode,
-            self.shared_rank,
-            self.private_rank,
+            self.ftn_rank,
             fc2_output_dim,
             fc2_input_dim,
             self.TASK_ORDER,
@@ -173,21 +134,9 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
         self, x: torch.Tensor, apply_dropout: bool
     ) -> tuple[torch.Tensor, ...]:
         shared_h = self.hidden_layer(x)
-        if self.decomposition_mode == "independent":
-            adapted = tuple(
-                shared_h + task_update(x) for task_update in self.task_updates
-            )
-        else:
-            shared_latent = self.shared_down(x) if self.shared_rank else None
-            adapted = []
-            for task_index in range(len(self.TASK_ORDER)):
-                z = shared_h
-                if self.shared_rank:
-                    z = z + self.shared_task_ups[task_index](shared_latent)
-                if self.private_rank:
-                    z = z + self.task_updates[task_index](x)
-                adapted.append(z)
-            adapted = tuple(adapted)
+        adapted = tuple(
+            shared_h + task_update(x) for task_update in self.task_updates
+        )
         if apply_dropout:
             adapted = tuple(self.dropout_shared2(h) for h in adapted)
         return adapted
@@ -223,94 +172,17 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
         )
 
     def get_delta_weights(self) -> Dict[str, torch.Tensor]:
-        if self.decomposition_mode == "independent":
-            return {
-                task: update.delta_weight()
-                for task, update in zip(self.TASK_ORDER, self.task_updates)
-            }
-        shared = self.get_shared_factor_weights()
-        private = self.get_private_weights()
-        return {task: shared[task] + private[task] for task in self.TASK_ORDER}
-
-    def get_delta_norms(self) -> Dict[str, float]:
-        with torch.no_grad():
-            if self.decomposition_mode == "factor_shared_private":
-                return {
-                    task: float(torch.linalg.vector_norm(weight).item())
-                    for task, weight in self.get_delta_weights().items()
-                }
-            return {
-                task: float(update.delta_frobenius_norm().item())
-                for task, update in zip(self.TASK_ORDER, self.task_updates)
-            }
-
-    def get_shared_factor_weights(self) -> Dict[str, torch.Tensor]:
-        """Materialize each task's ``U_shared_t V_shared`` weight."""
-        if not self.shared_rank:
-            return {task: torch.zeros_like(self.hidden_layer.weight) for task in self.TASK_ORDER}
-        return {
-            task: up.weight @ self.shared_down.weight
-            for task, up in zip(self.TASK_ORDER, self.shared_task_ups)
-        }
-
-    def get_private_weights(self) -> Dict[str, torch.Tensor]:
-        """Materialize each task's private update, or a zero weight if absent."""
-        if not self.private_rank:
-            return {task: torch.zeros_like(self.hidden_layer.weight) for task in self.TASK_ORDER}
         return {
             task: update.delta_weight()
             for task, update in zip(self.TASK_ORDER, self.task_updates)
         }
 
-    def get_component_norms(self) -> Dict[str, Dict[str, float]]:
+    def get_delta_norms(self) -> Dict[str, float]:
         with torch.no_grad():
-            shared = self.get_shared_factor_weights()
-            private = self.get_private_weights()
             return {
-                "shared_factor": {
-                    task: float(torch.linalg.vector_norm(shared[task]).item())
-                    for task in self.TASK_ORDER
-                },
-                "private": {
-                    task: float(torch.linalg.vector_norm(private[task]).item())
-                    for task in self.TASK_ORDER
-                },
+                task: float(update.delta_frobenius_norm().item())
+                for task, update in zip(self.TASK_ORDER, self.task_updates)
             }
-
-    def get_component_activations(self, input_seq: torch.Tensor):
-        """Return dropout-free FC2 and component outputs for validation analysis."""
-        x = self._pre_fc2_representation(input_seq, apply_dropout=False)
-        base = self.hidden_layer(x)
-        shared_latent = self.shared_down(x) if self.shared_rank else None
-        shared = {}
-        private = {}
-        for index, task in enumerate(self.TASK_ORDER):
-            shared[task] = (
-                self.shared_task_ups[index](shared_latent)
-                if self.shared_rank else torch.zeros_like(base)
-            )
-            private[task] = (
-                self.task_updates[index](x)
-                if self.private_rank else torch.zeros_like(base)
-            )
-        return base, shared, private
-
-    def get_shared_factor_cosine_similarities(self) -> Dict[str, float]:
-        """Compare effective shared-factor update matrices, not raw up factors."""
-        with torch.no_grad():
-            weights = self.get_shared_factor_weights()
-            similarities = {}
-            for left, right in (("ks", "si"), ("ks", "er"), ("si", "er")):
-                left_flat = weights[left].reshape(-1)
-                right_flat = weights[right].reshape(-1)
-                if left_flat.norm() == 0 or right_flat.norm() == 0:
-                    similarity = 0.0
-                else:
-                    similarity = float(
-                        F.cosine_similarity(left_flat, right_flat, dim=0).item()
-                    )
-                similarities[f"{left}_{right}"] = similarity
-            return similarities
 
     def get_shared_weight_norm(self) -> float:
         """Return the Frobenius norm of the existing shared FC2 weight."""
