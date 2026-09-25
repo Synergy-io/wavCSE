@@ -58,7 +58,6 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
 
         if phase == "train":
             diagnostics.update(self.consume_shared_gradient_stats())
-            diagnostics.update(self.consume_gradnorm_stats())
             gradient_stats = self.consume_gradient_norm_stats()
             if gradient_stats is not None:
                 diagnostics.update(
@@ -92,8 +91,6 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
                 }
             )
         mlflow.log_metrics(diagnostics, step=epoch)
-        if phase == "val":
-            self.save_training_state(epoch, stats.avg_loss_all)
         return super()._epoch_report_line(epoch, phase, stats)
 
 
@@ -163,11 +160,6 @@ def main() -> None:
     parser.add_argument(
         "--device_index", type=int, default=None, help="Override the config GPU index"
     )
-    parser.add_argument(
-        "--resume_state",
-        default=None,
-        help="Load a GradNorm training state; num_epochs then specifies additional epochs",
-    )
     args = parser.parse_args()
 
     if args.task_type != DownstreamMultiTaskModelFTN.SUPPORTED_TASK_TYPE:
@@ -179,10 +171,6 @@ def main() -> None:
     seed = int(cfg.get("seed", 42))
     _set_seed(seed)
     logging.info("Experiment seed: %d", seed)
-
-    seed = args.seed if args.seed is not None else cfg.get("seed", 42)
-    set_seed(seed)
-    cfg["seed"] = seed
 
     device_index = (
         args.device_index if args.device_index is not None else cfg["device"]["index"]
@@ -206,10 +194,8 @@ def main() -> None:
 
     mlflow_utils.setup_mlflow(cfg)
     model_cfg = cfg["model"]
-    task_weighting = cfg["training"].get("task_weighting", "equal")
-    gradnorm_cfg = cfg.get("gradnorm", {})
     run_name = (
-        f"ftn_r{model_cfg['ftn_rank']}_{task_weighting}_seed{seed}_{task_type}_"
+        f"ftn_independent_r{model_cfg['ftn_rank']}_seed{seed}_{task_type}_"
         f"{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}"
     )
 
@@ -217,10 +203,6 @@ def main() -> None:
         mlflow_utils.log_config_params(cfg)
         mlflow.log_param("task_type", task_type)
         mlflow.log_param("architecture", "shared_fc2_private_adapter")
-        mlflow.log_param("task_weighting", task_weighting)
-        if task_weighting == "gradnorm":
-            mlflow.log_param("gradnorm_alpha", gradnorm_cfg.get("alpha", 1.5))
-            mlflow.log_param("gradnorm_weight_lr", gradnorm_cfg.get("weight_lr", 0.025))
 
         loader = LoadEmbedding(
             root_data_path=cfg["paths"]["root_data_path"],
@@ -260,11 +242,7 @@ def main() -> None:
             validation_data=val_data,
             ignore_index=cfg["dataset"]["ignore_index"],
             diagnostics_cfg=cfg.get("diagnostics", {}),
-            gradnorm_cfg=gradnorm_cfg,
         )
-        if args.resume_state:
-            resumed_epoch = trainer.load_training_state(_config_path(args.resume_state))
-            mlflow.log_param("resumed_from_epoch", resumed_epoch)
         trainer.train()
 
         results_run_id = os.path.basename(trainer.results_dir)
