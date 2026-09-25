@@ -57,6 +57,8 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
         diagnostics = {f"{phase}_balanced_task_acc": balanced_accuracy}
 
         if phase == "train":
+            diagnostics.update(self.consume_shared_gradient_stats())
+            diagnostics.update(self.consume_gradnorm_stats())
             gradient_stats = self.consume_gradient_norm_stats()
             if gradient_stats is not None:
                 diagnostics.update(
@@ -67,9 +69,8 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
                 )
 
         if phase == "val":
-            diagnostics["shared_fc2_weight_norm"] = (
-                self.model.get_shared_weight_norm()
-            )
+            shared_weight_norm = self.model.get_shared_weight_norm()
+            diagnostics["shared_fc2_weight_norm"] = shared_weight_norm
             diagnostics.update(
                 {
                     f"delta_norm_{task}": norm
@@ -90,8 +91,9 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
                     )
                 }
             )
-
         mlflow.log_metrics(diagnostics, step=epoch)
+        if phase == "val":
+            self.save_training_state(epoch, stats.avg_loss_all)
         return super()._epoch_report_line(epoch, phase, stats)
 
 
@@ -113,12 +115,10 @@ def _config_path(path: str) -> str:
 
 
 def _parameter_counts(model: DownstreamMultiTaskModelFTN) -> dict[str, int]:
-    updates = [
-        sum(p.numel() for p in module.parameters())
-        for module in model.task_updates
-    ]
-    if len(set(updates)) != 1:
-        raise ValueError(f"Expected equal per-task update sizes, got {updates}")
+    per_task = [sum(p.numel() for p in update.parameters()) for update in model.task_updates]
+    if len(set(per_task)) != 1:
+        raise ValueError(f"Expected equal per-task adapter sizes, got {per_task}")
+    adapter_total = sum(per_task)
     return {
         "total_parameters": sum(p.numel() for p in model.parameters()),
         "trainable_parameters": sum(
@@ -127,8 +127,12 @@ def _parameter_counts(model: DownstreamMultiTaskModelFTN) -> dict[str, int]:
         "shared_fc2_parameters": sum(
             p.numel() for p in model.hidden_layer.parameters()
         ),
-        "task_update_parameters_total": sum(updates),
-        "task_update_parameters_per_task": updates[0],
+        "task_adapter_parameters_per_task": per_task[0],
+        "task_adapter_parameters_total": adapter_total,
+        "ftn_specific_parameters_total": adapter_total,
+        "task_update_parameters_per_task": per_task[0],
+        "task_update_parameters_total": adapter_total,
+        "rank": model.ftn_rank,
         "ftn_rank": model.ftn_rank,
     }
 
@@ -160,8 +164,9 @@ def main() -> None:
         "--device_index", type=int, default=None, help="Override the config GPU index"
     )
     parser.add_argument(
-        "--seed", type=int, default=None,
-        help="Random seed (overrides config file's seed:, default 42 if neither set)",
+        "--resume_state",
+        default=None,
+        help="Load a GradNorm training state; num_epochs then specifies additional epochs",
     )
     args = parser.parse_args()
 
@@ -200,15 +205,22 @@ def main() -> None:
     task_type = args.task_type
 
     mlflow_utils.setup_mlflow(cfg)
-    ftn_rank = cfg["model"]["ftn_rank"]
+    model_cfg = cfg["model"]
+    task_weighting = cfg["training"].get("task_weighting", "equal")
+    gradnorm_cfg = cfg.get("gradnorm", {})
     run_name = (
-        f"ftn_r{ftn_rank}_{task_type}_"
+        f"ftn_r{model_cfg['ftn_rank']}_{task_weighting}_seed{seed}_{task_type}_"
         f"{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}"
     )
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
         mlflow.log_param("task_type", task_type)
+        mlflow.log_param("architecture", "shared_fc2_private_adapter")
+        mlflow.log_param("task_weighting", task_weighting)
+        if task_weighting == "gradnorm":
+            mlflow.log_param("gradnorm_alpha", gradnorm_cfg.get("alpha", 1.5))
+            mlflow.log_param("gradnorm_weight_lr", gradnorm_cfg.get("weight_lr", 0.025))
 
         loader = LoadEmbedding(
             root_data_path=cfg["paths"]["root_data_path"],
@@ -224,7 +236,6 @@ def main() -> None:
             subset_percentage=cfg["dataset"]["subset_percentage"],
         )
 
-        model_cfg = cfg["model"]
         model = DownstreamMultiTaskModelFTN(
             upstream_model_type=cfg["upstream"]["model_type"],
             task_type=task_type,
@@ -248,7 +259,12 @@ def main() -> None:
             training_data=train_data,
             validation_data=val_data,
             ignore_index=cfg["dataset"]["ignore_index"],
+            diagnostics_cfg=cfg.get("diagnostics", {}),
+            gradnorm_cfg=gradnorm_cfg,
         )
+        if args.resume_state:
+            resumed_epoch = trainer.load_training_state(_config_path(args.resume_state))
+            mlflow.log_param("resumed_from_epoch", resumed_epoch)
         trainer.train()
 
         results_run_id = os.path.basename(trainer.results_dir)

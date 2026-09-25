@@ -62,12 +62,11 @@ class LowRankTaskUpdate(nn.Module):
 
 
 class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
-    """Three-task wavCSE model with FTN-inspired FC2 decomposition.
+    """Three-task wavCSE model with independent low-rank FC2 updates.
 
-    The original hidden layer (FC2) is the shared parameter component. Each
-    task adds a bias-free low-rank residual to that transformation, giving the
-    effective parameterization ``W_t = W_shared + U_t V_t``. This is an
-    FTN-inspired task decomposition, not an exact reproduction of FTN.
+    The existing FC2 and its bias are shared; each task uses the bias-free
+    residual ``U_t V_t`` on the pre-FC2 input. This is FTN-inspired, not an
+    exact reproduction of FTN.
     """
 
     SUPPORTED_TASK_TYPE = "ks_si_er"

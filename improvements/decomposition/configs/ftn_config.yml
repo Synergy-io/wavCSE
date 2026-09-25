@@ -32,7 +32,12 @@ model:
   dropout_prob_shared2: 0.6
   ftn_rank: 16 
 
+diagnostics:
+  shared_gradient_analysis: true
+  shared_gradient_every_n_batches: 10
+
 training:
+  task_weighting: gradnorm  # use equal to reproduce the rank-16 baseline
   num_epochs: 30
   batch_size: 2048
   learning_rate: 0.00075
@@ -50,6 +55,11 @@ training:
   # max_grad_norm: 1.0
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
+
+gradnorm:
+  alpha: 1.5
+  weight_lr: 0.025
+  min_weight: 0.000001
 
 evaluation:
   batch_size: 1
