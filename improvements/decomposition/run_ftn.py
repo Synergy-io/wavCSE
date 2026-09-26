@@ -32,7 +32,10 @@ from seed_utils import set_seed
 
 from dataset.load_embedding import LoadEmbedding
 from improvements.decomposition.models.ftn_model import DownstreamMultiTaskModelFTN
-from improvements.decomposition.trainers.ftn_trainer import MultiTasksModelTrainerFTN
+from improvements.decomposition.trainers.ftn_trainer import (
+    MultiTasksModelTrainerFTN,
+    _TaskLossDispatcher,
+)
 from evaluator.evaluator_model import MultiTasksModelEvaluator
 from utils.load_config import load_config
 from utils.parse_transformer_layers import parse_transformer_layers
@@ -94,6 +97,18 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
         return super()._epoch_report_line(epoch, phase, stats)
 
 
+class _LabelSmoothingEvaluator(MultiTasksModelEvaluator):
+    """Evaluate with the same per-task loss criteria used by FTN training."""
+
+    def __init__(self, *args, er_label_smoothing: float, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.loss_fn = _TaskLossDispatcher(self.task_array, er_label_smoothing)
+
+    def _process_batch(self, batch):
+        self.loss_fn.reset()
+        return super()._process_batch(batch)
+
+
 def _owner_relative_path(path: str) -> str:
     expanded = os.path.expanduser(path)
     if os.path.isabs(expanded):
@@ -129,6 +144,10 @@ def _parameter_counts(model: DownstreamMultiTaskModelFTN) -> dict[str, int]:
         "ftn_specific_parameters_total": adapter_total,
         "task_update_parameters_per_task": per_task[0],
         "task_update_parameters_total": adapter_total,
+        "ftn_rank_ks": model.ftn_rank,
+        "ftn_rank_si": model.ftn_rank,
+        "ftn_rank_er": model.ftn_rank,
+        "ftn_total_rank": model.ftn_rank * len(model.TASK_ORDER),
         "rank": model.ftn_rank,
         "ftn_rank": model.ftn_rank,
     }
@@ -194,8 +213,10 @@ def main() -> None:
 
     mlflow_utils.setup_mlflow(cfg)
     model_cfg = cfg["model"]
+    er_label_smoothing = float(cfg["training"].get("er_label_smoothing", 0.0))
     run_name = (
-        f"ftn_independent_r{model_cfg['ftn_rank']}_seed{seed}_{task_type}_"
+        f"ftn_r{model_cfg['ftn_rank']}_erls{int(er_label_smoothing * 100):03d}_"
+        f"ks_si_er_"
         f"{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}"
     )
 
@@ -203,6 +224,7 @@ def main() -> None:
         mlflow_utils.log_config_params(cfg)
         mlflow.log_param("task_type", task_type)
         mlflow.log_param("architecture", "shared_fc2_private_adapter")
+        mlflow.log_param("er_label_smoothing", er_label_smoothing)
 
         loader = LoadEmbedding(
             root_data_path=cfg["paths"]["root_data_path"],
@@ -248,7 +270,7 @@ def main() -> None:
         results_run_id = os.path.basename(trainer.results_dir)
         checkpoint_run_id = os.path.basename(trainer.ckpt_dir)
         for tag in ("opt", "best", "epoch"):
-            evaluator = MultiTasksModelEvaluator(
+            evaluator = _LabelSmoothingEvaluator(
                 model=model,
                 device=device,
                 task_type=task_type,
@@ -260,6 +282,7 @@ def main() -> None:
                 ignore_index=cfg["dataset"]["ignore_index"],
                 results_run_id=results_run_id,
                 checkpoint_run_id=checkpoint_run_id,
+                er_label_smoothing=er_label_smoothing,
             )
             stats = evaluator.write_metrics()
             evaluator.write_predictions_csv()
