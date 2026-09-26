@@ -37,7 +37,7 @@ diagnostics:
   shared_gradient_every_n_batches: 10
 
 training:
-  num_epochs: 100
+  num_epochs: 30
   batch_size: 2048
   learning_rate: 0.00075
   weight_decay: 0.00000005
@@ -54,6 +54,7 @@ training:
   # max_grad_norm: 1.0
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
+  er_label_smoothing: 0.05
 
 evaluation:
   batch_size: 1
