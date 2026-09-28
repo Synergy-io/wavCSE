@@ -81,6 +81,38 @@ parser.add_argument(
     help="GPU index to use"
 )
 
+parser.add_argument(
+    "--root_data_path",
+    type=str,
+    default=None,
+    help="Override paths.root_data_path (root directory containing raw audio datasets)"
+)
+
+parser.add_argument(
+    "--root_emb_path",
+    type=str,
+    default=None,
+    help="Override paths.root_emb_path (root directory to write extracted embeddings)"
+)
+
+parser.add_argument(
+    "--checkpoint",
+    type=str,
+    default=None,
+    help="Override paths.upstream_checkpoint_path (pretrained upstream checkpoint file)"
+)
+
+parser.add_argument(
+    "--limit",
+    type=int,
+    default=None,
+    help=(
+        "Override dataset.limit: process only the first N samples of each split "
+        "(training, validation and testing each -- so up to 3*N embeddings total). "
+        "Useful for smoke tests. Omit to use the config value."
+    ),
+)
+
 args = parser.parse_args()
 
 
@@ -90,13 +122,16 @@ args = parser.parse_args()
 cfg = load_config(args.config)
 
 # Paths
-root_data_path = cfg["paths"]["root_data_path"]
-root_emb_path = cfg["paths"]["root_emb_path"]
-checkpoint_path = cfg["paths"]["upstream_checkpoint_path"]
+# CLI arguments take precedence over the configuration file so that a run on an
+# ephemeral worker can point at freshly materialized data and checkpoints
+# without editing a committed config file.
+root_data_path = args.root_data_path or cfg["paths"]["root_data_path"]
+root_emb_path = args.root_emb_path or cfg["paths"]["root_emb_path"]
+checkpoint_path = args.checkpoint or cfg["paths"]["upstream_checkpoint_path"]
 
 # Dataset
 dataset_name = args.dataset_name
-dataset_limit = cfg["dataset"]["limit"]      
+dataset_limit = args.limit if args.limit is not None else cfg["dataset"]["limit"]
 
 # Upstream model
 upstream_model_type = cfg["upstream"]["model_type"]
