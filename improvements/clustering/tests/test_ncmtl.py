@@ -423,6 +423,28 @@ class NCMTLTrainerTests(unittest.TestCase):
                 trainer.row_task_sharing.warmup_summary_path
             ))
 
+    def test_confidence_gate_leaves_uncertain_rows_independent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trainer = self._build_trainer(
+                directory,
+                sharing_granularity="row",
+                row_warmup_mode="fixed",
+                warmup_epochs=1,
+                row_min_relative_margin=1.0,
+            )
+            trainer._process_data_loader(trainer.train_dataloader, train_mode=True)
+            trainer._process_data_loader(trainer.train_dataloader, train_mode=True)
+
+            self.assertTrue(trainer.row_task_sharing.initialized)
+            self.assertEqual(
+                sum(trainer.row_task_sharing.shared_assignment_counts().values()),
+                0,
+            )
+            self.assertEqual(
+                int(torch.sum(~trainer.row_task_sharing.shared_row_mask).item()),
+                8,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -85,6 +85,11 @@ def _log_final_mlflow_state(trainer, model):
         if trainer.sharing_granularity == "row":
             for pair, count in trainer.row_task_sharing.assignment_counts().items():
                 mlflow.log_param(f"row_pair_count_{pair}", count)
+            for pair, count in trainer.row_task_sharing.shared_assignment_counts().items():
+                mlflow.log_param(f"shared_row_pair_count_{pair}", count)
+            mlflow.log_param(
+                "row_min_relative_margin", trainer.row_min_relative_margin
+            )
             mlflow.log_param(
                 "clusters_frozen", trainer.row_task_sharing.initialized
             )

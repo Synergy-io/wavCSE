@@ -23,6 +23,7 @@ class RowTaskSharing:
         warmup_max_epochs: int = 10,
         warmup_stability_threshold: float = 0.90,
         warmup_stability_patience: int = 2,
+        min_relative_margin: float = 0.0,
     ):
         if list(task_names) != ["ks", "si", "er"]:
             raise ValueError("Row task sharing requires tasks ['ks', 'si', 'er']")
@@ -34,6 +35,7 @@ class RowTaskSharing:
         self.warmup_max_epochs = int(warmup_max_epochs)
         self.warmup_stability_threshold = float(warmup_stability_threshold)
         self.warmup_stability_patience = int(warmup_stability_patience)
+        self.min_relative_margin = float(min_relative_margin)
         if self.warmup_min_epochs < 1:
             raise ValueError("row_warmup_min_epochs must be at least 1")
         if self.warmup_max_epochs < self.warmup_min_epochs:
@@ -46,8 +48,11 @@ class RowTaskSharing:
             )
         if self.warmup_stability_patience < 1:
             raise ValueError("row_warmup_stability_patience must be at least 1")
+        if not 0.0 <= self.min_relative_margin <= 1.0:
+            raise ValueError("row_min_relative_margin must satisfy 0 <= value <= 1")
 
         self.assignments = None
+        self.shared_row_mask = None
         self.assignment_epoch = None
         self.ready_to_freeze = False
         self.freeze_reason = None
@@ -98,6 +103,15 @@ class RowTaskSharing:
         stacked = torch.stack([distances[name] for name, _, _ in self.PAIRS])
         sorted_distances, sorted_indices = torch.sort(stacked, dim=0)
         self.assignments = sorted_indices[0].to(dtype=torch.long)
+        best_distances = sorted_distances[0]
+        second_distances = sorted_distances[1]
+        absolute_margins = second_distances - best_distances
+        relative_margins = torch.where(
+            second_distances > 0.0,
+            absolute_margins / second_distances,
+            torch.zeros_like(second_distances),
+        )
+        self.shared_row_mask = relative_margins >= self.min_relative_margin
         self.assignment_epoch = int(epoch)
 
         with open(self.assignment_csv_path, "w", newline="") as assignment_file:
@@ -106,14 +120,16 @@ class RowTaskSharing:
                 [
                     "row", "pair_id", "selected_pair", "selected_distance",
                     "second_distance", "absolute_margin", "relative_margin",
+                    "sharing_decision",
                     "ks_si_distance", "ks_er_distance", "si_er_distance",
                 ]
             )
             for row_index in range(stacked.shape[1]):
                 selected = int(self.assignments[row_index].item())
-                best = float(sorted_distances[0, row_index].item())
-                second = float(sorted_distances[1, row_index].item())
-                margin = second - best
+                best = float(best_distances[row_index].item())
+                second = float(second_distances[row_index].item())
+                margin = float(absolute_margins[row_index].item())
+                relative_margin = float(relative_margins[row_index].item())
                 writer.writerow(
                     [
                         row_index,
@@ -122,7 +138,8 @@ class RowTaskSharing:
                         best,
                         second,
                         margin,
-                        margin / second if second > 0.0 else 0.0,
+                        relative_margin,
+                        "shared" if bool(self.shared_row_mask[row_index]) else "independent",
                         float(stacked[0, row_index].item()),
                         float(stacked[1, row_index].item()),
                         float(stacked[2, row_index].item()),
@@ -130,15 +147,22 @@ class RowTaskSharing:
                 )
 
         counts = self.assignment_counts()
+        shared_counts = self.shared_assignment_counts()
         total = int(self.assignments.numel())
+        shared_rows = int(torch.sum(self.shared_row_mask).item())
         summary = {
             "strategy": "closest_pair",
             "assignment_epoch": self.assignment_epoch,
             "frozen": True,
             "num_rows": total,
+            "minimum_relative_margin": self.min_relative_margin,
             "pair_ids": {name: pair_id for pair_id, (name, _, _) in enumerate(self.PAIRS)},
             "counts": counts,
             "proportions": {name: count / total for name, count in counts.items()},
+            "shared_pair_counts": shared_counts,
+            "shared_rows": shared_rows,
+            "independent_rows": total - shared_rows,
+            "sharing_coverage": shared_rows / total,
         }
         with open(self.assignment_summary_path, "w") as summary_file:
             json.dump(summary, summary_file, indent=2)
@@ -223,12 +247,24 @@ class RowTaskSharing:
             for pair_id, (name, _, _) in enumerate(self.PAIRS)
         }
 
+    def shared_assignment_counts(self) -> dict[str, int]:
+        if not self.initialized:
+            return {name: 0 for name, _, _ in self.PAIRS}
+        return {
+            name: int(torch.sum(
+                (self.assignments == pair_id) & self.shared_row_mask
+            ).item())
+            for pair_id, (name, _, _) in enumerate(self.PAIRS)
+        }
+
     @torch.no_grad()
     def share(self, weights) -> None:
         if not self.initialized:
             return
         for pair_id, (_, first, second) in enumerate(self.PAIRS):
-            row_mask = (self.assignments == pair_id).to(weights[first].device)
+            row_mask = (
+                (self.assignments == pair_id) & self.shared_row_mask
+            ).to(weights[first].device)
             if not bool(torch.any(row_mask)):
                 continue
             row_indices = torch.nonzero(row_mask, as_tuple=False).squeeze(1)
@@ -241,7 +277,9 @@ class RowTaskSharing:
             return weights[0].new_zeros(())
         loss = weights[0].new_zeros(())
         for pair_id, (_, first, second) in enumerate(self.PAIRS):
-            row_mask = (self.assignments == pair_id).to(weights[first].device)
+            row_mask = (
+                (self.assignments == pair_id) & self.shared_row_mask
+            ).to(weights[first].device)
             if not bool(torch.any(row_mask)):
                 continue
             center = (

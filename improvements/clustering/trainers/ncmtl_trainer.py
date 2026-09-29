@@ -73,6 +73,9 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         self.row_warmup_stability_patience = int(
             ncmtl_cfg.get("row_warmup_stability_patience", 2)
         )
+        self.row_min_relative_margin = float(
+            ncmtl_cfg.get("row_min_relative_margin", 0.0)
+        )
         self.kmeans_random_state = int(ncmtl_cfg.get("kmeans_random_state", 42))
         self.kmeans_n_init = int(ncmtl_cfg.get("kmeans_n_init", 1))
         self.kmeans_max_iter = int(ncmtl_cfg.get("kmeans_max_iter", 100))
@@ -127,6 +130,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                 warmup_max_epochs=self.row_warmup_max_epochs,
                 warmup_stability_threshold=self.row_warmup_stability_threshold,
                 warmup_stability_patience=self.row_warmup_stability_patience,
+                min_relative_margin=self.row_min_relative_margin,
             )
             if self.sharing_granularity == "row"
             else None
@@ -137,7 +141,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             "clusters=%d | alpha=%g | interval=%d | warmup_epochs=%d | "
             "kmeans_n_init=%d | label_smoothing=%g | gradient_clip_norm=%s | "
             "row_distance_diagnostics=%s | sharing_granularity=%s | "
-            "row_warmup_mode=%s",
+            "row_warmup_mode=%s | row_min_relative_margin=%g",
             self.model.candidate_dim,
             self.model.identical_candidate_initialization,
             self.num_clusters,
@@ -150,6 +154,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             self.log_candidate_row_distances,
             self.sharing_granularity,
             self.row_warmup_mode,
+            self.row_min_relative_margin,
         )
 
     def _process_data_loader(self, data_loader, train_mode: bool):
@@ -430,6 +435,14 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                 "frozen_epoch": self.row_task_sharing.assignment_epoch,
                 "freeze_reason": self.row_task_sharing.freeze_reason,
                 "row_pair_counts": self.row_task_sharing.assignment_counts(),
+                "shared_row_pair_counts": (
+                    self.row_task_sharing.shared_assignment_counts()
+                ),
+                "independent_rows": (
+                    self.model.candidate_dim
+                    - sum(self.row_task_sharing.shared_assignment_counts().values())
+                ),
+                "minimum_relative_margin": self.row_min_relative_margin,
             }
             with open(self.cluster_summary_path, "w") as summary_file:
                 json.dump(summary, summary_file, indent=2)
