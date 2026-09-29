@@ -736,7 +736,20 @@ submittable as registered (seed 42, three arms, one run per arm under
 (directed relation, project-original) still needs its own authorization to be designed, and
 the deferred `DG-xxxx` diagnostics stay on the backlog.
 
-Latest iteration (2026-09-29, no compute): **§2 control identity decided — RETAIN; `DG-0007`
+Latest iteration (2026-09-29, no compute result): **DG-0007 screen attempted, blocked on
+controller credentials; nothing ran.** `DEC-0018` granted the screen (`$3.00`, 3-hour
+window, one DG-0007-owned worker) and `authorizations/DG-0007.yaml` was committed at
+`8fb395b`. A separate worker (`b0ucfxlwrw3iz7`, RTX A4500, `$0.25/h`) was provisioned from an
+independent checkout and the existing `200 GB` EU-RO-1 cache volume attached, but
+`infra job submit` refused every arm: `MLFLOW_TRACKING_USERNAME`/`MLFLOW_TRACKING_PASSWORD`
+are absent from the controller's environment and from every sanctioned store on the host.
+Dropping `environment_secrets` would break the MLflow provenance `DEC-0006` and protocol §7
+require, so the plan was left unchanged. The worker was stopped and destroyed (≈`$0.02`
+total); the cache volume was not destroyed and `TR-0007` was untouched. The screen is
+re-runnable in ~68 s once those two variables are exported. Full record:
+`studies/DG-0007/NOTE.md`.
+
+Previous iteration (2026-09-29, no compute): **§2 control identity decided — RETAIN; `DG-0007`
 stays `BLOCKED` on authorization alone.** The researcher resolved the open
 `VARIANT_BENCHMARK_PROTOCOL.md` §2 question as `DEC-0017` (OPTION B): historical MTRL
 (`mtrl_poolingwinner_25L_config.yml`, `normalize_w: true`) **remains** the in-category control

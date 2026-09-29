@@ -114,3 +114,60 @@ Consequences for this Study, none of them a design change:
 * the Study is now blocked on **authorization coverage alone** (item 1 above remains open);
 * no compute was authorized, requested, provisioned, submitted or executed by this decision,
   and no metric of any run was touched.
+
+
+---
+
+## 2026-09-29 — Screen execution attempted and blocked: controller MLflow credentials absent
+
+Appended, not substituted. The pre-registration above is unchanged; the screen did **not**
+run and no scientific result exists.
+
+**What was done.** With the researcher's grant (`DEC-0018`: screen only, `$3.00`, 3-hour
+window) and the envelope committed at `8fb395b`, a DG-0007-owned worker was provisioned
+from an independent checkout (`~/projects/wavCSE-mtrl-integrate`, never the live
+`~/projects/wavCSE`), the existing `200 GB` EU-RO-1 cache volume was attached, and the
+three-arm seed-42 submit was attempted.
+
+**The blocker.** `infra job submit` refuses every job whose spec declares
+`environment_secrets` when those variables are not set on the controller:
+
+```
+these secret environment variables are required by the job specification but are not set
+on this controller: MLFLOW_TRACKING_PASSWORD, MLFLOW_TRACKING_USERNAME; export them in
+this shell before submitting
+```
+
+`MLFLOW_TRACKING_USERNAME`/`MLFLOW_TRACKING_PASSWORD` are **not** in this session's
+environment and exist in no sanctioned store on the host: no `.env` in any wavCSE checkout
+or `$HOME`; no `Environment=`/`EnvironmentFile=` in the reaper unit; and
+`~/.config/wavcse-infra/config.toml` carries only AWS/RunPod/SSH keys. `TR-0007`'s submits
+succeeded because the credentials were present in *that* orchestration's environment; they
+are not persisted anywhere a fresh session can read.
+
+**Why the plan was not adapted.** Dropping `environment_secrets` would make the submit
+succeed and would also remove the runs' MLflow/DagsHub logging, which `DEC-0006`, protocol
+§7 and `AGENTS.md` require for every run. That is changing the scientific configuration to
+make a failing step pass, which this screen's grant explicitly forbids. The plan, arms,
+seeds, layer policy and pooling are untouched.
+
+**Framework reconciliation (recorded for provenance).** The first submit left
+`submission_pending: true` on the `mtrl_norm_corrected` entry with `failure_class:
+TRANSIENT_INFRA` and no `job_id`, after the framework's own post-failure reconcile found no
+matching provider job. Provider truth was then established independently — `infra job list
+--worker b0ucfxlwrw3iz7` returned `[]`, and `infra worker exec … -- ps` showed no job
+process — proving the submission never landed. The stale flag was cleared through the
+backend's own state API with an event appended; nothing was re-submitted blindly.
+
+**Cost and cleanup.** One DG-0007 worker (`b0ucfxlwrw3iz7`, NVIDIA RTX A4500, `$0.25/h`,
+envelope digest `5b365dc285621a12e201cc89cbefdb585c43707805566bf35635d3a5e3249302`) was
+created and destroyed after ≈`0.07` paid wall-clock hours ≈ **`$0.02`**. The persistent
+`200 GB` EU-RO-1 cache volume was **not** destroyed. `TR-0007` was not stopped, restarted,
+adopted or otherwise touched, and the live `~/projects/wavCSE` worktree was never modified.
+
+**Remediation (human action).** Export `MLFLOW_TRACKING_USERNAME` and
+`MLFLOW_TRACKING_PASSWORD` in the environment that runs the orchestrator (or place a
+gitignored `.env` in the orchestration checkout), then re-run `worker-ensure` followed by
+`advance --scope DG-0007 --plan improvements/taskrelation/research/studies/DG-0007/compute/plan.json
+--stage screen`. Provisioning took 68 s, so resuming is cheap; the envelope at `8fb395b`
+expires `2026-09-30T00:11:20+00:00`.
