@@ -119,6 +119,16 @@ def _infra():
     return infra_cli.InfraCli(resolve_module.resolve())
 
 
+def _scope_lock(scope):
+    """Exclusive guard for one scope's mutating verbs.
+
+    Read-only verbs never take it, so a status check can always run; two
+    orchestrator instances contend and the loser refuses rather than acting.
+    """
+
+    return state_module.scope_lock(scope)
+
+
 def _emit(args, payload, exit_code=EXIT_OK, lines=None):
     return cli_support.emit(payload, as_json=getattr(args, "as_json", False),
                             exit_code=exit_code, lines=lines)
@@ -155,7 +165,12 @@ def _run(args):
 
     if args.verb == "sweep":
         infra = _infra()
-        result = sweep_module.sweep(infra, args.scope, execute=args.execute)
+        if args.execute:
+            with _scope_lock(args.scope):
+                result = sweep_module.sweep(infra, args.scope, execute=True)
+        else:
+            # A dry run is observational, so it never contends for the lock.
+            result = sweep_module.sweep(infra, args.scope, execute=False)
         return _emit(args, result)
 
     plan = jobspec.load_plan(args.plan) if getattr(args, "plan", None) else None
@@ -173,7 +188,8 @@ def _run(args):
     if args.verb == "worker-ensure":
         infra = _infra()
         view = envelope_module.load(args.scope)
-        worker, actions = worker_module.ensure_worker(plan, view, infra=infra)
+        with _scope_lock(args.scope):
+            worker, actions = worker_module.ensure_worker(plan, view, infra=infra)
         return _emit(args, {
             "worker": {key: worker.get(key) for key in
                        ("id", "name", "state", "hourly_cost", "gpu_type")},
@@ -184,15 +200,21 @@ def _run(args):
     if args.verb == "advance":
         infra = _infra()
         record = run_study.load_record(args.scope)
-        result = run_study.advance(
-            args.scope, plan, args.stage, infra=infra, record=record,
-            dry_run=args.dry_run,
-        )
+        if args.dry_run:
+            result = run_study.advance(
+                args.scope, plan, args.stage, infra=infra, record=record, dry_run=True,
+            )
+        else:
+            with _scope_lock(args.scope):
+                result = run_study.advance(
+                    args.scope, plan, args.stage, infra=infra, record=record,
+                )
         return _emit(args, result)
 
     if args.verb == "collect":
         record = run_study.load_record(args.scope)
-        result = run_study.collect(args.scope, plan, args.stage, record=record)
+        with _scope_lock(args.scope):
+            result = run_study.collect(args.scope, plan, args.stage, record=record)
         return _emit(args, result,
                      EXIT_OK if not result["unverified"] else EXIT_REFUSED)
 
@@ -200,20 +222,23 @@ def _run(args):
         infra = _infra()
         view = envelope_module.load(args.scope)
         record = run_study.load_record(args.scope)
-        result = run_study.finish(args.scope, plan, infra=infra, view=view, record=record)
+        with _scope_lock(args.scope):
+            result = run_study.finish(args.scope, plan, infra=infra, view=view,
+                                      record=record)
         return _emit(args, result)
 
     if args.verb == "stop":
         infra = _infra()
         actions = []
-        for lease in ledger.active_leases(args.scope):
-            worker_id = lease.get("worker_id")
-            if args.destroy:
-                worker_module.destroy_worker(infra, worker_id, reason="operator stop")
-                actions.append({"worker_id": worker_id, "action": "destroy"})
-            else:
-                worker_module.stop_worker(infra, worker_id, reason="operator stop")
-                actions.append({"worker_id": worker_id, "action": "stop"})
+        with _scope_lock(args.scope):
+            for lease in ledger.active_leases(args.scope):
+                worker_id = lease.get("worker_id")
+                if args.destroy:
+                    worker_module.destroy_worker(infra, worker_id, reason="operator stop")
+                    actions.append({"worker_id": worker_id, "action": "destroy"})
+                else:
+                    worker_module.stop_worker(infra, worker_id, reason="operator stop")
+                    actions.append({"worker_id": worker_id, "action": "stop"})
         return _emit(args, {"scope": args.scope, "actions": actions})
 
     raise UsageError("unhandled verb {!r}".format(args.verb))

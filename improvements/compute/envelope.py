@@ -473,6 +473,15 @@ def check(view, action, facts, requested=None):
                         "the authorization for {} expired at {}".format(
                             view.scope, envelope["expires_at"]), action=action)
 
+    if action in _COSTLY_ACTIONS and facts.get("accounting_bounded") is False:
+        # If the scope's spend cannot be bounded from provider facts, no paid
+        # action is authorizable — whatever else about the request looks fine.
+        return Decision(False, "COST",
+                        "the scope's spend cannot be bounded from provider facts "
+                        "({}), so a new paid action cannot be authorized".format(
+                            "; ".join(facts.get("unknowns") or ["unknown cost"])),
+                        action=action)
+
     maximum = int(concurrency["max_simultaneous_workers"])
     live = list(facts.get("live_workers") or [])
     live_count = len(live)

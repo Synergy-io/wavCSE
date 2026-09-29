@@ -24,7 +24,7 @@ import json
 import os
 from datetime import datetime, timezone
 
-from improvements.compute.errors import ConfigurationError
+from improvements.compute.errors import BusyError, ConfigurationError
 
 SCHEMA_VERSION = 1
 STATE_ROOT_ENV = "WAVCSE_RESEARCH_STATE"
@@ -87,6 +87,11 @@ class MutationLock(object):
     Used as a context manager. The lock file is separate from the document so a
     reader never has to hold the lock to read a consistent snapshot (writes are
     atomic replacements).
+
+    Acquisition is non-blocking and refuses rather than waiting: two
+    orchestrator instances must never spend for the same scope, and a silent
+    wait would hide that from the operator. The refusal names the lock file, so
+    a stale lock from a killed process is diagnosable.
     """
 
     def __init__(self, name):
@@ -101,7 +106,17 @@ class MutationLock(object):
         directory = os.path.dirname(self.path)
         _ensure_directory(directory)
         self._handle = open(self.path, "a+")
-        fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX)
+        try:
+            fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            self._handle.close()
+            self._handle = None
+            raise BusyError(
+                "another process holds the lock for this scope ({}); refusing to "
+                "act so two orchestrators cannot spend or run the same work. Wait "
+                "for it to finish, or remove the lock file if its owner is gone."
+                .format(self.path)
+            ) from exc
         return self
 
     def __exit__(self, exc_type, exc, traceback):

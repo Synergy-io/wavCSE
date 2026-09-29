@@ -34,6 +34,10 @@ class CapacityError(ComputeError):
     """No compatible resource satisfies the request inside the envelope."""
 
 
+class BusyError(ComputeError):
+    """Another orchestrator instance holds this scope. Nothing is done twice."""
+
+
 class TransientInfraError(ComputeError):
     """A bounded, retryable infrastructure failure (transport, throttling, readiness)."""
 

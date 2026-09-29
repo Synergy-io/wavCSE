@@ -97,7 +97,8 @@ class CliTests(ComputeTestCase):
         ])
         self.assertEqual(code, cli.EXIT_OK)
         self.assertEqual(len(payload["planned"]), 1)
-        calls = open(log_path, encoding="utf-8").read()
+        with open(log_path, encoding="utf-8") as handle:
+            calls = handle.read()
         self.assertIn("worker list", calls)
         self.assertNotIn("job submit", calls)
         self.assertNotIn("worker create", calls)
