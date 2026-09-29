@@ -1,0 +1,84 @@
+# DG-0007 matched wavCSE baseline -- screen stage.
+#
+# Plain DownstreamMultiTaskModel, no relation term; the reference
+# to beat, matched key-by-key to the two MTRL arms.
+#
+# Generated from:
+#   improvements/base/configs/base_poolingwinner_25L_config.yml
+# Only the study identity block below and the two output roots differ from
+# that source config; research/tests/test_dg0007_run_identity.py asserts it.
+#
+# Launched as (arms through the one study runner, per DG-0002's convention):
+#   python -m improvements.run_improvements --model original \
+#       --task_type ks_si_er --config improvements/taskrelation/research/studies/DG-0007/configs/baseline.yml \
+#       --device_index <n> [--seed <n>]
+log_level: INFO
+seed: 42
+device:
+  type: cuda
+  index: 0
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/embedding
+  results_root: improvements/taskrelation/research/studies/DG-0007/outputs/baseline/results
+  checkpoints_root: improvements/taskrelation/research/studies/DG-0007/outputs/baseline/checkpoints
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: smp
+  layer_pooling_param: 0.5
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+training:
+  num_epochs: 30
+  batch_size: 2048
+  learning_rate: 0.0025
+  weight_decay: 5.0e-08
+  saved_checkpoint_count: 1
+  shuffle_train: true
+  shuffle_val: false
+  pin_memory: true
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 4
+  patience: 5
+  factor: 0.5
+  l1_lambda: 1.0e-07
+  l2_lambda: 1.0e-05
+evaluation:
+  batch_size: 2048
+  shuffle: false
+  pin_memory: true
+  drop_last: false
+  num_workers: 4
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: wavcse-baseline
+
+# ----------------------------
+# Research identity (canonical field names; consumed by
+# improvements/mlflow_utils.py's build_research_run_name/set_standard_tags and
+# referenced by improvements/run_identity.py's ARC_RUN_IDENTITY record)
+# ----------------------------
+research:
+  study_id: DG-0007
+  stage: screen
+  family: task_relation_learning
+  method: wavcse-baseline
+  hypothesis_slug: mtrl-normalization-faithfulness
+  task_set: ks_si_er
+  representation: smp25
+  parent_study: DG-0002
+  baseline_study: LEGACY-PRE-ID-F4
+  agent_generated: true
+  status: active
+  run_note_file: improvements/taskrelation/research/studies/DG-0007/NOTE.md

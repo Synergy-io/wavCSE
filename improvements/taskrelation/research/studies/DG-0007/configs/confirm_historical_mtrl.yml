@@ -1,0 +1,90 @@
+# DG-0007 historical adapted MTRL control (normalize_w: true) -- confirm stage.
+#
+# This is the historical in-category control as committed
+# (normalize_w: true), re-run at this study's commit for a matched comparison.
+#
+# Generated from:
+#   improvements/taskrelation/01-mtrl/mtrl_poolingwinner_25L_config.yml
+# Only the study identity block below and the two output roots differ from
+# that source config; research/tests/test_dg0007_run_identity.py asserts it.
+#
+# Launched as (arms through the one study runner, per DG-0002's convention):
+#   python -m improvements.run_improvements --model mtrl \
+#       --task_type ks_si_er --config improvements/taskrelation/research/studies/DG-0007/configs/confirm_historical_mtrl.yml \
+#       --device_index <n> [--seed <n>]
+log_level: INFO
+seed: 42
+device:
+  type: cuda
+  index: 1
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/embedding
+  results_root: improvements/taskrelation/research/studies/DG-0007/outputs/confirm/historical_mtrl/results
+  checkpoints_root: improvements/taskrelation/research/studies/DG-0007/outputs/confirm/historical_mtrl/checkpoints
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: smp
+  layer_pooling_param: 0.5
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+  mtrl_lambda: 0.01
+  omega_epsilon: 0.0001
+  normalize_w: true
+training:
+  num_epochs: 30
+  batch_size: 2048
+  learning_rate: 0.0025
+  weight_decay: 5.0e-08
+  saved_checkpoint_count: 1
+  shuffle_train: true
+  shuffle_val: false
+  pin_memory: true
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 4
+  patience: 5
+  factor: 0.5
+  l1_lambda: 1.0e-07
+  l2_lambda: 1.0e-05
+mtrl:
+  warmup_epochs: 3
+  omega_update_frequency: 1
+evaluation:
+  batch_size: 2048
+  shuffle: false
+  pin_memory: true
+  drop_last: false
+  num_workers: 4
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: taskrelation-mtrl
+
+# ----------------------------
+# Research identity (canonical field names; consumed by
+# improvements/mlflow_utils.py's build_research_run_name/set_standard_tags and
+# referenced by improvements/run_identity.py's ARC_RUN_IDENTITY record)
+# ----------------------------
+research:
+  study_id: DG-0007
+  stage: confirm
+  family: task_relation_learning
+  method: mtrl
+  hypothesis_slug: mtrl-normalization-faithfulness
+  task_set: ks_si_er
+  representation: smp25
+  parent_study: DG-0002
+  baseline_study: DG-0007-baseline
+  agent_generated: true
+  status: confirming
+  run_note_file: improvements/taskrelation/research/studies/DG-0007/NOTE.md

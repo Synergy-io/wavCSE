@@ -71,6 +71,30 @@ def emit_run_identity(trainer, *, model=None, task_type=None, seed=None, extra=N
     return record
 
 
+def research_identity(research_cfg, git_commit, default_method=None):
+    """The study/arm fields every training run's identity record must carry.
+
+    A run identity has to answer *which arm of which study at which commit*
+    produced an artifact. `model` alone cannot: both arms of a two-arm MTRL
+    study are `model="mtrl"`, so the arm is carried by the research block's
+    `method`, and the commit is what the study record binds its evidence to.
+    Field names are the research-block names `mlflow_utils.set_standard_tags`
+    already publishes, so no parallel vocabulary is introduced.
+
+    `science` values must never be defaulted here: a config with no `research`
+    block yields `None`s, which the provenance checks treat as missing rather
+    than silently substituting a legacy identity.
+    """
+    research_cfg = research_cfg or {}
+    return {
+        "study_id": research_cfg.get("study_id"),
+        "stage": research_cfg.get("stage"),
+        "method": research_cfg.get("method", default_method),
+        "representation": research_cfg.get("representation"),
+        "git_commit": git_commit,
+    }
+
+
 def read_identity_file(path):
     """Read the identity records a training process wrote, oldest first."""
 

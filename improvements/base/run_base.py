@@ -41,7 +41,7 @@ from seed_utils import set_seed
 from improvements.device_utils import assert_training_device
 from improvements.eval_utils import evaluation_run_ids
 from improvements import embedding_root
-from improvements.run_identity import emit_run_identity
+from improvements.run_identity import emit_run_identity, research_identity
 from improvements.gradient_diagnostics import make_gradient_diagnostic_trainer
 
 from dataset.load_embedding import LoadEmbedding
@@ -231,10 +231,16 @@ def main():
             seed=seed,
         )
 
-        # State the run identity explicitly, before training starts.
+        # State the run identity explicitly, before training starts. Same
+        # run-identity contract as improvements/run_improvements.py, so one
+        # record answers *which arm of which study at which commit* produced the
+        # artifact regardless of which entry point trained it.
         emit_run_identity(
             trainer, model="wavcse-baseline", task_type=task_type, seed=seed,
-            extra={"study_id": study_id, "stage": stage},
+            extra=research_identity(
+                research_cfg, mlflow_utils.resolve_git_commit(),
+                default_method="wavcse-baseline",
+            ),
         )
 
         trainer.train()

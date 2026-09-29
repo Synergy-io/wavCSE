@@ -1,0 +1,117 @@
+# wavCSE-MTRL — NORMALIZATION-CORRECTED variant (row normalization removed)
+#
+# =============================================================================
+# Audit lineage (do not edit this header; see
+# improvements/taskrelation/research/audits/2026-09-29-mtrl-theory-to-implementation-audit.md
+# and the correction log at the end of that report)
+#
+# predecessor : the historical classical-MTRL in-category control, i.e.
+#               mtrl_poolingwinner_25L_config.yml (normalize_w: true)
+# reason      : theory-to-implementation audit of the classical MTRL arm
+# correction  : the published Omega closed form (TKDD 2014 Eq. (14)) and the
+#               published regularizer lambda*tr(W Omega^-1 W^T) are applied to
+#               the task parameter matrix W, not to a row-unit-normalized
+#               variant of it. This config sets normalize_w: false, which is
+#               the ONLY difference from the historical control config.
+#
+# LABEL — read this before citing the arm:
+#   This is "normalization-corrected MTRL". It is NOT "fully faithful
+#   Zhang & Yeung MTRL" and must not be labelled that way. It isolates the
+#   audit's finding D2 (the row normalization) and nothing else. The
+#   project-level adaptations that remain in both arms are D1 (the mean-head
+#   summary adapter stands in for the paper's task parameter matrix), D3 (the
+#   paper's (lambda_1/2) tr(W W^T) term on W is not implemented; an inherited
+#   generic L2 over ALL 4.09M model parameters stands in, which is not
+#   equivalent - it covers ~681x more elements and includes the shared trunk),
+#   D4 (warmup), D7 (per-epoch Omega cadence), D6 (epsilon-regularized
+#   inverse). Only D2 is removed here.
+#
+# It is a copy of mtrl_poolingwinner_25L_config.yml with exactly two changes:
+#   1. model.normalize_w: true -> false   (the audit's isolated correction)
+#   2. new results_root / checkpoints_root so the successor run cannot overwrite
+#      or be confused with a historical run directory.
+# Every other value - pooling, layer set, epochs, batch size, optimizer,
+# scheduler, l1/l2, splits, checkpoint policy, mtrl_lambda, omega_epsilon,
+# warmup, update frequency - is value-identical to the historical control; the
+# two files differ in their comment headers as well as in those three keys.
+# =============================================================================
+
+log_level: INFO
+seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
+
+device:
+  type: cuda
+  index: 1
+
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/embedding
+  results_root: results_mtrl_norm_corrected_25L
+  checkpoints_root: checkpoints_mtrl_norm_corrected_25L
+
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: smp
+  layer_pooling_param: 0.5
+
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+  # MTRL-specific. mtrl_lambda / omega_epsilon are unchanged from the
+  # historical control; only normalize_w differs.
+  mtrl_lambda: 0.01
+  omega_epsilon: 0.0001
+  # AUDIT CORRECTION: the paper's W is the task parameter matrix. Row
+  # unit-normalization makes the regularizer scale-invariant (bounded in
+  # [m*lambda, m^2*lambda] for m tasks) and makes the code's Omega the
+  # minimizer of tr(Omega^-1 W~^T W~) for the normalized W~, not of the
+  # published subproblem tr(Omega^-1 W^T W) for the parameters actually
+  # trained. normalize_w: false restores the published objective.
+  normalize_w: false
+
+training:
+  num_epochs: 30
+  batch_size: 2048
+  learning_rate: 0.0025
+  weight_decay: 0.00000005
+  saved_checkpoint_count: 1
+  shuffle_train: true
+  shuffle_val: false
+  pin_memory: true
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 4
+  patience: 5
+  factor: 0.5
+  l1_lambda: 0.0000001
+  l2_lambda: 0.00001
+
+# MTRL-specific
+mtrl:
+  warmup_epochs: 3
+  omega_update_frequency: 1
+
+evaluation:
+  batch_size: 2048
+  shuffle: false
+  pin_memory: true
+  drop_last: false
+  num_workers: 4
+
+# ----------------------------
+# MLflow / DagsHub tracking
+# ----------------------------
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: taskrelation-mtrl

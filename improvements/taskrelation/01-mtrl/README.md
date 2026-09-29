@@ -782,3 +782,59 @@ task-relation reading this project has produced remains
 **`weighted`-pooling at 16 layers**.
 
 <!-- ENTRIES APPENDED BELOW AS RUNS COMPLETE -->
+
+---
+
+## Theory-to-implementation audit (2026-09-29) — `normalize_w` is a deviation from the paper
+
+Full report: `../research/audits/2026-09-29-mtrl-theory-to-implementation-audit.md`.
+
+An independent audit reconstructed Zhang & Yeung's published mathematics
+(UAI 2010 / ACM TKDD 8(3):12, 2014, Eqs. (8) and (14)) and traced it through
+this folder, the entry point and the trainer. **The Ω closed form, the trace
+constraint, the initialization, the orientation and the alternating structure
+all match**, and `mtrl_model.py`/`mtrl_trainer.py` are byte-identical to their
+introduction commit `33603c3`.
+
+On provenance, the audit states exactly what Git supports: `33603c3` is an
+ancestor of `bfb1ad44` (the commit the historical five-seed and LOSO run
+metadata records), so the files implementing the row normalization were present
+throughout that history. The **complete executable repository state** of those
+runs is `INSUFFICIENT_EVIDENCE`, because `bfb1ad44` contains neither the seeding
+machinery nor the LOSO entry point and config those runs used — both arrive
+later, in `03c28fe`/`c604cc9` — so they cannot have executed that commit as
+committed. A dirty checkout or a wrong recorded commit are both possible and
+neither is established; the runs are not inferred not to have happened.
+
+What does *not* match is that **every committed config here sets
+`model.normalize_w: true`** (including the config at `bfb1ad44`), so both
+`update_omega()` and the regularizer are evaluated on a row-unit-normalized `W~`
+rather than on the task parameter matrix `W`. Measured on the protocol config
+with tiny deterministic tensors:
+
+* the code's Ω sits **50.11 % above** the published minimum of
+  `min_Ω tr(Ω⁻¹WᵀW)` for the matrix the model actually trains;
+* the penalty is **scale-invariant** — `penalty(3W)/penalty(W) = 1.0031` against
+  the published `9.0`; the 1.0031 is the `omega_epsilon` floor and tends to
+  exactly `1` as `ε → 0`, so the normalized penalty carries no information about
+  parameter scale and is confined to `λ·[m, m²]`;
+* the loss of task-scale information is the precise consequence: the diagonal
+  tracks the summary directions but never the tasks' parameter magnitude
+  (`diag(Ω) = [0.334, 0.332, 0.334]` against a 17.58× spread in `‖w_t‖`, where
+  a 40× rescale of one task moves Ω by 2.8e-3 versus 0.97 without the
+  normalization). `diag(Ω) ≈ 1/m` is *not* a general invariant — the 25L `smp`
+  Phase-A run reports `[0.3027, 0.3076, 0.3897]`.
+
+The historical numbers are unchanged and remain valid as measurements of the arm
+that ran; what changes is their attribution — this arm is an *adaptation of*
+MTRL, not the published method, and the Ω-based readings must be conditioned on
+the modification. The corrected configuration is
+`mtrl_norm_corrected_25L_config.yml` (differing from the historical control in
+that one key plus its output directories, value-identical otherwise), to be run
+as new study `DG-0007` under the matched protocol. That arm is
+**normalization-corrected MTRL, not "faithful Zhang & Yeung MTRL"**: it removes
+the row normalization (the audit's `D2`) and nothing else — the mean-head
+adapter (`D1`), the absent `λ₁` term (`D3`), warmup (`D4`), the ε-regularized
+inverse (`D6`) and the per-epoch Ω cadence (`D7`) all remain. The audit created
+no compute authorization and did not relabel the historical control, because
+that is a `DEC`-level decision.

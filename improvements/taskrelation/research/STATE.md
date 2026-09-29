@@ -593,6 +593,31 @@ only), and DEC-0014 activates Option 3 for the directed-relation question:
   registered**. Its exact relation rule is design work the policy classes as introducing a
   project-original mechanism; it needs either an explicit authorization to design it
   autonomously or a design review (Option C of the TR-0007 gate).
+* `DG-0007` (MTRL implementation faithfulness) — **registered 2026-09-29, pre-registered;
+  `BLOCKED`. Screen not executed; no compute authorized.** It is the successor to the
+  independent theory-to-implementation audit of the classical MTRL arm
+  (`audits/2026-09-29-mtrl-theory-to-implementation-audit.md`): every evidence-carrying
+  MTRL config sets `model.normalize_w: true`, so the published Ω closed form (TKDD 2014
+  Eq. (14)) and the published relation penalty were evaluated on a row-unit-normalized
+  copy of the task parameter matrix rather than on `W` itself — the code's Ω sits ≈50 %
+  above the published subproblem minimum for the parameters the model trains, and the
+  penalty loses its degree-two scaling. The arm is therefore **normalization-corrected
+  MTRL, not fully faithful Zhang & Yeung MTRL**: the correction removes that one
+  deviation (the audit's `D2`) and leaves the declared mean-head adapter (`D1`), the
+  absent `λ₁` term (`D3`), warmup (`D4`), the ε-regularized inverse (`D6`) and the
+  per-epoch Ω cadence (`D7`) in place. Independent variable: `model.normalize_w`
+  `true → false`, one boolean, same code path. Three arms — normalization-corrected
+  MTRL, the historical MTRL control and the matched wavCSE baseline — at `smp` 0.5 over
+  all 25 layers, screen seed 42 then confirmation seeds 0–4; LOSO is a conditional
+  escalation with a separate, currently unmeasured budget. Predecessor: the historical
+  MTRL campaign (`LEGACY-PRE-ID` evidence within `DG-0001`/`DG-0002`).
+  `studies/DG-0007/` holds the pre-registration (`PLAN.md`, `NOTE.md`), the three-arm
+  execution configs with their `research:` identity blocks (`configs/`, verified by
+  `research/tests/test_dg0007_run_identity.py`) and the pre-registered runtime gate
+  (`check_runtime_faithfulness.py`). It requests no compute and **may not be launched**
+  until the authorization question is answered; whether the corrected configuration
+  should *replace* the in-category control named by `VARIANT_BENCHMARK_PROTOCOL.md` §2 is
+  a `DEC`-level human decision.
 * the exact commit is **local-only**: `origin` publishes
   `feature/mssl-task-relation-study` at `05fa10c`, so any worker request is refused until
   the developer pushes the commit `preflight` resolves. Publication is a developer action,
@@ -605,6 +630,8 @@ only), and DEC-0014 activates Option 3 for the directed-relation question:
   MTRL does not mitigate it, and persistent pairwise conflict is rejected (F9);
 * LT-0001 — **REJECTED**; the F9 literature gate found no eligible published
   mechanism (DEC-0008, superseded by DEC-0009);
+* DG-0007 — **registered, pre-registered, `BLOCKED`**; normalization-corrected MTRL successor to
+the audit's D2 finding, screen not executed, no compute authorized;
 * DG-0005 — **CONFIRMED** (2026-09-22); matched seeds 0–4 removed late ER
   norm dominance in 5/5 seeds under a passing exposure gate. Produced F10 and
   refined F9. It authorizes no mechanism by itself — the benchmark's authority
@@ -660,8 +687,9 @@ Current active Study:
 
 `NONE` RUNNING. `TR-0007` is registered (`BLOCKED`, pre-registration) and carries the
 faithfulness gate described under *Current Pending Work*; `TR-0008` is named and activated
-by DEC-0014 but not registered. Every other `TR-xxxx` still requires its own explicit human
-authorization under DEC-0009/DEC-0010.
+by DEC-0014 but not registered. `DG-0007` is registered (`BLOCKED`, pre-registration) with
+no compute authorized for its scope. Every other `TR-xxxx` still requires its own explicit
+human authorization under DEC-0009/DEC-0010.
 
 Result (CONFIRMED, F10):
 
@@ -706,7 +734,25 @@ submittable as registered (seed 42, three arms, one run per arm under
 (directed relation, project-original) still needs its own authorization to be designed, and
 the deferred `DG-xxxx` diagnostics stay on the backlog.
 
-Latest iteration (2026-09-29, no compute): **TR-0007 Option A implemented and pre-registered.**
+Latest iteration (2026-09-29, no compute): **DG-0007 accepted into canonical; still
+`BLOCKED` on authorization.** The theory-to-implementation audit of the classical MTRL arm
+and its remediation were integrated from the read-only audit branch
+(`research/mtrl-theory-audit`, accepted through `46fc0f9`, verdict
+`DG_0007_MICRO_VERIFY_PASSED`) into `feature/mssl-task-relation-study`; the audit's
+stale-branch MSSL text was **not** taken — this repository's `DEC-0015`/`DEC-0016`
+semantics and its corrected `literature/goncalves-2016-mssl.md` govern. What arrived is the
+`DG-0007` registration above, its pre-registration (`studies/DG-0007/PLAN.md`, `NOTE.md`),
+its six study configs, its runtime-faithfulness checker, the corrected MTRL config
+`01-mtrl/mtrl_norm_corrected_25L_config.yml`, the audit report and three research test
+modules. The arm's label is **normalization-corrected MTRL**, never "faithful Zhang & Yeung
+MTRL" (`DEC-0015` governs MSSL; this governs the MTRL arm). No GPU run, no worker, no job,
+no S3 or network-volume mutation, and no authorization was created for DG-0007:
+`authorizations/TR-0007.yaml` is the only envelope on the record and it excludes DG-0007 by
+name. Its runtime gate is a checker fix (malformed evidence renders a bounded structured
+diagnostic and exits `2`; a scientific failure stays `1`); no scientific semantics changed,
+and no historical evidence or metric was rewritten.
+
+Previous iteration (2026-09-29, no compute): **TR-0007 Option A implemented and pre-registered.**
 No GPU run, no worker, no job, no S3 or volume mutation, no authorization created. The human
 gate on `TR-0007` was answered (`DEC-0015`: Option A, faithful published MSSL formulation) and
 recorded append-only in `studies/TR-0007/NOTE.md`, with a primary-source correction of the

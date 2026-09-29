@@ -57,7 +57,7 @@ from improvements.seed_utils import set_seed
 from improvements.device_utils import assert_training_device
 from improvements.eval_utils import evaluation_run_ids
 from improvements import embedding_root
-from improvements.run_identity import emit_run_identity
+from improvements.run_identity import emit_run_identity, research_identity
 from improvements import mlflow_utils
 from improvements.gradient_diagnostics import make_gradient_diagnostic_trainer
 
@@ -415,12 +415,17 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
         )
 
         # State the run identity explicitly, before training starts, so nothing
-        # downstream has to infer "which run" from the newest directory.
+        # downstream has to infer "which run" from the newest directory. The
+        # study/arm fields come from the shared contract in
+        # improvements/run_identity.py -- `model` alone cannot separate two arms
+        # of one study, since both are model="mtrl".
         emit_run_identity(
             trainer, model=model_type, task_type=task_type,
             seed=resolved_seed,
-            extra={"study_id": (cfg.get("research") or {}).get("study_id"),
-                   "stage": (cfg.get("research") or {}).get("stage")},
+            extra=research_identity(
+                cfg.get("research"), mlflow_utils.resolve_git_commit(),
+                default_method=model_type,
+            ),
         )
 
         # Train
