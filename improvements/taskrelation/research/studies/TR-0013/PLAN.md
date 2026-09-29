@@ -177,7 +177,9 @@ is not an ER result (F3).
 * Five-run allowance, four runs executed; expected ≈ 1.5–1.8 GPU-h of training plus preparation,
   one worker, inside a 4 h envelope.
 * Worker: the cheapest compatible part in the existing network volume's data center (EU-RO-1),
-  discovered at execution time. Compatibility is a hard constraint: the pinned PyTorch
+  discovered at execution time. At provisioning that was `NVIDIA L4` at `$0.49/h` (SECURE,
+  direct SSH, `sm_89`), so it is the plan's pinned part; the next-cheapest compatible offer was
+  `NVIDIA GeForce RTX 4090` at `$0.74/h`. Compatibility is a hard constraint: the pinned PyTorch
   (`runpod/pytorch:2.4.0-py3.11-cuda12.4.1`) tops out at `sm_90`, so Blackwell-class offers
   (`NVIDIA RTX PRO 4000/4500/6000 Blackwell`, `RTX 5090`) are excluded regardless of price —
   DG-0007 recorded that failure. One worker is reused for all four arms, sequentially.
