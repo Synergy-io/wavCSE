@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "study": "DG-0007",
+  "repository": "https://github.com/Synergy-io/wavCSE.git",
+  "task_type": "ks_si_er",
+  "environment_secrets": [
+    "MLFLOW_TRACKING_USERNAME",
+    "MLFLOW_TRACKING_PASSWORD"
+  ],
+  "timeout_seconds": 21600,
+  "device_index": 0,
+  "arms": [
+    {
+      "arm": "mtrl_norm_corrected",
+      "method": "mtrl_norm_corrected",
+      "config": "improvements/taskrelation/research/studies/DG-0007/configs/norm_corrected_mtrl.yml",
+      "argv": [
+        "python",
+        "-m",
+        "improvements.run_improvements",
+        "--model",
+        "mtrl",
+        "--task_type",
+        "{task_type}",
+        "--config",
+        "{config}",
+        "--device_index",
+        "{device_index}",
+        "--seed",
+        "{seed}"
+      ],
+      "labels": {
+        "implementation": "normalization-corrected-mtrl",
+        "not": "not fully faithful Zhang & Yeung MTRL; removes the audit's D2 (row normalization) only, D1/D3/D4/D6/D7 remain",
+        "independent_variable": "model.normalize_w = false",
+        "normalize_w": "false",
+        "mtrl_lambda": "0.01",
+        "omega_epsilon": "0.0001",
+        "layer_policy": "all-25",
+        "environment": "single-gpu-worker",
+        "audit": "improvements/taskrelation/research/audits/2026-09-29-mtrl-theory-to-implementation-audit.md",
+        "checker": "improvements/taskrelation/research/studies/DG-0007/check_runtime_faithfulness.py",
+        "experiment": "taskrelation-mtrl"
+      }
+    },
+    {
+      "arm": "mtrl",
+      "method": "mtrl",
+      "config": "improvements/taskrelation/research/studies/DG-0007/configs/historical_mtrl.yml",
+      "argv": [
+        "python",
+        "-m",
+        "improvements.run_improvements",
+        "--model",
+        "mtrl",
+        "--task_type",
+        "{task_type}",
+        "--config",
+        "{config}",
+        "--device_index",
+        "{device_index}",
+        "--seed",
+        "{seed}"
+      ],
+      "labels": {
+        "implementation": "historical-adapted-in-category-control",
+        "in_category_control": "retained by DEC-0017; VARIANT_BENCHMARK_PROTOCOL.md section 2 is unchanged",
+        "independent_variable": "model.normalize_w = true",
+        "normalize_w": "true",
+        "mtrl_lambda": "0.01",
+        "omega_epsilon": "0.0001",
+        "layer_policy": "all-25",
+        "environment": "single-gpu-worker",
+        "experiment": "taskrelation-mtrl"
+      }
+    },
+    {
+      "arm": "wavcse-baseline",
+      "method": "wavcse-baseline",
+      "config": "improvements/taskrelation/research/studies/DG-0007/configs/baseline.yml",
+      "argv": [
+        "python",
+        "-m",
+        "improvements.run_improvements",
+        "--model",
+        "original",
+        "--task_type",
+        "{task_type}",
+        "--config",
+        "{config}",
+        "--device_index",
+        "{device_index}",
+        "--seed",
+        "{seed}"
+      ],
+      "labels": {
+        "implementation": "matched-wavcse-baseline",
+        "layer_policy": "all-25",
+        "environment": "single-gpu-worker",
+        "experiment": "wavcse-baseline"
+      }
+    }
+  ],
+  "stages": {
+    "screen": {
+      "seeds": [
+        42
+      ]
+    }
+  },
+  "inputs_file": "improvements/taskrelation/research/studies/DG-0007/compute/inputs.json",
+  "outputs": [
+    {
+      "name": "checkpoint_best",
+      "kind": "checkpoint",
+      "tag": "best",
+      "required": true
+    },
+    {
+      "name": "checkpoint_opt",
+      "kind": "checkpoint",
+      "tag": "opt",
+      "required": true
+    },
+    {
+      "name": "eval_metrics_epoch",
+      "kind": "results_file",
+      "required": true
+    }
+  ],
+  "worker": {
+    "gpu_type": "NVIDIA RTX A4500",
+    "cloud": "SECURE",
+    "gpu_count": 1,
+    "image": "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
+    "container_disk_gb": 60,
+    "data_centers": [
+      "EU-RO-1"
+    ],
+    "network_volume": {
+      "min_size_gb": 200,
+      "datacenter": "EU-RO-1",
+      "volume_type": "STANDARD"
+    }
+  },
+  "embedding_layout": {
+    "root": "embedding",
+    "datasets": [
+      {
+        "dataset": "speechcommand",
+        "inputs": [
+          "embeddings/v1/speechcommand-wavlm-large-mean/training-000.tar",
+          "embeddings/v1/speechcommand-wavlm-large-mean/training-001.tar",
+          "embeddings/v1/speechcommand-wavlm-large-mean/training-002.tar",
+          "embeddings/v1/speechcommand-wavlm-large-mean/validation-000.tar",
+          "embeddings/v1/speechcommand-wavlm-large-mean/testing-000.tar"
+        ]
+      },
+      {
+        "dataset": "voxceleb",
+        "inputs": [
+          "embeddings/v1/voxceleb-wavlm-large-mean/train-000.tar",
+          "embeddings/v1/voxceleb-wavlm-large-mean/train-001.tar",
+          "embeddings/v1/voxceleb-wavlm-large-mean/train-002.tar",
+          "embeddings/v1/voxceleb-wavlm-large-mean/train-003.tar",
+          "embeddings/v1/voxceleb-wavlm-large-mean/train-004.tar",
+          "embeddings/v1/voxceleb-wavlm-large-mean/train-005.tar",
+          "embeddings/v1/voxceleb-wavlm-large-mean/train-006.tar",
+          "embeddings/v1/voxceleb-wavlm-large-mean/dev-000.tar",
+          "embeddings/v1/voxceleb-wavlm-large-mean/test-000.tar"
+        ]
+      },
+      {
+        "dataset": "iemocap",
+        "input": "embeddings/v1/iemocap-wavlm-large-mean.tar"
+      }
+    ]
+  }
+}
