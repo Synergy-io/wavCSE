@@ -431,3 +431,36 @@ can assert its 25 rows and none is invented. This is therefore a
 accepted, the materialized store must be confirmed to have 25 layer slots per
 utterance (a short store raises `IndexError` in the loader rather than silently
 training on a subset, so the check is cheap and loud).
+
+---
+
+## Decision record (post-registration, 2026-09-29) — `DEC-0017`: RETAIN
+
+Appended after the pre-registration above was written. **No element of the pre-registered
+design changed** — not the hypothesis, the independent variable, the three arms, the seeds,
+the gates, the decision rules, the cost, or the authorization status.
+
+The open question this plan carried — whether the normalization-corrected configuration
+should *replace* `VARIANT_BENCHMARK_PROTOCOL.md` §2's in-category control or remain an
+additional arm — was put to the researcher and answered **`DEC-0017` (OPTION B, RETAIN)**:
+
+* historical MTRL (`mtrl_poolingwinner_25L_config.yml`, `normalize_w: true`) remains §2.1's
+  in-category control and the reproducibility anchor; it is **not** replaced or redefined;
+* the normalization-corrected configuration (`mtrl_norm_corrected_25L_config.yml`,
+  `normalize_w: false`) remains a **distinct `DG-0007` successor experimental arm**;
+* whether the corrected configuration should later *become* the standing control is a
+  separate decision for this Study's evidence, not this one.
+
+Two forward-looking passages above are affected only in their *conditionality*, and neither
+is rewritten:
+
+* **"Matched controls"** — arm 1 stands exactly as written: the historical adapted MTRL
+  config at `normalize_w: true`, the registered in-category control.
+* **"Expected information gain" (H1 →)** — the `DEC`-level consequence of H1 is narrowed by
+  `DEC-0017` to the *labelling and citation* of the control's `D2` modification. Adopting the
+  corrected arm as the standing control would be a further decision taken on this Study's
+  evidence, which this plan does not presuppose.
+
+Authorization is unchanged and still **UNRESOLVED**: `DEC-0017` authorized no compute and
+created no envelope, so this Study remains `BLOCKED` / `pre_registration` and nothing
+described here may be launched.

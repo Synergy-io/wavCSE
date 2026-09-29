@@ -31,6 +31,22 @@ A variant Study may only report a result against this protocol. If an arm cannot
 
 A variant that beats neither has not contributed. A variant that beats MTRL but not the baseline is a mechanism-level finding, not a champion.
 
+> **Control identity — raised and resolved, 2026-09-29 (`DEC-0017`, human): RETAINED.**
+> The audit of the classical MTRL arm
+> (`audits/2026-09-29-mtrl-theory-to-implementation-audit.md`) showed that §2.1's control
+> carries `normalize_w: true`, so its relation objective is evaluated on a row-unit-normalized
+> copy of the task parameter matrix (the audit's `D2`), and `DG-0007` was registered as
+> normalization-corrected MTRL. The human decision is to **retain** §2.1 as written:
+> `mtrl_poolingwinner_25L_config.yml` remains the in-category control and reproducibility
+> anchor that every variant must beat, and historical MTRL is neither replaced nor redefined.
+> The normalization-corrected configuration (`mtrl_norm_corrected_25L_config.yml`,
+> `normalize_w: false`) is a distinct **`DG-0007` successor experimental arm**, not a
+> replacement control; whether it should later *become* the standing control is a separate
+> decision to be taken on `DG-0007`'s evidence. Retaining the control does not certify its
+> label: a claim that a variant "beats classical symmetric MTRL" must name the `D2`
+> modification. **No fixed condition, endpoint, rule or control above changed** — this note
+> records a decision, and the two controls of §2 remain the two mandatory controls.
+
 ## 3. Staging
 
 * **Screen:** one explicit seed, one run per arm (variant, MTRL, baseline), with protocol and exposure checks verified before any comparison is read. A screen can only produce `PROMISING` / `REJECTED`, never a promoted claim (F1).

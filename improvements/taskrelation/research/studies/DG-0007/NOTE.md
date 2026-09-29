@@ -84,3 +84,33 @@ requests no compute, and none is authorized.
 Orchestrator review: confirm or deny authorization coverage, then schedule the
 seed-42 screen (three arms) under the matched protocol. Any ER claim that
 emerges requires the speaker-independent LOSO protocol before it is stated.
+
+---
+
+## 2026-09-29 — Protocol decision recorded: `DEC-0017` (RETAIN), §2 unchanged
+
+Appended, not substituted: the unresolved-question list above stays on record as the state the
+Study was in when the decision was taken.
+
+The researcher resolved items 2 and 3 above as **`DEC-0017` — RETAIN**:
+
+* **Historical MTRL is retained — the control and the reproducibility anchor.**
+  `improvements/taskrelation/01-mtrl/mtrl_poolingwinner_25L_config.yml` (`normalize_w: true`)
+  remains `VARIANT_BENCHMARK_PROTOCOL.md` §2.1's in-category control. It is **not** replaced
+  and **not** redefined, and §2.1's text is unchanged; a dated decision note now sits beside it.
+* **Normalization-corrected MTRL does not become the control.** It remains a distinct `DG-0007`
+  successor **experimental** arm. Whether it should later *become* the standing control is a
+  separate decision for `DG-0007`'s own evidence and is **not** settled here.
+* **Item 3's conditional is therefore answered in the retaining direction for now.** If H1
+  holds, every citation of the control must carry its documented `D2` modification — the
+  protocol note records that a "beats classical symmetric MTRL" claim has to name it — but
+  adopting the corrected arm as the standing control is not authorized by this decision. If H2
+  holds, only the documentation changes, exactly as `PLAN.md` already states.
+
+Consequences for this Study, none of them a design change:
+
+* the three arms, the independent variable (`model.normalize_w`), both gates and both decision
+  rules are **unchanged** — the control's identity was never an experimental question;
+* the Study is now blocked on **authorization coverage alone** (item 1 above remains open);
+* no compute was authorized, requested, provisioned, submitted or executed by this decision,
+  and no metric of any run was touched.

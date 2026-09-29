@@ -520,3 +520,62 @@ widened by an agent.
    pre-registered in `PLAN.md`; the goalposts do not move after seeing the result.
 3. Confirmation remains a separate, later, explicitly human-authorized stage. A `PROMISING`
    screen does not trigger it.
+
+---
+
+## DEC-0017 — HUMAN DECISION: the §2 in-category control is retained; normalization-corrected MTRL is a successor arm, not a replacement
+
+**Status:** ACTIVE — 2026-09-29 (human-authored decision; recorded by an agent cycle)
+
+**Previous direction:** The theory-to-implementation audit of the classical MTRL arm
+(`audits/2026-09-29-mtrl-theory-to-implementation-audit.md`) established that every
+evidence-carrying MTRL run, and every committed MTRL config, sets `model.normalize_w: true`.
+The arm named by `VARIANT_BENCHMARK_PROTOCOL.md` §2.1 as the in-category control therefore
+evaluates the published `Ω` closed form (TKDD 2014 Eq. (14)) and the published relation
+penalty on a row-unit-normalized copy of the task parameter matrix `W` — the audit's `D2`.
+On that evidence `DG-0007` was registered as **normalization-corrected MTRL**, and one
+question was deliberately left to the researcher rather than decided: whether the corrected
+configuration should **replace** the §2 control or remain an **additional** successor arm.
+
+**Decision (human): RETAIN.**
+
+1. Historical MTRL — `improvements/taskrelation/01-mtrl/mtrl_poolingwinner_25L_config.yml`,
+   `normalize_w: true` — **remains** the in-category benchmark/control named by
+   `VARIANT_BENCHMARK_PROTOCOL.md` §2.1. It is **not** replaced and **not** redefined.
+2. Normalization-corrected MTRL —
+   `improvements/taskrelation/01-mtrl/mtrl_norm_corrected_25L_config.yml`,
+   `normalize_w: false` — remains a **distinct `DG-0007` successor experimental arm**.
+
+Rationale recorded by the human: historical MTRL remains the existing in-category
+benchmark/control and the reproducibility anchor.
+
+**What this settles, and what it does not.**
+
+* It settles the control's **identity**. Whether the corrected configuration should later
+  *become* the standing control is a separate decision, to be taken on `DG-0007`'s evidence;
+  this entry does not pre-empt it, and adoption of the corrected arm as the standing control
+  is **not** authorized here.
+* It does **not** authorize compute for `DG-0007`. That authorization is deferred
+  deliberately and remains a later, separate gate.
+
+**Label integrity (binding, unchanged).** Retaining the control does not make its label
+accurate. §2.1's control executes a *modified* relation objective (`D2`), while `D1`, `D3`,
+`D4`, `D6` and `D7` are departures shared by every arm. §2.1 already names `normalize_w: true`
+explicitly, so the protocol stays self-documenting; any published statement that a variant
+"beats classical symmetric MTRL" must be read with that modification named. The corrected arm
+stays labelled **normalization-corrected MTRL**, never "faithful Zhang & Yeung MTRL".
+
+**Consequences.**
+
+1. `VARIANT_BENCHMARK_PROTOCOL.md` §2.1 is **unchanged**; a dated decision note records this
+   ruling beside it. No fixed condition, endpoint or rule in the protocol changed.
+2. `TR-0007`'s registered control reference (arm `classical-mtrl`,
+   `mtrl_poolingwinner_25L_config.yml`) stays valid, so its pre-registered and already
+   executing screen is unaffected and needs no retroactive amendment.
+3. `DG-0007`'s three-arm design is unchanged: matched wavCSE baseline, historical MTRL
+   (`normalize_w: true`), normalization-corrected MTRL (`normalize_w: false`); screen seed 42,
+   confirmation seeds `0–4`, all 25 layers, `smp` 0.5.
+4. `DG-0007` stays `BLOCKED` / `pre_registration`; its `blocked_on` narrows to authorization
+   coverage alone.
+5. No mechanism, no architecture and no historical number changes. No metric of any run was
+   touched.

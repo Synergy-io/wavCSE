@@ -615,9 +615,11 @@ only), and DEC-0014 activates Option 3 for the directed-relation question:
   execution configs with their `research:` identity blocks (`configs/`, verified by
   `research/tests/test_dg0007_run_identity.py`) and the pre-registered runtime gate
   (`check_runtime_faithfulness.py`). It requests no compute and **may not be launched**
-  until the authorization question is answered; whether the corrected configuration
-  should *replace* the in-category control named by `VARIANT_BENCHMARK_PROTOCOL.md` §2 is
-  a `DEC`-level human decision.
+  until the authorization question is answered. The `VARIANT_BENCHMARK_PROTOCOL.md` §2
+  question is **resolved** (`DEC-0017`, human, 2026-09-29): historical MTRL is **retained** as
+  the §2 in-category control and reproducibility anchor, and normalization-corrected MTRL
+  remains a distinct successor experimental arm — so `DG-0007` is now blocked on
+  **authorization coverage alone**.
 * the exact commit is **local-only**: `origin` publishes
   `feature/mssl-task-relation-study` at `05fa10c`, so any worker request is refused until
   the developer pushes the commit `preflight` resolves. Publication is a developer action,
@@ -734,7 +736,21 @@ submittable as registered (seed 42, three arms, one run per arm under
 (directed relation, project-original) still needs its own authorization to be designed, and
 the deferred `DG-xxxx` diagnostics stay on the backlog.
 
-Latest iteration (2026-09-29, no compute): **DG-0007 accepted into canonical; still
+Latest iteration (2026-09-29, no compute): **§2 control identity decided — RETAIN; `DG-0007`
+stays `BLOCKED` on authorization alone.** The researcher resolved the open
+`VARIANT_BENCHMARK_PROTOCOL.md` §2 question as `DEC-0017` (OPTION B): historical MTRL
+(`mtrl_poolingwinner_25L_config.yml`, `normalize_w: true`) **remains** the in-category control
+and reproducibility anchor, and normalization-corrected MTRL
+(`mtrl_norm_corrected_25L_config.yml`, `normalize_w: false`) remains a **distinct `DG-0007`
+successor experimental arm**. Historical MTRL is neither replaced nor redefined. §2.1's text is
+unchanged and now carries a dated decision note; `DG-0007`'s three-arm design, seeds (screen 42;
+confirmation `0–4`), all-25-layer policy and `smp` 0.5 are untouched, and the study stays
+`BLOCKED` / `pre_registration` with `blocked_on` narrowed to authorization coverage. No compute
+authorization was created, nothing was submitted or provisioned, and no metric of any run was
+touched. Whether the corrected configuration should later *become* the standing control stays a
+decision for `DG-0007`'s own evidence.
+
+Previous iteration (2026-09-29, no compute): **DG-0007 accepted into canonical; still
 `BLOCKED` on authorization.** The theory-to-implementation audit of the classical MTRL arm
 and its remediation were integrated from the read-only audit branch
 (`research/mtrl-theory-audit`, accepted through `46fc0f9`, verdict
