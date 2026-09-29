@@ -45,15 +45,15 @@ class SweepTests(ComputeTestCase):
         self.assertEqual(infra.stop_calls, ["w-1"])
         self.assertEqual(len(plan["performed"]), 1)
 
-    def test_running_job_protects_a_worker_past_its_deadline(self):
+    def test_deadline_stops_a_running_job_before_spend_can_continue(self):
         self.lease("w-1", deadline=DEADLINE_PAST)
         infra = FakeInfra(
             workers=[worker_record(worker_id="w-1")],
             jobs=[{"job_id": "job-1", "state": "RUNNING", "worker_id": "w-1"}],
         )
         plan = sweep_module.sweep(infra, "TR-0007", execute=True)
-        self.assertEqual(infra.stop_calls, [])
-        self.assertEqual(plan["employees"][0]["classification"], sweep_module.JOB_RUNNING)
+        self.assertEqual(infra.stop_calls, ["w-1"])
+        self.assertEqual(plan["employees"][0]["classification"], sweep_module.STALE)
 
     def test_unknown_worker_is_reported_and_untouched(self):
         infra = FakeInfra(workers=[worker_record(

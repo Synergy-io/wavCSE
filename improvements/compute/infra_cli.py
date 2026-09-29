@@ -20,6 +20,8 @@ import json
 import os
 import subprocess
 
+from dotenv import dotenv_values
+
 from improvements.compute.errors import (
     ArtifactIntegrityError,
     CapacityError,
@@ -34,6 +36,7 @@ from improvements.compute.errors import (
 from improvements.compute import resolve as resolve_module
 
 DEFAULT_TIMEOUT_SECONDS = 600.0
+_RESEARCH_SECRET_NAMES = ("MLFLOW_TRACKING_USERNAME", "MLFLOW_TRACKING_PASSWORD")
 
 # Substrings that name a genuinely transient condition. Everything else is
 # treated as non-retryable: an unrecognised failure is not evidence of a
@@ -129,6 +132,14 @@ class InfraCli(object):
         self.timeout = float(timeout)
         self.global_args = tuple(global_args)
         self.environ = dict(os.environ if environ is None else environ)
+        # The controller's gitignored .env is never copied to a worker. Only
+        # explicitly supported MLflow credentials enter the infra process and
+        # only a job spec naming them forwards them to the worker at runtime.
+        if environ is None:
+            local_values = dotenv_values(os.path.join(resolve_module.repo_root(), ".env"))
+            for name in _RESEARCH_SECRET_NAMES:
+                if not self.environ.get(name) and local_values.get(name):
+                    self.environ[name] = local_values[name]
 
     # ------------------------------------------------------------------ plumbing
 
@@ -197,19 +208,23 @@ class InfraCli(object):
         return self.run("doctor")
 
     def worker_list(self):
-        return self.run("worker", "list", json_output=True).payload or []
+        payload = self.run("worker", "list", "--read-only", json_output=True).payload
+        if not isinstance(payload, list):
+            raise ConfigurationError("infra worker list returned an incompatible JSON shape")
+        return payload
 
     def worker_show(self, worker_id):
-        return self.run("worker", "show", worker_id, json_output=True).payload
+        return self.run("worker", "show", worker_id, "--read-only", json_output=True).payload
 
     def worker_health(self, worker_id):
         return self.run("worker", "health", worker_id, json_output=True).payload
 
     def volume_list(self):
-        return self.run("volume", "list", json_output=True).payload or []
+        result = self.run("volume", "list", "--read-only", json_output=True).payload or {}
+        return result.get("volumes", []) if isinstance(result, dict) else result
 
     def volume_show(self, volume_id):
-        return self.run("volume", "show", volume_id, json_output=True).payload
+        return self.run("volume", "show", volume_id, "--read-only", json_output=True).payload
 
     def job_list(self, state=None, worker_id=None):
         args = ["job", "list"]
@@ -217,7 +232,10 @@ class InfraCli(object):
             args.extend(["--state", state])
         if worker_id:
             args.extend(["--worker", worker_id])
-        return self.run(*args, json_output=True).payload or []
+        payload = self.run(*args, json_output=True).payload
+        if not isinstance(payload, list):
+            raise ConfigurationError("infra job list returned an incompatible JSON shape")
+        return payload
 
     def job_status(self, job_id):
         """Reconcile one job. A FAILED job still returns its record."""

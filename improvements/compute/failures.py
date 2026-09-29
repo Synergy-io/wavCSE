@@ -187,6 +187,15 @@ def assess_job_outcome(record, log_text=None, outputs_verified=True):
                    "to re-run before spending again",
         )
 
+    if record.get("worker_absent") or record.get("remote_status") in (
+            "worker_absent", "worker_destroyed", "worker_terminating",
+            "workspace_absent"):
+        return _build(
+            TRANSIENT_INFRA, True,
+            reason="the worker or its workspace disappeared before the job outcome "
+                   "could be verified; this is infrastructure failure, not scientific evidence",
+        )
+
     if looks_like_oom(exit_code, log_text):
         return _build(
             RESOURCE_OOM, True,

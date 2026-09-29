@@ -134,6 +134,9 @@ def stage_outputs(plan, arm, seed, identity, outputs_dir):
                 missing.append("{}: {}".format(output["name"], exc))
             continue
         target = os.path.join(outputs_dir, _target_name(output))
+        if required and os.path.getsize(source) == 0:
+            missing.append("{}: required output is empty".format(output["name"]))
+            continue
         with open(source, "rb") as reader, open(target, "wb") as writer:
             while True:
                 chunk = reader.read(1 << 20)

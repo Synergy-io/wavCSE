@@ -135,6 +135,10 @@ def resolve(checkout=None, cli=None):
                     expanded, os.path.join(_VENV_BIN, "infra"), CLI_ENV
                 )
             )
+        if _checkout_from_executable(resolved_cli) != os.path.realpath(expanded):
+            raise ConfigurationError(
+                "the resolved infra executable does not belong to the selected "
+                "wavcse-infra checkout; refusing a mixed-version control plane")
         return InfraLocation(expanded, resolved_cli, "environment")
 
     if explicit_cli:
@@ -143,6 +147,10 @@ def resolve(checkout=None, cli=None):
                 "{}={} is not executable.".format(CLI_ENV, explicit_cli)
             )
         recovered = _checkout_from_executable(explicit_cli)
+        if not _valid_checkout(recovered):
+            raise ConfigurationError(
+                "the explicit infra executable does not resolve to a valid "
+                "wavcse-infra checkout")
         return InfraLocation(recovered, explicit_cli, "environment-cli")
 
     on_path = shutil.which("infra")

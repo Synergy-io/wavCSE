@@ -4,7 +4,7 @@ import unittest
 from decimal import Decimal
 
 from improvements.compute import ledger
-from improvements.compute.errors import ConfigurationError
+from improvements.compute.errors import BusyError, ConfigurationError
 from improvements.compute.tests.fakes import ComputeTestCase, worker_record
 
 
@@ -70,8 +70,37 @@ class SpendTests(ComputeTestCase):
         self.assertEqual(report.estimated_spend_usd, Decimal("3.25"))
         self.assertEqual(report.estimated_wall_clock_hours, Decimal("6.5"))
 
+    def test_destroyed_unknown_price_cannot_reset_budget_after_restart(self):
+        self.make_repo()
+        ledger.redeem_create("TR-0007", worker_id="w-unknown", purpose="test",
+                             envelope_digest="digest", deadline="2999-01-01T00:00:00+00:00")
+        ledger.close_lease("w-unknown", state="destroyed")
+        self.assertFalse(ledger.derive_spend([], "TR-0007").bounded)
+
+    def test_replacement_worker_adds_to_predecessor_cost(self):
+        self.make_repo()
+        ledger.redeem_create("TR-0007", worker_id="w-old", purpose="test",
+                             envelope_digest="digest", deadline="2999-01-01T00:00:00+00:00")
+        ledger.close_lease("w-old", cost_usd="2.00", wall_clock_hours="4.00",
+                           state="destroyed")
+        now = ledger.state_module.parse_timestamp("2026-09-29T02:00:00+00:00")
+        new = worker_record(worker_id="w-new", hourly="0.50",
+                            created="2026-09-29T00:00:00+00:00")
+        report = ledger.derive_spend([new], "TR-0007", now=now)
+        self.assertTrue(report.bounded)
+        self.assertEqual(report.estimated_spend_usd, Decimal("3.00"))
+
 
 class OwnershipTests(ComputeTestCase):
+    def test_shared_lease_ledger_refuses_cross_scope_concurrent_write(self):
+        self.make_repo()
+        with ledger.state_module.MutationLock("leases"):
+            with self.assertRaises(BusyError):
+                ledger.begin_create("TR-0008", purpose="test", envelope_digest="d",
+                                    request={}, deadline="2999-01-01T00:00:00+00:00")
+        self.assertEqual(ledger.all_leases(), [])
+        self.assertEqual(ledger.pending_creates(), [])
+
     def test_create_intent_blocks_a_second_paid_request(self):
         self.make_repo()
         ledger.begin_create("TR-0007", purpose="a", envelope_digest="d",
@@ -86,7 +115,8 @@ class OwnershipTests(ComputeTestCase):
             "TR-0007", purpose="a", envelope_digest="d", request={},
             deadline="2999-01-01T00:00:00+00:00",
         )
-        found = ledger.find_worker_for_intent(intent, [worker_record()])
+        found = ledger.find_worker_for_intent(intent, [worker_record(
+            name=intent["name_prefix"] + "provider-suffix")])
         self.assertIsNotNone(found)
         self.assertIsNone(
             ledger.find_worker_for_intent(intent, [worker_record(name="wavcse-other-x")])

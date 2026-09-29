@@ -96,7 +96,9 @@ class FakeInfra(object):
         self.calls.append(("worker_create", name, gpu, cloud))
         self.last_create_kwargs = dict(kwargs, name=name, gpu=gpu, cloud=cloud)
         if self.create_returncode == 0 and self.create_worker_record is not None:
-            self.workers.append(dict(self.create_worker_record))
+            record = dict(self.create_worker_record)
+            record["name"] = "wavcse-{}-fixture".format(name.lower())
+            self.workers.append(record)
         return InfraResult(("worker", "create"), self.create_returncode,
                            stderr=self.create_stderr)
 
@@ -134,6 +136,10 @@ class FakeInfra(object):
 
     def job_submit(self, spec_path, worker_id):
         self.calls.append(("job_submit", str(spec_path), worker_id))
+        if self.submit_returncode == 0 and isinstance(self.submit_payload, dict):
+            if not any(job.get("job_id") == self.submit_payload.get("job_id")
+                       for job in self.jobs):
+                self.jobs.append(dict(self.submit_payload))
         return InfraResult(("job", "submit"), self.submit_returncode,
                            payload=self.submit_payload)
 
@@ -342,6 +348,7 @@ def sample_plan(**overrides):
         "study": "TR-0007",
         "repository": "https://github.com/example/wavCSE.git",
         "task_type": "ks_si_er",
+        "environment_secrets": ["MLFLOW_TRACKING_USERNAME", "MLFLOW_TRACKING_PASSWORD"],
         "timeout_seconds": 3600,
         "device_index": 0,
         "arms": [

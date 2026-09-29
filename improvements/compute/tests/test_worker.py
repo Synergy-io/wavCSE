@@ -25,6 +25,9 @@ class EnsureWorkerTests(ComputeTestCase):
 
     def test_existing_worker_is_reused_without_creating(self):
         infra = FakeInfra(workers=[self.ready_record()])
+        ledger.redeem_create("TR-0007", worker_id="w-1", purpose="test",
+                             envelope_digest=self.view.digest,
+                             deadline="2999-01-01T00:00:00+00:00")
         created, actions = worker_module.ensure_worker(self.plan, self.view, infra=infra)
         self.assertEqual(created["id"], "w-1")
         self.assertEqual(infra.count("worker_create"), 0)
@@ -71,17 +74,70 @@ class EnsureWorkerTests(ComputeTestCase):
         self.assertEqual(len(ledger.pending_creates("TR-0007")), 1)
 
         # A later attempt must reconcile, not issue a second paid request.
-        with self.assertRaises(Exception):
+        with self.assertRaises(ReconcilableError):
             worker_module.ensure_worker(self.plan, self.view, infra=infra)
         self.assertEqual(infra.count("worker_create"), 1)
 
-    def test_failed_create_closes_the_intent(self):
+    def test_lost_create_ack_is_redeemed_after_restart(self):
+        infra = FakeInfra()
+        def lost_ack(**kwargs):
+            infra.calls.append(("worker_create", kwargs["name"]))
+            infra.workers.append(self.ready_record(
+                worker_id="w-created",
+                name="wavcse-{}-provider".format(kwargs["name"].lower())))
+            return type("R", (), {"returncode": 1, "stdout": "", "stderr": "timeout"})()
+        infra.worker_create = lost_ack
+        worker, actions = worker_module.ensure_worker(self.plan, self.view, infra=infra)
+        self.assertEqual(worker["id"], "w-created")
+        self.assertEqual(infra.count("worker_create"), 1)
+        self.assertEqual(ledger.pending_creates("TR-0007"), [])
+        self.assertEqual(ledger.leases_for("TR-0007")[0]["worker_id"], "w-created")
+
+    def test_unleased_scope_named_worker_is_not_started_or_used(self):
+        infra = FakeInfra(workers=[self.ready_record(state="STOPPED")])
+        with self.assertRaises(ReconcilableError):
+            worker_module.ensure_worker(self.plan, self.view, infra=infra)
+        self.assertEqual(infra.count("worker_start"), 0)
+
+    def test_missing_job_discovery_blocks_worker_creation(self):
+        infra = FakeInfra()
+        def missing_job_list(*args, **kwargs):
+            raise ReconcilableError("infra job list is unavailable")
+        infra.job_list = missing_job_list
+        with self.assertRaises(ReconcilableError):
+            worker_module.ensure_worker(self.plan, self.view, infra=infra)
+        self.assertEqual(infra.count("worker_create"), 0)
+
+    def test_expired_authorization_cannot_restart_a_stopped_worker(self):
+        infra = FakeInfra(workers=[self.ready_record(state="STOPPED")])
+        ledger.redeem_create("TR-0007", worker_id="w-1", purpose="test",
+                             envelope_digest=self.view.digest,
+                             deadline="2999-01-01T00:00:00+00:00")
+        ledger.close_lease("w-1", cost_usd="0.1", wall_clock_hours="0.2")
+        self.view.envelope["expires_at"] = "2000-01-01T00:00:00+00:00"
+        with self.assertRaises(Exception):
+            worker_module.ensure_worker(self.plan, self.view, infra=infra)
+        self.assertEqual(infra.count("worker_start"), 0)
+
+    def test_price_rise_stops_an_existing_paid_worker(self):
+        infra = FakeInfra(workers=[self.ready_record(hourly="0.99")])
+        ledger.redeem_create("TR-0007", worker_id="w-1", purpose="test",
+                             envelope_digest=self.view.digest,
+                             deadline="2999-01-01T00:00:00+00:00")
+        with self.assertRaises(CostError):
+            worker_module.ensure_worker(self.plan, self.view, infra=infra)
+        self.assertEqual(infra.stop_calls, ["w-1"])
+
+    def test_failed_create_keeps_the_ambiguous_intent(self):
         infra = FakeInfra()
         infra.create_returncode = 1
         infra.create_stderr = "ResourceUnavailableError: no capacity"
         with self.assertRaises(Exception):
             worker_module.ensure_worker(self.plan, self.view, infra=infra)
-        self.assertEqual(ledger.pending_creates("TR-0007"), [])
+        self.assertEqual(len(ledger.pending_creates("TR-0007")), 1)
+        with self.assertRaises(ReconcilableError):
+            worker_module.ensure_worker(self.plan, self.view, infra=infra)
+        self.assertEqual(infra.count("worker_create"), 1)
 
     def test_price_above_ceiling_after_create_is_destroyed(self):
         infra = FakeInfra()
@@ -97,16 +153,33 @@ class EnsureWorkerTests(ComputeTestCase):
             worker_module.ensure_worker(self.plan, self.view, infra=infra)
         self.assertEqual(infra.destroy_calls, ["w-1"])
 
+    def test_readiness_failure_stops_a_newly_created_paid_worker(self):
+        infra = FakeInfra()
+        infra.create_worker_record = self.ready_record()
+        infra.bootstrap_returncode = 1
+        with self.assertRaises(ReconcilableError):
+            worker_module.ensure_worker(self.plan, self.view, infra=infra)
+        self.assertEqual(infra.stop_calls, ["w-1"])
+
     def test_second_live_worker_is_not_created_under_a_limit_of_one(self):
         infra = FakeInfra(workers=[self.ready_record()])
+        ledger.redeem_create("TR-0007", worker_id="w-1", purpose="test",
+                             envelope_digest=self.view.digest,
+                             deadline="2999-01-01T00:00:00+00:00")
         worker_module.ensure_worker(self.plan, self.view, infra=infra)
         self.assertEqual(infra.count("worker_create"), 0)
 
     def test_stopped_worker_is_restarted_before_reuse(self):
         infra = FakeInfra(workers=[self.ready_record(state="STOPPED")])
+        ledger.redeem_create("TR-0007", worker_id="w-1", purpose="test",
+                             envelope_digest=self.view.digest,
+                             deadline="2999-01-01T00:00:00+00:00")
+        ledger.close_lease("w-1", cost_usd="0.10", wall_clock_hours="0.2")
         worker_module.ensure_worker(self.plan, self.view, infra=infra)
         self.assertEqual(infra.count("worker_start"), 1)
         self.assertEqual(infra.count("worker_create"), 0)
+        worker_module.stop_worker(infra, "w-1", reason="test restart accounting")
+        self.assertFalse(ledger.derive_spend(infra.workers, "TR-0007").bounded)
 
     def test_volume_selector_with_no_candidate_never_creates_a_volume(self):
         plan = jobspec.load_plan(self.write_plan(

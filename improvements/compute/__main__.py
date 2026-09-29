@@ -146,12 +146,13 @@ def _run(args):
 
     if args.verb == "envelope-check":
         view = envelope_module.load(args.scope)
-        facts = {"live_workers": []}
         try:
             infra = _infra()
             facts = ledger.derive_spend(infra.worker_list(), args.scope).facts()
-        except ComputeError:
-            pass
+        except ComputeError as exc:
+            return _emit(args, {"allowed": False, "class": "TRANSIENT_INFRA",
+                                "reason": "provider facts unavailable: {}".format(exc),
+                                "action": args.action}, EXIT_REFUSED)
         requested = None
         if args.action == envelope_module.ACTION_CREATE_WORKER:
             requested = {
@@ -231,14 +232,28 @@ def _run(args):
         infra = _infra()
         actions = []
         with _scope_lock(args.scope):
+            leased_ids = {lease.get("worker_id") for lease in ledger.active_leases(args.scope)}
+            open_jobs = [job for job in infra.job_list()
+                         if (job.get("worker_id") in leased_ids or
+                             ((job.get("spec") or {}).get("tracking") or {}).get("metadata", {}).get("scope") == args.scope)
+                         and str(job.get("state") or "").upper() in run_study.OPEN_STATES]
+            if open_jobs:
+                raise UsageError("scope has open jobs; reconcile or cancel them before stopping compute")
+            if args.destroy:
+                entries = list(run_study.load_record(args.scope)["entries"].values())
+                if not entries or any(entry.get("state") != run_study.COLLECTED for entry in entries):
+                    raise UsageError("destruction requires every recorded run to have verified outputs")
             for lease in ledger.active_leases(args.scope):
                 worker_id = lease.get("worker_id")
                 if args.destroy:
-                    worker_module.destroy_worker(infra, worker_id, reason="operator stop")
+                    result = worker_module.destroy_worker(infra, worker_id, reason="operator stop")
                     actions.append({"worker_id": worker_id, "action": "destroy"})
                 else:
-                    worker_module.stop_worker(infra, worker_id, reason="operator stop")
+                    result = worker_module.stop_worker(infra, worker_id, reason="operator stop")
                     actions.append({"worker_id": worker_id, "action": "stop"})
+                if result.returncode != 0:
+                    raise UsageError("worker {} cleanup failed; reconcile provider state"
+                                     .format(worker_id))
         return _emit(args, {"scope": args.scope, "actions": actions})
 
     raise UsageError("unhandled verb {!r}".format(args.verb))

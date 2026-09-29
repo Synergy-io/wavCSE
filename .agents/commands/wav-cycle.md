@@ -14,6 +14,15 @@ or a hard stop.
 Skills: wavcse-research-runner, wavcse-experiment-operator
 Boundaries: mutates-research-state, may-provision-compute, may-commit
 
+## ARC v1 integration gate
+
+Before a paid worker request, require a tested worker-visible mapping from every
+declared input to the loader's configured path, independent validation of the
+stored result manifest and required metrics, and a cleanup path that still
+enforces the cost envelope after the controller exits. If any is missing,
+report a HARD_STOP; a successful unit suite alone does not establish these
+runtime contracts.
+
 ## Objective
 
 Advance the programme's scientific question, not merely a score, and treat the

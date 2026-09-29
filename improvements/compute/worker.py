@@ -32,8 +32,8 @@ DEFAULT_DEADLINE_HOURS = Decimal("6")
 def _deadline_for(view, horizon_hours=None, spend=None):
     """Bounded lease lifetime: envelope expiry, wall-clock budget, and a horizon.
 
-    The tightest of the three wins, so a forgotten worker cannot bill past the
-    authorization even if nothing ever sweeps it.
+    The tightest of the three wins when the controller runs a transition or
+    sweep. A separate reaper is still required to enforce it after a crash.
     """
 
     from datetime import timedelta
@@ -46,6 +46,12 @@ def _deadline_for(view, horizon_hours=None, spend=None):
     if remaining_wall < 0:
         remaining_wall = Decimal(0)
     candidates.append(now + timedelta(seconds=float(remaining_wall * 3600)))
+    total_limit = Decimal(str(view.envelope["budget"]["max_total_gpu_usd"]))
+    consumed_usd = Decimal(0) if spend is None else spend.estimated_spend_usd
+    remaining_usd = max(Decimal(0), total_limit - consumed_usd)
+    hourly_ceiling = Decimal(str(view.envelope["budget"]["max_gpu_hourly_usd"]))
+    candidates.append(now + timedelta(seconds=float(
+        remaining_usd / hourly_ceiling * 3600)))
     candidates.append(
         now + timedelta(seconds=float(
             Decimal(str(horizon_hours or DEFAULT_DEADLINE_HOURS)) * 3600
@@ -146,13 +152,83 @@ def ensure_worker(plan, view, *, infra, purpose=None, projected_hours=None):
 
     scope = plan["study"]
     actions = []
+    # A paid Pod is pointless if this checkout cannot discover and reconcile
+    # jobs after a lost submit acknowledgement. Check that contract first.
+    infra.job_list()
     workers = infra.worker_list()
     spend = ledger.derive_spend(workers, scope)
+    if view.modified_in_tree or view.uncommitted:
+        raise CostError("compute authorization must match a committed grant")
+    for lease in ledger.active_leases(scope):
+        if lease.get("state") == "active" and lease.get("envelope_digest") != view.digest:
+            raise CostError("active worker {} belongs to a different authorization digest"
+                            .format(lease.get("worker_id")))
+    for intent in ledger.pending_creates(scope):
+        if intent.get("envelope_digest") != view.digest:
+            raise CostError("unresolved create intent belongs to a different authorization digest")
+    envelope_module.record_snapshot(view, busy=ledger.scope_is_busy(scope, workers))
 
-    existing = _select_existing(workers, scope)
+    intents = ledger.pending_creates(scope)
+    recovered = None
+    if intents:
+        if len(intents) != 1:
+            raise ReconcilableError("multiple unresolved create intents for {}".format(scope),
+                                    action="create-worker")
+        intent = intents[0]
+        recovered = ledger.find_worker_for_intent(intent, workers)
+        if recovered is None:
+            raise ReconcilableError(
+                "worker create for {} remains unresolved; no second paid request is safe"
+                .format(scope), action="create-worker")
+        ledger.redeem_create(
+            scope, worker_id=recovered["id"], purpose=intent["purpose"],
+            envelope_digest=intent["envelope_digest"], deadline=intent["deadline"],
+            request=intent["request"],
+        )
+        actions.append("reconciled create intent for {}".format(recovered["id"]))
+
+    existing = recovered or _select_existing(workers, scope)
     if existing is not None:
+        lease = _lease_for(existing["id"])
+        if lease is None or lease.get("scope") != scope or lease.get("provenance") != "arc":
+            raise ReconcilableError(
+                "scope-named worker {} has no ARC creation lease; refusing to start "
+                "or use a worker with unproven ownership".format(existing["id"]),
+                action="worker-ensure",
+            )
+        if lease.get("envelope_digest") != view.digest and lease.get("state") == "active":
+            raise CostError("worker {} was created under a different authorization digest"
+                            .format(existing["id"]))
+        hourly = _decimal_or_none(existing.get("hourly_cost"))
+        if hourly is None or hourly > Decimal(str(view.envelope["budget"]["max_gpu_hourly_usd"])):
+            if str(existing.get("state") or "").upper() != "STOPPED":
+                stopped = stop_worker(infra, existing["id"], reason="price is unknown or above ceiling")
+                if stopped.returncode != 0:
+                    raise ReconcilableError("worker {} has an unauthorized price and could not be stopped"
+                                            .format(existing["id"]), action="stop-worker")
+            raise CostError("worker {} has unknown or unauthorized provider price".format(existing["id"]))
+        requested = {"hourly_usd": str(hourly),
+                     "projected_hours": str(projected_hours or 1)}
+        decision = envelope_module.check(
+            view, envelope_module.ACTION_SUBMIT_JOB, spend.facts(), requested=requested)
+        if not decision.allowed:
+            if str(existing.get("state") or "").upper() != "STOPPED":
+                stopped = stop_worker(infra, existing["id"], reason=decision.reason)
+                if stopped.returncode != 0:
+                    raise ReconcilableError("worker {} could not be stopped after authorization "
+                                            "refusal".format(existing["id"]),
+                                            action="stop-worker")
+            decision.require()
+        if str(existing.get("state") or "").upper() == "STOPPED":
+            if not view.envelope["concurrency"]["replacement_workers_allowed"]:
+                raise CapacityError("restarting a stopped worker requires replacement authority")
+            ledger.reopen_lease(existing["id"])
         actions.append("reused worker {}".format(existing.get("id")))
-        _prepare(infra, existing.get("id"), existing)
+        try:
+            _prepare(infra, existing.get("id"), existing)
+        except ReconcilableError:
+            _stop_after_prepare_failure(infra, existing["id"])
+            raise
         actions.append("readiness ladder satisfied")
         return existing, actions
 
@@ -191,7 +267,7 @@ def ensure_worker(plan, view, *, infra, purpose=None, projected_hours=None):
     actions.append("recorded a create intent before the billable request")
 
     result = infra.worker_create(
-        name=request["name"],
+        name=intent["request_name"],
         gpu=request["gpu"],
         cloud=request["cloud"],
         image=request["image"],
@@ -207,19 +283,12 @@ def ensure_worker(plan, view, *, infra, purpose=None, projected_hours=None):
 
     created = ledger.find_worker_for_intent(intent, infra.worker_list())
     if created is None:
-        if result.returncode != 0:
-            ledger.abandon_create(scope, _failure_text(result))
-            raise ReconcilableError(
-                "the worker create for {} did not succeed and no worker with the "
-                "expected identity exists; the intent was closed. Provider said: "
-                "{}".format(scope, _failure_text(result)),
-                action="create-worker",
-            )
         raise ReconcilableError(
-            "the worker create for {} returned success but no worker with the "
+            "the worker create for {} returned {} but no worker with the "
             "expected generated name is visible yet. The intent stays open and "
             "the paid request is never repeated; reconcile with `sweep` or "
-            "`worker ensure` once the provider lists it.".format(scope),
+            "`worker ensure` once the provider lists it. Provider said: {}".format(
+                scope, result.returncode, _failure_text(result)),
             action="create-worker",
         )
 
@@ -237,8 +306,11 @@ def ensure_worker(plan, view, *, infra, purpose=None, projected_hours=None):
     actual = _decimal_or_none(created.get("hourly_cost"))
     ceiling = Decimal(str(view.envelope["budget"]["max_gpu_hourly_usd"]))
     if actual is not None and actual > ceiling:
-        infra.worker_destroy(worker_id)
-        ledger.close_lease(worker_id, state="destroyed")
+        destruction = destroy_worker(infra, worker_id, reason="price above ceiling")
+        if destruction.returncode != 0:
+            raise ReconcilableError("worker {} has an unauthorized price and its destroy "
+                                    "request failed; it still needs cleanup".format(worker_id),
+                                    action="destroy-worker")
         raise CostError(
             "the created worker reports ${}/hour, above the authorized ceiling "
             "${}/hour; it was destroyed immediately rather than left billing".format(
@@ -246,14 +318,21 @@ def ensure_worker(plan, view, *, infra, purpose=None, projected_hours=None):
             )
         )
     if actual is None:
-        infra.worker_destroy(worker_id)
-        ledger.close_lease(worker_id, state="destroyed")
+        destruction = destroy_worker(infra, worker_id, reason="price unknown")
+        if destruction.returncode != 0:
+            raise ReconcilableError("worker {} has an unknown price and its destroy "
+                                    "request failed; it still needs cleanup".format(worker_id),
+                                    action="destroy-worker")
         raise CostError(
             "the provider did not report a price for the created worker, so the "
             "authorization cannot be enforced; it was destroyed immediately"
         )
 
-    _prepare(infra, worker_id)
+    try:
+        _prepare(infra, worker_id)
+    except ReconcilableError:
+        _stop_after_prepare_failure(infra, worker_id)
+        raise
     actions.append("readiness ladder satisfied")
     return created, actions
 
@@ -318,20 +397,33 @@ def _prepare(infra, worker_id, worker=None):
     return None
 
 
+def _stop_after_prepare_failure(infra, worker_id):
+    result = stop_worker(infra, worker_id, reason="readiness failed")
+    if result.returncode != 0:
+        raise ReconcilableError(
+            "worker {} failed readiness and could not be stopped; cleanup remains pending"
+            .format(worker_id), action="stop-worker")
+
+
 def stop_worker(infra, worker_id, *, reason):
     """Stop compute billing. Reversible, so it is always permitted."""
 
     spend_before = None
     lease = _lease_for(worker_id)
+    if lease is None:
+        raise CapacityError("worker {} has no scope lease; refusing to stop it".format(worker_id))
     if lease is not None:
         workers = infra.worker_list()
+        matching = [item for item in workers if item.get("id") == worker_id]
+        if not matching or not ledger.worker_belongs_to(matching[0].get("name"), lease["scope"]):
+            raise CapacityError("worker {} no longer matches its recorded scope".format(worker_id))
         spend_before = _accrued_for(workers, worker_id)
     result = infra.worker_stop(worker_id)
     if result.returncode == 0:
         ledger.close_lease(
             worker_id,
             cost_usd=spend_before,
-            wall_clock_hours=_elapsed_hours(worker_id),
+            wall_clock_hours=_elapsed_hours(worker_id, workers),
             state="stopped",
         )
         state_module.append_event(
@@ -350,7 +442,9 @@ def destroy_worker(infra, worker_id, *, reason, allow_adopted=False):
     """
 
     lease = _lease_for(worker_id)
-    if lease is not None and lease.get("provenance") == "adopted" and not allow_adopted:
+    if lease is None:
+        raise CapacityError("worker {} has no ARC creation lease".format(worker_id))
+    if lease.get("provenance") != "arc":
         raise CapacityError(
             "worker {} matched the scope name prefix but has no creation record; "
             "it may be stopped but not destroyed by automation".format(worker_id)
@@ -359,8 +453,11 @@ def destroy_worker(infra, worker_id, *, reason, allow_adopted=False):
     wall_clock = None
     if lease is not None:
         workers = infra.worker_list()
+        matching = [item for item in workers if item.get("id") == worker_id]
+        if not matching or not ledger.worker_belongs_to(matching[0].get("name"), lease["scope"]):
+            raise CapacityError("worker {} no longer matches its recorded scope".format(worker_id))
         spend_before = _accrued_for(workers, worker_id)
-        wall_clock = _elapsed_hours(worker_id)
+        wall_clock = _elapsed_hours(worker_id, workers)
     result = infra.worker_destroy(worker_id)
     if result.returncode == 0:
         ledger.close_lease(
@@ -385,24 +482,32 @@ def _accrued_for(workers, worker_id):
     for worker in workers:
         if worker.get("id") == worker_id:
             hourly = _decimal_or_none(worker.get("hourly_cost"))
-            created = state_module.parse_timestamp(worker.get("created_at"))
+            lease = _lease_for(worker_id) or {}
+            created = (state_module.parse_timestamp(worker.get("last_started_at"))
+                       if lease.get("closed_cost_usd") is not None else
+                       state_module.parse_timestamp(worker.get("created_at")))
             if hourly is None or created is None:
                 return None
             elapsed = state_module.utc_now() - created
             hours = Decimal(str(max(elapsed.total_seconds(), 0.0))) / Decimal(3600)
-            return hourly * hours
+            prior = _decimal_or_none(lease.get("closed_cost_usd")) or Decimal(0)
+            return prior + hourly * hours
     return None
 
 
-def _elapsed_hours(worker_id):
+def _elapsed_hours(worker_id, workers=None):
     lease = _lease_for(worker_id)
     if not lease:
         return None
-    created = state_module.parse_timestamp(lease.get("created_at"))
+    record = next((item for item in (workers or ()) if item.get("id") == worker_id), {})
+    created = (state_module.parse_timestamp(record.get("last_started_at"))
+               if lease.get("closed_wall_clock_hours") is not None else
+               state_module.parse_timestamp(record.get("created_at")))
     if created is None:
         return None
     elapsed = state_module.utc_now() - created
-    return Decimal(str(max(elapsed.total_seconds(), 0.0))) / Decimal(3600)
+    prior = _decimal_or_none(lease.get("closed_wall_clock_hours")) or Decimal(0)
+    return prior + Decimal(str(max(elapsed.total_seconds(), 0.0))) / Decimal(3600)
 
 
 def _decimal_or_none(value):

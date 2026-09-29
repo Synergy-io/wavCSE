@@ -485,6 +485,12 @@ def check(view, action, facts, requested=None):
     maximum = int(concurrency["max_simultaneous_workers"])
     live = list(facts.get("live_workers") or [])
     live_count = len(live)
+    if action in _COSTLY_ACTIONS and live_count > maximum:
+        return Decision(False, "CAPACITY",
+                        "{} workers are already billable for {}, above the authorized "
+                        "concurrent limit of {}; reconcile and stop the excess before "
+                        "further paid work".format(live_count, view.scope, maximum),
+                        action=action)
 
     if action == ACTION_CREATE_WORKER:
         # Concurrency is about workers that still bill, not about how many were

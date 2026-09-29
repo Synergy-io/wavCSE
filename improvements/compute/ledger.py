@@ -20,6 +20,8 @@ fails closed for new spend instead of under-reporting it.
 """
 
 import os
+import uuid
+from functools import wraps
 from decimal import Decimal
 
 from improvements.compute import state as state_module
@@ -80,6 +82,17 @@ def _save(path, document):
     state_module.write_json_atomically(path, document)
 
 
+def _serialized_lease_write(operation):
+    """Protect the shared ledger across different scope controllers."""
+
+    @wraps(operation)
+    def locked(*args, **kwargs):
+        with state_module.MutationLock("leases"):
+            return operation(*args, **kwargs)
+
+    return locked
+
+
 def all_leases():
     return list(_leases_document()[1]["leases"])
 
@@ -100,6 +113,7 @@ def pending_creates(scope=None):
     return [intent for intent in intents if intent.get("scope") == scope]
 
 
+@_serialized_lease_write
 def begin_create(scope, *, purpose, envelope_digest, request, deadline):
     """Record a creation intent *before* the billable request.
 
@@ -111,14 +125,16 @@ def begin_create(scope, *, purpose, envelope_digest, request, deadline):
     path, document = _leases_document()
     prefix = name_prefix_for(scope)
     for intent in document["pending_creates"]:
-        if intent.get("name_prefix") == prefix and intent.get("status") == "pending":
+        if str(intent.get("name_prefix") or "").startswith(prefix) and intent.get("status") == "pending":
             raise ConfigurationError(
                 "an earlier worker create for {} is still unresolved (intent "
                 "started {}); reconcile it with `sweep` before requesting another "
                 "paid resource".format(scope, intent.get("created_at"))
             )
+    nonce = uuid.uuid4().hex[:12]
     intent = {
-        "name_prefix": prefix,
+        "name_prefix": prefix + nonce + "-",
+        "request_name": scope + "-" + nonce,
         "scope": scope,
         "purpose": purpose,
         "envelope_digest": envelope_digest,
@@ -152,6 +168,7 @@ def find_worker_for_intent(intent, workers):
     return matches[0]
 
 
+@_serialized_lease_write
 def redeem_create(scope, *, worker_id, purpose, envelope_digest, deadline, request=None):
     """Convert a resolved intent into an active lease."""
 
@@ -159,7 +176,8 @@ def redeem_create(scope, *, worker_id, purpose, envelope_digest, deadline, reque
     prefix = name_prefix_for(scope)
     document["pending_creates"] = [
         intent for intent in document["pending_creates"]
-        if not (intent.get("name_prefix") == prefix and intent.get("status") == "pending")
+        if not (str(intent.get("name_prefix") or "").startswith(prefix)
+                and intent.get("status") == "pending")
     ]
     existing = [lease for lease in document["leases"]
                 if lease.get("worker_id") == worker_id]
@@ -192,6 +210,20 @@ def redeem_create(scope, *, worker_id, purpose, envelope_digest, deadline, reque
     return lease
 
 
+@_serialized_lease_write
+def reopen_lease(worker_id):
+    """Mark an already accounted stopped worker active before restarting it."""
+
+    path, document = _leases_document()
+    for lease in document["leases"]:
+        if lease.get("worker_id") == worker_id:
+            lease["state"] = "active"
+            _save(path, document)
+            return lease
+    raise ConfigurationError("worker {} has no ARC lease".format(worker_id))
+
+
+@_serialized_lease_write
 def abandon_create(scope, reason):
     """Drop an intent whose create provably did not happen."""
 
@@ -200,7 +232,7 @@ def abandon_create(scope, reason):
     kept = []
     dropped = []
     for intent in document["pending_creates"]:
-        if intent.get("name_prefix") == prefix and intent.get("status") == "pending":
+        if str(intent.get("name_prefix") or "").startswith(prefix) and intent.get("status") == "pending":
             dropped.append(intent)
         else:
             kept.append(intent)
@@ -214,6 +246,7 @@ def abandon_create(scope, reason):
     return dropped
 
 
+@_serialized_lease_write
 def adopt_worker(worker, *, scope, deadline, envelope_digest=None):
     """Record a matching but unleased worker without claiming authority over it.
 
@@ -252,6 +285,7 @@ def adopt_worker(worker, *, scope, deadline, envelope_digest=None):
     return lease
 
 
+@_serialized_lease_write
 def record_job(worker_id, *, job_key, job_id):
     """Attach a submitted job to the lease of the worker that runs it."""
 
@@ -267,6 +301,7 @@ def record_job(worker_id, *, job_key, job_id):
     return None
 
 
+@_serialized_lease_write
 def close_lease(worker_id, *, cost_usd=None, wall_clock_hours=None, state="stopped"):
     """Freeze a lease's accrued cost so it survives the provider record.
 
@@ -279,12 +314,17 @@ def close_lease(worker_id, *, cost_usd=None, wall_clock_hours=None, state="stopp
     updated = None
     for lease in document["leases"]:
         if lease.get("worker_id") == worker_id:
+            was_active = lease.get("state") == "active"
             lease["state"] = state
             lease["closed_at"] = state_module.isoformat(state_module.utc_now())
             if cost_usd is not None:
                 lease["closed_cost_usd"] = str(cost_usd)
+            elif was_active:
+                lease["closed_cost_usd"] = None
             if wall_clock_hours is not None:
                 lease["closed_wall_clock_hours"] = str(wall_clock_hours)
+            elif was_active:
+                lease["closed_wall_clock_hours"] = None
             updated = lease
             break
     _save(path, document)
@@ -428,9 +468,15 @@ def derive_spend(workers, scope, leases=None, now=None):
 
     closed_cost = Decimal(0)
     closed_wall_clock = Decimal(0)
+    unknowns = []
     for lease in leases:
         if lease.get("scope") != scope:
             continue
+        if lease.get("state") in ("stopped", "destroyed") and \
+                (lease.get("closed_cost_usd") is None or
+                 lease.get("closed_wall_clock_hours") is None):
+            unknowns.append("closed lease {} has no verified accrued cost or time"
+                            .format(lease.get("worker_id")))
         if lease.get("closed_cost_usd") is not None:
             closed_cost += _decimal_or_none(lease["closed_cost_usd"]) or Decimal(0)
         if lease.get("closed_wall_clock_hours") is not None:
@@ -439,7 +485,6 @@ def derive_spend(workers, scope, leases=None, now=None):
             )
 
     entries = []
-    unknowns = []
     seen = set()
     for worker in workers:
         name = str(worker.get("name") or "")
@@ -454,8 +499,13 @@ def derive_spend(workers, scope, leases=None, now=None):
         # The provider's own most-recent start is the honest basis for the
         # current billing period: a worker stopped and started again does not
         # bill from its original creation.
-        created = state_module.parse_timestamp(worker.get("last_started_at")) or \
-            state_module.parse_timestamp(worker.get("created_at"))
+        if lease and lease.get("closed_cost_usd") is not None:
+            created = state_module.parse_timestamp(worker.get("last_started_at"))
+            if billable and created is None:
+                unknowns.append("restarted worker {} has no provider last-start time"
+                                .format(worker_id))
+        else:
+            created = state_module.parse_timestamp(worker.get("created_at"))
         end = now
         if not billable and lease and lease.get("closed_at"):
             end = state_module.parse_timestamp(lease.get("closed_at")) or now

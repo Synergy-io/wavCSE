@@ -49,14 +49,14 @@ def classify(worker, *, scope, lease, jobs=(), now=None,
         job for job in jobs
         if str(job.get("state") or "").upper() in ("PENDING", "PREPARING", "RUNNING")
     ]
-    if open_jobs:
-        return JOB_RUNNING, "{} job(s) still open".format(len(open_jobs))
-    if lease is not None and lease.get("pending_outputs"):
-        return AWAITING_OUTPUTS, "outputs not yet verified"
     if deadline is not None and now >= deadline:
         return STALE, "lease deadline passed at {}".format(
             state_module.isoformat(deadline)
         )
+    if open_jobs:
+        return JOB_RUNNING, "{} job(s) still open".format(len(open_jobs))
+    if lease is not None and lease.get("pending_outputs"):
+        return AWAITING_OUTPUTS, "outputs not yet verified"
     if state in _ACTIVE_STATES:
         return ACTIVE_HEALTHY, "active and inside its deadline"
     return STOPPED, "provider state {} does not bill compute".format(state)
@@ -134,6 +134,9 @@ def sweep(infra, scope, *, view=None, execute=False, jobs=None, now=None):
     jobs = infra.job_list() if jobs is None else jobs
     jobs_by_worker = {}
     for job in jobs:
+        metadata = ((job.get("spec") or {}).get("tracking") or {}).get("metadata") or {}
+        if metadata.get("scope") != scope:
+            continue
         jobs_by_worker.setdefault(job.get("worker_id"), []).append(job)
 
     plan = plan_actions(
@@ -148,9 +151,12 @@ def sweep(infra, scope, *, view=None, execute=False, jobs=None, now=None):
         if entry["action"] == "stop":
             from improvements.compute import worker as worker_module
 
-            worker_module.stop_worker(
+            result = worker_module.stop_worker(
                 infra, entry["worker_id"], reason=entry["reason"]
             )
+            if result.returncode != 0:
+                raise CapacityError("worker {} could not be stopped at its deadline"
+                                    .format(entry["worker_id"]))
             performed.append(dict(entry, performed=True))
         elif entry["action"] == "destroy":
             raise CapacityError(

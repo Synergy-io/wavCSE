@@ -62,6 +62,19 @@ class ResolutionTests(ComputeTestCase):
         self.assertEqual(location.cli, binary)
         self.assertEqual(location.checkout, root)
 
+    def test_mismatched_checkout_and_cli_are_refused(self):
+        first = self.fake_checkout()
+        second = os.path.join(self.home, "other-infra")
+        os.makedirs(os.path.join(second, ".venv", "bin"), exist_ok=True)
+        binary = os.path.join(second, ".venv", "bin", "infra")
+        with open(binary, "w", encoding="utf-8") as handle:
+            handle.write("#!/bin/sh\nexit 0\n")
+        os.chmod(binary, 0o755)
+        os.environ[resolve_module.CHECKOUT_ENV] = first
+        os.environ[resolve_module.CLI_ENV] = binary
+        with self.assertRaises(ConfigurationError):
+            resolve_module.resolve()
+
     def test_non_executable_cli_is_refused(self):
         path = os.path.join(self.home, "infra")
         with open(path, "w", encoding="utf-8") as handle:

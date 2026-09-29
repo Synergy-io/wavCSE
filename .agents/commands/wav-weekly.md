@@ -12,7 +12,7 @@ invent progress from conversational context, and never smooth over a
 disagreement between records.
 
 Skills: wavcse-experiment-operator
-Boundaries: writes-reports, no-commit, no-paid-compute
+Boundaries: read-only, no-commit, no-paid-compute
 
 ## Weekly period
 
@@ -20,11 +20,8 @@ Boundaries: writes-reports, no-commit, no-paid-compute
 - Unless another period is requested, report the research week ending on the
   most recent Tuesday: the current Tuesday if today is Tuesday, otherwise the
   preceding Tuesday.
-- Name the report by its Tuesday end date and write it to
-  `improvements/taskrelation/research/weekly/<YYYY-MM-DD>.md`, updating an
-  existing report for that week rather than duplicating it.
-- Maintain one row per report in
-  `improvements/taskrelation/research/weekly/INDEX.md`.
+- Deliver the report in the conversation. Generating a weekly briefing never
+  writes a research record; a separately requested publication may do so.
 
 ## Must not
 
@@ -33,7 +30,7 @@ Boundaries: writes-reports, no-commit, no-paid-compute
 - Never present a smoke test or an edited old file as substantive progress.
 - Never omit or soften a negative result.
 - Never claim significance, causation or a champion without the evidence.
-- Never write outside the report file and the weekly index.
+- Never write any file or commit while answering this read-only command.
 - Never commit, and never launch or buy compute.
 
 ## Steps
@@ -65,13 +62,13 @@ Boundaries: writes-reports, no-commit, no-paid-compute
    glance, and one supervisor paragraph.
 6. Label single-seed and speaker-leaky results as such, and state explicitly
    where records disagree instead of choosing a side.
-7. Update the weekly index, then reply with the period, report path, strongest
+7. Reply with the period, strongest
    conclusion, biggest unresolved question, next-period priority and the
    supervisor paragraph.
 
 ## Durable state
 
-- Reports: `improvements/taskrelation/research/weekly/`.
-- Index: `improvements/taskrelation/research/weekly/INDEX.md`.
-- Source records are read-only for this command; if a record looks wrong,
+- Existing reports: `improvements/taskrelation/research/weekly/`.
+- Existing index: `improvements/taskrelation/research/weekly/INDEX.md`.
+- All records are read-only for this command; if a record looks wrong,
   disclose the disagreement in the report rather than editing the record.

@@ -15,6 +15,12 @@ COMMIT = "a" * 40
 
 
 class PlanValidationTests(ComputeTestCase):
+    def test_runtime_secrets_are_limited_to_the_required_mlflow_pair(self):
+        for names in ([], ["MLFLOW_TRACKING_PASSWORD"], ["GITHUB_TOKEN"]):
+            plan = sample_plan(environment_secrets=names)
+            with self.assertRaises(ConfigurationError):
+                jobspec.validate_plan(plan)
+
     def test_sample_plan_is_valid(self):
         jobspec.validate_plan(sample_plan())
 
@@ -47,6 +53,7 @@ class SpecTests(ComputeTestCase):
         super(SpecTests, self).setUp()
         self.make_repo()
         self.plan = jobspec.load_plan(self.write_plan(sample_plan()))
+        self.commit()
 
     def build(self, **overrides):
         kwargs = dict(stage="screen", arm="mssl", seed=42, commit=COMMIT,

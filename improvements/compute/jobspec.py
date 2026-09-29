@@ -52,6 +52,7 @@ _ALLOWED_OUTPUT_KINDS = ("checkpoint", "results_file", "gradient_diagnostics")
 WRAPPER_MODULE = "improvements.compute.worker_stage"
 DEFAULT_SETUP_ARGV = ("uv", "sync", "--locked")
 DEFAULT_TIMEOUT_SECONDS = 86400
+_ALLOWED_RUNTIME_SECRETS = {"MLFLOW_TRACKING_USERNAME", "MLFLOW_TRACKING_PASSWORD"}
 
 
 def _fail(field, message):
@@ -92,6 +93,15 @@ def validate_plan(plan):
     _require(isinstance(plan.get("study"), str) and plan["study"].strip(),
              "study", "must be a study identifier")
     _check_secret_free(plan, "root")
+    secret_names = plan.get("environment_secrets", [])
+    _require(isinstance(secret_names, list) and all(
+        isinstance(name, str) and name in _ALLOWED_RUNTIME_SECRETS
+        for name in secret_names), "environment_secrets",
+        "may name only the MLflow credentials required by this research workload")
+    _require(len(set(secret_names)) == len(secret_names), "environment_secrets",
+             "must not repeat a name")
+    _require(set(secret_names) == _ALLOWED_RUNTIME_SECRETS, "environment_secrets",
+             "must declare both MLflow credentials for a recorded research job")
 
     repository = plan.get("repository", "")
     _require(repository.startswith("https://"), "repository",
@@ -372,7 +382,19 @@ def _plan_relative(plan):
     path = plan.get("_path")
     if not path:
         raise ConfigurationError("plan has no source path; load it with load_plan()")
-    return os.path.relpath(path, repo_root())
+    root = os.path.realpath(repo_root())
+    real_path = os.path.realpath(path)
+    if not real_path.startswith(root + os.sep):
+        raise RepositoryConflictError("compute plan must be inside the research checkout")
+    relative = os.path.relpath(real_path, root)
+    tracked = subprocess.run(
+        ["git", "-C", root, "ls-files", "--error-unmatch", "--", relative],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        universal_newlines=True,
+    )
+    if tracked.returncode != 0:
+        raise RepositoryConflictError("compute plan {} is not tracked by Git".format(relative))
+    return relative
 
 
 def repo_root():
@@ -467,7 +489,7 @@ def git_state(root=None):
             "cannot read HEAD in {}: {}".format(root, head.stderr.strip())
         )
     status = subprocess.run(
-        ["git", "-C", root, "status", "--porcelain", "--untracked-files=no"],
+        ["git", "-C", root, "status", "--porcelain", "--untracked-files=all"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, universal_newlines=True,
     )
     dirty = [line for line in status.stdout.splitlines() if line.strip()]

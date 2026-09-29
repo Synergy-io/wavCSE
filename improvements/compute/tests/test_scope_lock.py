@@ -1,13 +1,38 @@
 """Two orchestrator instances must never work the same scope at once."""
 
 import unittest
+import multiprocessing
 
 from improvements.compute import state as state_module
 from improvements.compute.errors import BusyError
 from improvements.compute.tests.fakes import ComputeTestCase
 
 
+def _hold_lock_until_killed(connection):
+    with state_module.scope_lock("TR-0007"):
+        connection.send("locked")
+        connection.recv()
+
+
 class ScopeLockTests(ComputeTestCase):
+    def test_a_second_process_is_refused_and_crash_releases_lock(self):
+        parent, child = multiprocessing.Pipe()
+        process = multiprocessing.Process(target=_hold_lock_until_killed, args=(child,))
+        process.start()
+        try:
+            self.assertEqual(parent.recv(), "locked")
+            with self.assertRaises(BusyError):
+                with state_module.scope_lock("TR-0007"):
+                    self.fail("second controller must not enter")
+        finally:
+            process.terminate()
+            process.join(timeout=5)
+            parent.close()
+            child.close()
+        self.assertFalse(process.is_alive())
+        with state_module.scope_lock("TR-0007"):
+            pass
+
     def test_a_second_holder_is_refused_rather_than_waiting(self):
         with state_module.scope_lock("TR-0007"):
             with self.assertRaises(BusyError) as caught:
@@ -40,6 +65,7 @@ class ScopeLockTests(ComputeTestCase):
         self.make_repo()
         self.write_envelope("TR-0007")
         self.commit()
+        self.fake_control_plane()
         with state_module.scope_lock("TR-0007"):
             with self.assertRaises(CliBusyError):
                 with cli._scope_lock("TR-0007"):
@@ -58,6 +84,7 @@ class ScopeLockTests(ComputeTestCase):
         self.make_repo()
         self.write_envelope("TR-0007")
         self.commit()
+        self.fake_control_plane()
         with state_module.scope_lock("TR-0007"):
             picture = status_module.build("TR-0007", infra=None, jobs=[])
             self.assertEqual(picture["scope"], "TR-0007")

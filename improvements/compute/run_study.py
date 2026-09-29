@@ -17,6 +17,9 @@ instead of submitting a second job.
 """
 
 import os
+import re
+import subprocess
+from decimal import Decimal
 
 from improvements.compute import envelope as envelope_module
 from improvements.compute import failures, jobspec, ledger, worker as worker_module
@@ -24,8 +27,10 @@ from improvements.compute import state as state_module
 from improvements.compute.errors import (
     ArtifactIntegrityError,
     AuthorizationError,
+    CostError,
     ImplementationBugError,
     ReconcilableError,
+    RepositoryConflictError,
     UsageError,
 )
 
@@ -94,18 +99,23 @@ def _entry(record, key, *, arm, seed, plan, stage):
     return entry
 
 
-def _viewport(scope, *, repo_root=None):
+def _viewport(scope, *, repo_root=None, infra=None):
     """Load the envelope and record the digest this run acts under."""
 
     view = envelope_module.load(scope, repo_root)
     busy = ledger.scope_is_busy(scope)
+    if infra is not None:
+        busy = busy or any(
+            ((job.get("spec") or {}).get("tracking") or {}).get("metadata", {}).get("scope") == scope
+            and str(job.get("state") or "").upper() in OPEN_STATES
+            for job in infra.job_list())
     envelope_module.record_snapshot(view, busy=busy)
     return view
 
 
-def _match_provider_job(jobs, spec):
+def _match_provider_job(jobs, spec, excluded=()):
     for job in jobs:
-        if jobspec.looks_like_duplicate(job, spec):
+        if job.get("job_id") not in excluded and jobspec.looks_like_duplicate(job, spec):
             return job
     return None
 
@@ -124,9 +134,10 @@ def reconcile(scope, plan, stage, *, infra, record=None):
         if entry.get("job_id"):
             continue
         spec = _spec_for(plan, stage, arm, seed, scope, commit)
-        match = _match_provider_job(jobs, spec)
+        match = _match_provider_job(jobs, spec, entry.get("previous_job_ids") or ())
         if match is not None:
             entry["job_id"] = match.get("job_id")
+            entry["submission_pending"] = False
             entry["worker_id"] = match.get("worker_id")
             entry["state"] = SUBMITTED
             entry["adopted_at"] = state_module.isoformat(state_module.utc_now())
@@ -140,12 +151,34 @@ def reconcile(scope, plan, stage, *, infra, record=None):
             )
 
     for entry in record["entries"].values():
-        if not entry.get("job_id"):
+        if not entry.get("job_id") or entry.get("state") == COLLECTED:
+            continue
+        if (entry.get("stage") != stage or
+                entry.get("job_key", "").rsplit("::", 1)[-1] != commit):
+            if entry.get("state") not in (COLLECTED, FAILED):
+                raise RepositoryConflictError(
+                    "an earlier commit or stage still has an open job; reconcile it before "
+                    "advancing the current plan")
             continue
         record_view = infra.job_status(entry["job_id"])
+        if record_view.get("job_id") != entry["job_id"]:
+            raise ArtifactIntegrityError("infra returned a different job identity for {}"
+                                         .format(entry["job_id"]))
+        expected = _spec_for(plan, entry["stage"], entry["arm"], entry["seed"],
+                             scope, entry["job_key"].rsplit("::", 1)[-1])
+        if not jobspec.looks_like_duplicate(record_view, expected):
+            raise ArtifactIntegrityError("job {} no longer matches its committed study identity"
+                                         .format(entry["job_id"]))
+        if str(record_view.get("state") or "").upper() == SUCCEEDED.upper() and \
+                record_view.get("exit_code") != 0:
+            raise ArtifactIntegrityError("job {} claims success without exit code zero"
+                                         .format(entry["job_id"]))
         entry["state"] = str(record_view.get("state") or entry["state"]).lower()
         entry["worker_id"] = record_view.get("worker_id") or entry.get("worker_id")
         entry["exit_code"] = record_view.get("exit_code")
+        entry["worker_absent"] = bool(record_view.get("worker_absent"))
+        entry["remote_status"] = record_view.get("remote_status")
+        entry["state_reason"] = record_view.get("state_reason")
         entry["outputs"] = record_view.get("outputs")
         entry["finished_at"] = record_view.get("finished_at") or entry.get("finished_at")
     save_record(scope, record)
@@ -172,7 +205,18 @@ def _inputs_for(plan, repo_root=None):
     from improvements.compute import artifacts
 
     root = repo_root or jobspec.repo_root()
-    path = os.path.join(root, inputs_file) if not os.path.isabs(inputs_file) else inputs_file
+    root = os.path.realpath(root)
+    path = os.path.realpath(os.path.join(root, inputs_file))
+    if not path.startswith(root + os.sep):
+        raise ArtifactIntegrityError("inputs_file must be inside the committed checkout")
+    relative = os.path.relpath(path, root)
+    tracked = subprocess.run(
+        ["git", "-C", root, "ls-files", "--error-unmatch", "--", relative],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        universal_newlines=True,
+    )
+    if tracked.returncode != 0:
+        raise ArtifactIntegrityError("inputs_file {} is not tracked by Git".format(relative))
     if not os.path.exists(path):
         raise ArtifactIntegrityError(
             "the plan declares inputs_file {} but it does not exist".format(inputs_file)
@@ -209,6 +253,11 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
         if entry.get("job_id") or entry.get("state") == COLLECTED:
             continue
 
+        if entry.get("submission_pending"):
+            raise ReconcilableError(
+                "submission for {} remains ambiguous; reconcile the infra job record "
+                "before issuing another request".format(key), action="submit-job")
+
         decision = envelope_module.check(
             view, envelope_module.ACTION_SUBMIT_JOB,
             ledger.derive_spend(infra.worker_list(), scope).facts(),
@@ -231,14 +280,38 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
         if dry_run:
             continue
 
+        worker_id = entry.get("worker_id") or _worker_id_for(infra, scope)
+        known_jobs = infra.job_list()
+        match = _match_provider_job(known_jobs, spec, entry.get("previous_job_ids") or ())
+        if match is not None:
+            entry["job_id"] = match["job_id"]
+            entry["worker_id"] = match.get("worker_id")
+            entry["state"] = SUBMITTED
+            entry["submission_pending"] = False
+            entry["spec_digest"] = jobspec.verification_digest(spec)
+            save_record(scope, record)
+            submitted.append(entry["job_id"])
+            break
+        open_jobs = [job for job in known_jobs
+                     if str(job.get("state") or "").upper() in OPEN_STATES
+                     and (job.get("worker_id") == worker_id or
+                          ((job.get("spec") or {}).get("tracking") or {}).get("metadata", {}).get("scope") == scope)]
+        if open_jobs:
+            raise ReconcilableError(
+                "worker {} or scope {} already has an open job; reconcile it before "
+                "submitting another seed".format(worker_id, scope), action="submit-job")
+
         path = spec_path(scope, spec)
         jobspec.write_spec(spec, path)
         entry["spec_digest"] = jobspec.verification_digest(spec)
-        entry["worker_id"] = entry.get("worker_id") or _worker_id_for(infra, scope)
+        entry["worker_id"] = worker_id
+        entry["submission_pending"] = True
+        save_record(scope, record)
         result = infra.job_submit(path, entry["worker_id"])
         record_view = result.payload if isinstance(result.payload, dict) else None
         if record_view and record_view.get("job_id"):
             entry["job_id"] = record_view["job_id"]
+            entry["submission_pending"] = False
             entry["state"] = SUBMITTED
             entry["attempts"] = int(entry.get("attempts", 0)) + 1
             entry["submitted_at"] = state_module.isoformat(state_module.utc_now())
@@ -251,18 +324,19 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
                 kind="job-submitted",
             )
             submitted.append(entry["job_id"])
-            continue
+            break
 
         # Submission returned no usable record: the request may or may not have
         # landed. Never re-submit blindly; reconcile by the deterministic identity.
         jobs = infra.job_list()
-        match = _match_provider_job(jobs, spec)
+        match = _match_provider_job(jobs, spec, entry.get("previous_job_ids") or ())
         if match is not None:
             entry["job_id"] = match.get("job_id")
+            entry["submission_pending"] = False
             entry["worker_id"] = match.get("worker_id")
             entry["state"] = SUBMITTED
             submitted.append(entry["job_id"])
-            continue
+            break
         entry["failure_class"] = failures.TRANSIENT_INFRA
         save_record(scope, record)
         raise ReconcilableError(
@@ -274,7 +348,8 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
             action="submit-job",
         )
 
-    save_record(scope, record)
+    if not dry_run:
+        save_record(scope, record)
     return {"planned": planned, "submitted": submitted, "warnings": warnings}
 
 
@@ -300,20 +375,34 @@ def collect(scope, plan, stage, *, record, require_all=True):
 
     collected = []
     unverified = []
+    commit = jobspec.git_state()["head"]
     for arm, seed in plan_jobs(plan, stage):
+        key = jobspec.job_key(scope, plan["study"], stage, arm, seed, commit)
         for entry in record["entries"].values():
-            if entry.get("arm") != arm or entry.get("seed") != seed:
-                continue
-            if entry.get("stage") != stage:
+            if entry.get("job_key") != key:
                 continue
             if entry.get("state") != SUCCEEDED:
                 continue
             outputs = entry.get("outputs") or []
-            missing = [
-                output for output in outputs
-                if output.get("required", True)
-                and not (output.get("persisted") and output.get("verified_size_bytes") is not None)
-            ]
+            expected = jobspec.declared_outputs(plan, jobspec.arm_by_name(plan, arm), seed)
+            by_path = {}
+            for output in outputs:
+                by_path.setdefault(output.get("path"), []).append(output)
+            missing = []
+            for declared in expected:
+                if not declared["required"]:
+                    continue
+                matches = by_path.get(declared["path"], [])
+                if len(matches) != 1:
+                    missing.append(declared)
+                    continue
+                output = matches[0]
+                if (output.get("artifact") != declared["artifact"]
+                        or output.get("persisted") is not True
+                        or not isinstance(output.get("verified_size_bytes"), int)
+                        or output["verified_size_bytes"] <= 0
+                        or not re.fullmatch(r"[0-9a-f]{64}", str(output.get("sha256") or ""))):
+                    missing.append(declared)
             if missing:
                 entry["state"] = FAILED
                 entry["failure_class"] = failures.ARTIFACT_INTEGRITY
@@ -345,7 +434,7 @@ def assess(record, *, stage=None, logs=None):
                              "class": failures.SCIENTIFIC_FAILURE, "retry": False,
                              "reason": "completed execution; the outcome is evidence"})
             continue
-        if state in (SUBMITTED, MONITORING, PENDING) and entry.get("job_id"):
+        if state in (SUBMITTED, MONITORING, PENDING, "preparing", "running") and entry.get("job_id"):
             outcomes.append({"job_key": entry["job_key"], "state": state,
                              "class": None, "retry": None})
             continue
@@ -355,7 +444,9 @@ def assess(record, *, stage=None, logs=None):
             continue
         log_text = (logs or {}).get(entry.get("job_id"), "")
         classification = failures.assess_job_outcome(
-            {"state": "FAILED", "exit_code": entry.get("exit_code")},
+            {"state": "FAILED", "exit_code": entry.get("exit_code"),
+             "worker_absent": entry.get("worker_absent"),
+             "remote_status": entry.get("remote_status")},
             log_text=log_text,
             outputs_verified=bool(entry.get("outputs_verified")),
         )
@@ -390,21 +481,36 @@ def assess(record, *, stage=None, logs=None):
 def finish(scope, plan, *, infra, view, record):
     """Stop or destroy scope compute once nothing useful is pending."""
 
+    if not record["entries"]:
+        return {"finished": False, "reason": "no verified study work is recorded"}
     pending = [
         entry for entry in record["entries"].values()
-        if entry.get("state") not in (COLLECTED, FAILED)
+        if entry.get("state") != COLLECTED
     ]
     if pending:
         return {"finished": False, "reason": "{} entries are not collected".format(len(pending))}
+    leased_ids = {lease.get("worker_id") for lease in ledger.active_leases(scope)}
+    open_jobs = [job for job in infra.job_list()
+                 if (job.get("worker_id") in leased_ids or
+                     ((job.get("spec") or {}).get("tracking") or {}).get("metadata", {}).get("scope") == scope)
+                 and str(job.get("state") or "").upper() in OPEN_STATES]
+    if open_jobs:
+        return {"finished": False, "reason": "{} scope jobs are still open".format(len(open_jobs))}
     stop_policy = view.envelope["stop_policy"]
     actions = []
     for lease in ledger.active_leases(scope):
         worker_id = lease.get("worker_id")
         if stop_policy.get("destroy_on_completion"):
-            worker_module.destroy_worker(infra, worker_id, reason="stage complete")
+            result = worker_module.destroy_worker(infra, worker_id, reason="stage complete")
+            if result.returncode != 0:
+                raise ReconcilableError("worker {} destroy failed; cleanup remains pending"
+                                        .format(worker_id), action="destroy-worker")
             actions.append({"worker_id": worker_id, "action": "destroy"})
         elif int(stop_policy.get("retain_for_reuse_hours", 0)) == 0:
-            worker_module.stop_worker(infra, worker_id, reason="stage complete")
+            result = worker_module.stop_worker(infra, worker_id, reason="stage complete")
+            if result.returncode != 0:
+                raise ReconcilableError("worker {} stop failed; cleanup remains pending"
+                                        .format(worker_id), action="stop-worker")
             actions.append({"worker_id": worker_id, "action": "stop"})
     return {"finished": True, "actions": actions}
 
@@ -420,14 +526,48 @@ def advance(scope, plan, stage, *, infra, record=None, view=None, dry_run=False)
     """
 
     record = record if record is not None else load_record(scope)
-    view = view or _viewport(scope)
+    if dry_run:
+        view = view or envelope_module.load(scope)
+        preview = submit_pending(scope, plan, stage, infra=infra, view=view,
+                                 record=record, dry_run=True, require_clean=False)
+        return {"step": "dry-run", "adopted": [], "outcomes": [],
+                "submit": preview, "in_flight": []}
+    view = view or _viewport(scope, infra=infra)
+    if not dry_run:
+        spend = ledger.derive_spend(infra.worker_list(), scope)
+        budget = view.envelope["budget"]
+        violation = None
+        if envelope_module.is_expired(view.envelope):
+            violation = "authorization expired"
+        elif not spend.bounded:
+            violation = "provider cost facts are unbounded"
+        elif spend.estimated_spend_usd >= Decimal(str(budget["max_total_gpu_usd"])):
+            violation = "total GPU budget exhausted"
+        elif spend.estimated_wall_clock_hours >= Decimal(str(budget["max_wall_clock_hours"])):
+            violation = "paid wall-clock budget exhausted"
+        elif any(item["hourly_cost"] is None or item["hourly_cost"] >
+                 Decimal(str(budget["max_gpu_hourly_usd"])) for item in spend.billable):
+            violation = "provider price is unknown or above the hourly ceiling"
+        if violation:
+            for lease in ledger.active_leases(scope):
+                if any(item["id"] == lease.get("worker_id") and item["billable"]
+                       for item in spend.billable):
+                    stopped = worker_module.stop_worker(
+                        infra, lease["worker_id"], reason=violation)
+                    if stopped.returncode != 0:
+                        raise ReconcilableError(
+                            "{}; worker {} could not be stopped".format(
+                                violation, lease["worker_id"]), action="stop-worker")
+            raise CostError("scope {} stopped before job reconciliation: {}".format(
+                scope, violation))
     record, adopted = reconcile(scope, plan, stage, infra=infra, record=record)
     outcomes = assess(record, stage=stage)
 
     entries = [entry for entry in record["entries"].values()
                if entry.get("stage") == stage]
     in_flight = [entry for entry in entries
-                 if entry.get("state") in (SUBMITTED, MONITORING) and entry.get("job_id")]
+                 if entry.get("state") in (SUBMITTED, MONITORING, "preparing", "running")
+                 and entry.get("job_id")]
     submittable = [
         entry for entry in entries
         if entry.get("state") == PENDING

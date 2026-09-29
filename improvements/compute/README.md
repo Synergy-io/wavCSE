@@ -61,14 +61,14 @@ Everything under `~/.local/state/wavcse-research/` (override with
 | `specs/` | the exact job specs submitted, for auditing a run |
 | `compute-events.jsonl` | append-only audit trail of every action and refusal |
 
-Worker identity is derived from the name: the control plane prefixes every
-worker it creates with its own marker, and this backend passes the scope as the
-human prefix, so a scope-prefixed name *is* the ownership record.
+Worker discovery uses a scope prefix plus a unique create-intent nonce. A
+matching name alone is insufficient to start or destroy a worker: ARC also
+requires its recorded creation lease.
 
 ## Accounting
 
 Spend is derived, never self-reported: each scope worker's provider-reported
-hourly price and observed lifetime are summed from `infra worker list --json`,
+hourly price and observed lifetime are summed from `infra worker list --read-only --json`,
 and a lease that this backend closed contributes its frozen cost. Every figure
 is labelled an estimate. An unknown price or an unknown creation time makes the
 total unbounded, and unbounded totals fail closed for new spend.
@@ -89,6 +89,17 @@ total unbounded, and unbounded totals fail closed for new spend.
   volume, and never touches a worker it cannot attribute to a scope.
 - Failure classes, retry bounds and the "OOM never changes the science" rule are
   implemented in `failures.py` and stated in `.agents/policies/autonomy.md`.
+
+## Integration limits found in adversarial review
+
+Do not treat this backend as approval for a paid autonomous cycle yet. Its
+deadlines are enforced when the controller runs a transition or sweep; there
+is no independent reaper after a controller crash. The declared input files
+are placed under the job workspace, while current embedding loaders expect an
+unpacked tree at the configured embedding root. Output records prove stored
+bytes, but ARC does not yet parse the stored manifest or metrics before
+collection and destructive cleanup. These gaps need a zero-cost integration
+design and tests before an authorization is granted.
 
 ## Study compute plan
 

@@ -24,6 +24,7 @@ class AdversarialTestCase(ComputeTestCase):
             "job_id": "job-" + self.name,
             "name": self.name,
             "state": state,
+            "exit_code": 0 if state == "SUCCEEDED" else None,
             "worker_id": "w-1",
             "outputs": outputs or [],
             "spec": {
@@ -47,10 +48,14 @@ class CrashRecoveryTests(AdversarialTestCase):
         """The job finished while nobody was watching: collect, do not resubmit."""
 
         record = self.submit()
+        expected = jobspec.declared_outputs(
+            self.plan, jobspec.arm_by_name(self.plan, "mssl"), 42)
         self.infra.jobs = [self.payload(
             state="SUCCEEDED",
-            outputs=[{"path": "outputs/mssl_s42/MANIFEST.json", "required": True,
-                      "persisted": True, "verified_size_bytes": 10}],
+            outputs=[{"path": item["path"], "artifact": item["artifact"],
+                      "required": item["required"], "persisted": True,
+                      "verified_size_bytes": 10, "sha256": "a" * 64}
+                     for item in expected],
         )]
         run_study.reconcile("TR-0007", self.plan, "screen", infra=self.infra,
                             record=record)
@@ -150,6 +155,15 @@ class PriceChangeTests(AdversarialTestCase):
 
 
 class ConcurrencyTests(AdversarialTestCase):
+    def test_two_existing_billable_workers_block_submission(self):
+        self.infra.workers = [worker_record(worker_id="w-one"),
+                              worker_record(worker_id="w-two")]
+        decision = envelope_module.check(
+            self.view, envelope_module.ACTION_SUBMIT_JOB,
+            ledger.derive_spend(self.infra.workers, "TR-0007").facts())
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.klass, "CAPACITY")
+
     def test_two_workers_under_a_limit_of_one_cannot_be_created(self):
         self.infra.workers = [worker_record(worker_id="w-live")]
         decision = envelope_module.check(
