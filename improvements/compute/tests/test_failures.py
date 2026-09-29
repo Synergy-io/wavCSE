@@ -105,3 +105,43 @@ class JobOutcomeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PreparationFailureTests(unittest.TestCase):
+    """A job that never started is infrastructure, not a defect in the science."""
+
+    def test_prepare_enospc_is_transient_and_retryable(self):
+        # Regression: the worker's container disk filled during checkout and the
+        # entry carried the reason in state_reason, but the classifier ignored
+        # it and called the failure an IMPLEMENTATION_BUG -- not retryable, so a
+        # paid worker sat idle with two arms unrun.
+        assessment = failures.assess_job_outcome({
+            "state": "FAILED",
+            "exit_code": None,
+            "state_reason": ("Job prepare failed on RunPod worker abc: git checkout "
+                             "failed (exit 128): fatal: write error: No space left on "
+                             "device"),
+            "outputs_verified": False,
+        })
+        self.assertEqual(assessment.klass, failures.TRANSIENT_INFRA)
+        self.assertTrue(assessment.retryable)
+        self.assertFalse(assessment.scientific_change_allowed)
+
+    def test_prepare_transfer_failure_is_transient(self):
+        assessment = failures.assess_job_outcome({
+            "state": "FAILED",
+            "exit_code": None,
+            "note": "materializing inputs: connection reset by peer",
+            "outputs_verified": False,
+        })
+        self.assertEqual(assessment.klass, failures.TRANSIENT_INFRA)
+        self.assertTrue(assessment.retryable)
+
+    def test_a_reasonless_failure_is_still_an_implementation_bug(self):
+        assessment = failures.assess_job_outcome({
+            "state": "FAILED",
+            "exit_code": 1,
+            "outputs_verified": False,
+        })
+        self.assertEqual(assessment.klass, failures.IMPLEMENTATION_BUG)
+        self.assertFalse(assessment.retryable)

@@ -58,6 +58,24 @@ MAX_ATTEMPTS = {
     ARTIFACT_INTEGRITY: 2,
 }
 
+# Markers in a recorded failure reason that name a *preparation* failure --
+# checkout, transfer, or the worker running out of space -- rather than a
+# failure of the run itself. Preparing a job is infrastructure: no science has
+# happened yet, so the same committed spec may be attempted again inside the
+# envelope's bounded attempts. Without this the reason text was ignored and an
+# ENOSPC during checkout was classified as a code defect, which is not
+# retryable and would strand a paid worker with two unrun arms.
+_INFRA_PREPARE_MARKERS = (
+    "job prepare failed",
+    "no space left on device",
+    "failed to write",
+    "fetch-pack",
+    "could not resolve host",
+    "connection reset",
+    "connection refused",
+    "timed out",
+)
+
 # Marker text in a job log for an out-of-memory kill, which is the only
 # resource failure that may legitimately change the *resource*.
 _OOM_MARKERS = (
@@ -217,6 +235,18 @@ def assess_job_outcome(record, log_text=None, outputs_verified=True):
             TRANSIENT_INFRA, True,
             reason="the worker or its workspace disappeared before the job outcome "
                    "could be verified; this is infrastructure failure, not scientific evidence",
+        )
+
+    reason_text = " ".join(
+        str(record.get(field) or "") for field in ("state_reason", "failure_reason", "note")
+    ).lower()
+    if any(marker in reason_text for marker in _INFRA_PREPARE_MARKERS):
+        return _build(
+            TRANSIENT_INFRA, True,
+            reason=("the job failed while it was still being prepared on the worker "
+                    "(checkout, transfer, or worker storage), which is infrastructure "
+                    "rather than a property of the run: {}".format(
+                        reason_text.strip()[:300] or "no reason recorded")),
         )
 
     if looks_like_oom(exit_code, log_text):
