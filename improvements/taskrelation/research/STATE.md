@@ -736,7 +736,20 @@ submittable as registered (seed 42, three arms, one run per arm under
 (directed relation, project-original) still needs its own authorization to be designed, and
 the deferred `DG-xxxx` diagnostics stay on the backlog.
 
-Latest iteration (2026-09-29, no compute result): **DG-0007 screen attempted, blocked on
+Latest iteration (2026-09-29, no compute result): **DG-0007 screen re-attempted; two
+worker-environment defects block it.** With the MLflow credentials supplied, `34d2ad7`
+published and the lease reconciled, a replacement worker ran the first arm, which failed in
+under a second. Two independent, reproducible causes, neither scientific: **(1)**
+`paths.root_data_path: ~/voice_dataset` is not a declared plan input — no study plan carries a
+dataset root, the plan materialises embeddings only, and the network volume mounts at
+`/workspace/cache` — so the loader cannot find `speech_commands_v0.01`; it affects `TR-0007`'s
+arms identically. **(2)** the cheapest-available GPU (RTX PRO 4000 Blackwell, `sm_120`) cannot
+run the pinned PyTorch, which tops out at `sm_90`; future screens must select an `sm_89`/`sm_86`
+part. The worker was stopped and destroyed, its lease reconciled, the volume retained and
+`TR-0007` left untouched; `$0.1532` of `$3.00` was spent and no evidence was produced. Both
+defects are prerequisites for any resumed attempt. Record: `studies/DG-0007/NOTE.md`.
+
+Previous iteration (2026-09-29, no compute result): **DG-0007 screen attempted, blocked on
 controller credentials; nothing ran.** `DEC-0018` granted the screen (`$3.00`, 3-hour
 window, one DG-0007-owned worker) and `authorizations/DG-0007.yaml` was committed at
 `8fb395b`. A separate worker (`b0ucfxlwrw3iz7`, RTX A4500, `$0.25/h`) was provisioned from an

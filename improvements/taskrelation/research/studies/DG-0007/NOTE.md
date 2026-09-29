@@ -171,3 +171,57 @@ gitignored `.env` in the orchestration checkout), then re-run `worker-ensure` fo
 `advance --scope DG-0007 --plan improvements/taskrelation/research/studies/DG-0007/compute/plan.json
 --stage screen`. Provisioning took 68 s, so resuming is cheap; the envelope at `8fb395b`
 expires `2026-09-30T00:11:20+00:00`.
+
+---
+
+## 2026-09-29 — Screen re-attempted after the credential fix: blocked by two worker-environment defects
+
+Appended, not substituted. The screen did **not** complete and no scientific result exists.
+
+**What was done.** The missing `MLFLOW_TRACKING_USERNAME`/`MLFLOW_TRACKING_PASSWORD` were
+supplied to the orchestrator environment, `34d2ad7` was published, the destroyed worker's
+lease was reconciled, and a replacement worker (`07mzo87vkscf0d`, `$0.57/h`) was provisioned
+from the independent checkout in `82.9 s`. All three seed-42 arms were submitted.
+
+**Outcome.** `mtrl_norm_corrected` (`job-345107f5f8054f5e`) ran its setup and then failed the
+training command in **under one second** (exit 1); `mtrl` (`job-8e50e52f3be04c72`) was then
+submitted and also failed. The framework classified the first as `IMPLEMENTATION_BUG`, which is
+deliberately never retried, so the screen stopped rather than burning the budget.
+
+**Root cause 1 — the raw dataset root is not a declared input.** The command died on
+
+```
+RuntimeError: The path /root/voice_dataset/speechcommand/SpeechCommands/speech_commands_v0.01
+doesn't exist.
+```
+
+`paths.root_data_path: ~/voice_dataset` in every study config is **not** declared by any
+compute plan: the plan's `inputs.json` materialises the *embeddings* only, the network volume
+mounts at `/workspace/cache`, and no study plan — TR-0007's included — declares a dataset root.
+A fresh worker therefore cannot construct the dataset object the loader needs. This is a
+repository-level prerequisite gap, and it is consistent with TR-0007's own
+`classical-mtrl`/`wavcse-baseline` arm failures.
+
+**Root cause 2 — the chosen GPU cannot run the pinned PyTorch.** The pod reported
+
+```
+NVIDIA RTX PRO 4000 Blackwell with CUDA capability sm_120 is not compatible with the current
+PyTorch installation. The current PyTorch install supports CUDA capabilities sm_50 … sm_90.
+```
+
+Choosing the cheapest GPU by price was wrong: "compatible" must include the image's PyTorch
+build, so an `sm_120` Blackwell part is unusable and an `sm_89`/`sm_86` part (RTX 4090,
+A4500/A5000) is required. This is a reusable selection rule for every future screen.
+
+**Why the plan was again not adapted.** Providing the dataset root would mean declaring new
+multi-gigabyte inputs with digests this repository does not carry, and pointing
+`root_data_path` at a path that exists would change what the loader reads; both are changes to
+the authorized screen's scientific configuration/inputs, which the grant forbids.
+
+**Cleanup.** The replacement worker was stopped and destroyed; its lease was reconciled to
+`vanished` through `ledger.close_lease` with its cost preserved (`$0.1335`). The `200 GB`
+EU-RO-1 volume was **not** destroyed. `TR-0007` was not stopped, restarted, adopted or
+otherwise touched, and the live `~/projects/wavCSE` worktree was never modified.
+
+**Spend.** `$0.0197` (attempt 1 worker) + `$0.1335` (attempt 2 worker) = **`$0.1532`** of the
+`$3.00` grant. No arm produced evidence; no checkpoint, manifest or metrics file exists.
