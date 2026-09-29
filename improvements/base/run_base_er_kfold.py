@@ -39,6 +39,7 @@ _IMPROVEMENTS_DIR = os.path.dirname(_THIS_DIR)              # .../improvements
 _REPO_ROOT = os.path.dirname(_IMPROVEMENTS_DIR)              # .../wavCSE (git repo root)
 _DOWNSTREAM_DIR = os.path.join(_REPO_ROOT, "downstream")
 
+sys.path.insert(0, _REPO_ROOT)          # exposes improvements as a package
 sys.path.insert(0, _DOWNSTREAM_DIR)     # exposes dataset/, model/, trainer/, evaluator/, utils/ as top-level
 sys.path.insert(0, _IMPROVEMENTS_DIR)   # exposes mlflow_utils as top-level
 sys.path.insert(0, _THIS_DIR)           # exposes kfold_iemocap, run_base as top-level
@@ -47,6 +48,9 @@ import mlflow
 import mlflow_utils
 from loading_utils import get_loader_device
 from seed_utils import set_seed
+from improvements.device_utils import assert_training_device
+from improvements.eval_utils import evaluation_run_ids
+from improvements.run_identity import emit_run_identity
 
 from torch.utils.data import Subset
 
@@ -174,6 +178,14 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
         validation_data=val_data,
         ignore_index=ignore_index
     )
+
+    # State this fold's run identity explicitly, before training starts.
+    emit_run_identity(
+        trainer, model="wavcse-baseline-er-kfold", task_type=task_type,
+        seed=cfg.get("seed"),
+        extra={"fold_index": fold_index, "num_folds": num_folds},
+    )
+
     trainer.train()
 
     for tag in ["best", "opt"]:
@@ -183,6 +195,10 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
 
     task_array = trainer.task_array
     er_idx = task_array.index("er")
+
+    # Bind evaluation to this fold's own run, never to the newest directory
+    # under the fold root (see improvements/eval_utils.py).
+    results_run_id, checkpoint_run_id = evaluation_run_ids(trainer)
 
     fold_er_metrics = {}
     fold_task_metrics = {}
@@ -196,7 +212,9 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
             dataset=test_data,
             checkpoints_root=fold_checkpoints_root,
             checkpoint_tag=tag,
-            ignore_index=ignore_index
+            ignore_index=ignore_index,
+            results_run_id=results_run_id,
+            checkpoint_run_id=checkpoint_run_id,
         )
         stats = evaluator.write_metrics()
         evaluator.write_predictions_csv()
@@ -292,6 +310,11 @@ def main():
 
     setup_logging(log_level=log_level)
     device = set_device(device_type=device_type, device_index=device_index)
+    # A run that declares cuda must not silently train on CPU (downstream/ is
+    # frozen; see improvements/device_utils.py).
+    assert_training_device(
+        device_type, device_index, device, context="run_base_er_kfold"
+    )
 
     mlflow_utils.setup_mlflow(cfg)
     run_suffix = "_".join(

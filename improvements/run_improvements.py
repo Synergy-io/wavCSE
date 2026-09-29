@@ -54,6 +54,9 @@ from utils.parse_transformer_layers import parse_transformer_layers
 
 from improvements.loading_utils import get_loader_device
 from improvements.seed_utils import set_seed
+from improvements.device_utils import assert_training_device
+from improvements.eval_utils import evaluation_run_ids
+from improvements.run_identity import emit_run_identity
 from improvements import mlflow_utils
 from improvements.gradient_diagnostics import make_gradient_diagnostic_trainer
 
@@ -276,6 +279,15 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
         cfg.get("device", {}).get("type", "cuda"),
         device_index if device_index is not None else cfg.get("device", {}).get("index", 0)
     )
+    # A run that declares cuda must not silently train on CPU (see
+    # improvements/device_utils.py). downstream/ is frozen, so the assertion is
+    # made here, at the boundary the entry point owns.
+    assert_training_device(
+        cfg.get("device", {}).get("type", "cuda"),
+        device_index if device_index is not None else cfg.get("device", {}).get("index", 0),
+        device,
+        context="run_improvements --model {}".format(model_type),
+    )
 
     # Parse transformer layers
     transformer_layer_array = parse_transformer_layers(
@@ -338,6 +350,15 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
             train_data, val_data, ignore_index
         )
 
+        # State the run identity explicitly, before training starts, so nothing
+        # downstream has to infer "which run" from the newest directory.
+        emit_run_identity(
+            trainer, model=model_type, task_type=task_type,
+            seed=resolved_seed,
+            extra={"study_id": (cfg.get("research") or {}).get("study_id"),
+                   "stage": (cfg.get("research") or {}).get("stage")},
+        )
+
         # Train
         trainer.train()
 
@@ -348,6 +369,9 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
 
         # Evaluate
         task_array = trainer.task_array
+        # Bind evaluation to this process's own run, never to the newest
+        # directory under the root (see improvements/eval_utils.py).
+        results_run_id, checkpoint_run_id = evaluation_run_ids(trainer)
         for tag in ["opt", "best", "epoch"]:
             try:
                 evaluator = MultiTasksModelEvaluator(
@@ -360,6 +384,8 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
                     dataset=test_data,
                     checkpoint_tag=tag,
                     ignore_index=ignore_index,
+                    results_run_id=results_run_id,
+                    checkpoint_run_id=checkpoint_run_id,
                 )
                 stats = evaluator.write_metrics()
                 evaluator.write_predictions_csv()
@@ -373,7 +399,17 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
     return model
 
 
-def main():
+def main(argv=None):
+    """Run the requested model variants; return a process exit code.
+
+    An implementation or runtime failure in any requested arm is reported and
+    makes the process exit non-zero, because callers (and, under the compute
+    backend, `infra job submit`) treat exit 0 as a successful execution. A
+    scientifically negative result is NOT a failure: it comes out of a run that
+    completed and wrote its outputs, so it still exits 0 and is interpreted
+    later as evidence.
+    """
+
     parser = argparse.ArgumentParser(
         description="Run wavCSE architectural improvements"
     )
@@ -401,7 +437,7 @@ def main():
              "e.g. by taskrelation/02-lnp/ whose configs live outside "
              "taskrelation/configs/."
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.config is not None and args.model == "all":
         parser.error("--config cannot be combined with --model all")
@@ -418,6 +454,7 @@ def main():
         models_to_run = [args.model]
 
     results = {}
+    failures = []
     for mtype in models_to_run:
         if args.config is not None:
             # Explicit --config override (see the argparse help; used by
@@ -431,23 +468,38 @@ def main():
         else:
             config_path = os.path.join(config_dir, f"{mtype}_config.yml")
         if not os.path.exists(config_path):
-            print(f"Warning: No config found for {mtype} at {config_path}")
+            # A requested arm whose config is missing could not run at all.
+            # Skipping it silently used to exit 0, which reported success for
+            # work that never happened.
+            message = (
+                f"No config found for {mtype} at {config_path}; the requested "
+                f"arm did not run"
+            )
+            print(f"Error: {message}", file=sys.stderr)
+            failures.append((mtype, message))
             continue
         try:
             results[mtype] = run_single_model(
                 mtype, args.task_type, config_path, args.device_index, args.seed
             )
         except Exception as e:
-            print(f"Error running {mtype}: {e}")
+            print(f"Error running {mtype}: {e}", file=sys.stderr)
             import traceback
             traceback.print_exc()
+            failures.append((mtype, "{}: {}".format(type(e).__name__, e)))
 
     print("\n" + "="*60)
+    if failures:
+        print("  RUN FAILED for {}".format(", ".join(name for name, _ in failures)))
+        print("="*60)
+        for name, reason in failures:
+            print("  {}: {}".format(name, reason), file=sys.stderr)
+        return 1
     print("  All model runs completed.")
     print("="*60)
 
-    return results
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

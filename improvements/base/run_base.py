@@ -38,6 +38,9 @@ import mlflow
 import mlflow_utils
 from loading_utils import get_loader_device
 from seed_utils import set_seed
+from improvements.device_utils import assert_training_device
+from improvements.eval_utils import evaluation_run_ids
+from improvements.run_identity import emit_run_identity
 from improvements.gradient_diagnostics import make_gradient_diagnostic_trainer
 
 from dataset.load_embedding import LoadEmbedding
@@ -128,6 +131,11 @@ def main():
 
     setup_logging(log_level=log_level)
     device = set_device(device_type=device_type, device_index=device_index)
+    # A run that declares cuda must not silently train on CPU (downstream/ is
+    # frozen; see improvements/device_utils.py).
+    assert_training_device(
+        device_type, device_index, device, context="run_base --task_type " + task_type
+    )
 
     # ----------------------------
     # Pre-run disk guard: this is a shared machine whose root disk has
@@ -219,6 +227,13 @@ def main():
             ignore_index=ignore_index,
             seed=seed,
         )
+
+        # State the run identity explicitly, before training starts.
+        emit_run_identity(
+            trainer, model="wavcse-baseline", task_type=task_type, seed=seed,
+            extra={"study_id": study_id, "stage": stage},
+        )
+
         trainer.train()
 
         for tag in ["best", "opt"]:
@@ -230,6 +245,9 @@ def main():
         # Evaluate opt / best / epoch checkpoints
         # ----------------------------
         task_array = trainer.task_array
+        # Bind evaluation to this process's own run, never to the newest
+        # directory under the root (see improvements/eval_utils.py).
+        results_run_id, checkpoint_run_id = evaluation_run_ids(trainer)
         for tag in ["opt", "best", "epoch"]:
             evaluator = MultiTasksModelEvaluator(
                 model=model,
@@ -240,7 +258,9 @@ def main():
                 dataset=test_data,
                 checkpoints_root=checkpoints_root,
                 checkpoint_tag=tag,
-                ignore_index=ignore_index
+                ignore_index=ignore_index,
+                results_run_id=results_run_id,
+                checkpoint_run_id=checkpoint_run_id,
             )
             stats = evaluator.write_metrics()
             evaluator.write_predictions_csv()
