@@ -730,7 +730,7 @@ endpoint; the screen plan and preflight are prepared but **nothing was submitted
 recorded rather than smoothed over: the tracking repository already holds `TR-0007__screen__*`
 runs from a code line absent from this repository's history (seed 0; `p-mssl` 0.9607 vs
 0.9744/0.9737 for the controls; all `rejected`). Two inputs remain the researcher's: the λ₂
-rule and the compute envelope.
+rule and the compute envelope. The screen's exact commit is now `8b40eede8ceddfd4209ca0c3ef503786461c7f21`, published to `origin/feature/mssl-task-relation-study` and verified worker-fetchable by the exact-commit preflight (`available: True`, mechanism `ls-remote-ref`); the deterministic plan renders three job specs (`TR-0007__screen__{p-mssl,classical-mtrl,wavcse-baseline}__s42`), each carrying its arm's method, layer policy and declared inputs, and nothing was submitted.
 
 Previous iteration (2026-09-29, no compute): **ARC v1 zero-cost integration exercise,
 research-side.** No GPU run, no worker, no job, no authorization. Established: the deployed
