@@ -1,5 +1,18 @@
 # MSSL_PREDICTIONS — falsifiable sparse-precision outcomes for the registered `TR-0007` screen
 
+> **Status note (2026-09-29, integration).** This document was written against checkout
+> `664c572` / `9955166`, before the TR-0007 screen closed and before DG-0007 was registered. Its
+> reasoning, derivations and predictions are unchanged and none of its claims is withdrawn; only
+> sentences that report a *corrected seed-42 TR-0007 result*, a *DG-0007 record*, or an *edge-support
+> reading* as absent **in this checkout** are stale, and they are preserved as that checkout's
+> history. Since then: the screen closed `REJECTED` at the researcher-fixed `λ₂ = 0.01` (dense
+> support, all three partial correlations `+0.4911`), DG-0007 is registered and pre-registered with
+> **no result**, and the post-TR-0007 reconciliation — including the exact-solve reading that makes
+> the published `λ₂` axis empty of a scale fix — is
+> [`POST_TR0007_SYNTHESIS.md`](./POST_TR0007_SYNTHESIS.md) (§5 lists every stale sentence by file and
+> line). Source: `research/taskrelation-literature` `9955166`, `a53f29d`, integrated here.
+
+
 **Scope.** This is a **prediction** document for the already-registered `TR-0007` p-MSSL arm
 (§"Fixed arm facts" below) and for the sparse-vs-dense relation questions that arm can and
 cannot answer. It registers **no** study, creates **no** authorization, launches **no** run,

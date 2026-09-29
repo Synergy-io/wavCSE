@@ -1,5 +1,18 @@
 # TR-0008: directed-object predictions versus useful directional transfer
 
+> **Status note (2026-09-29, integration).** This document was written against checkout
+> `664c572` / `9955166`, before the TR-0007 screen closed and before DG-0007 was registered. Its
+> reasoning, derivations and predictions are unchanged and none of its claims is withdrawn; only
+> sentences that report a *corrected seed-42 TR-0007 result*, a *DG-0007 record*, or an *edge-support
+> reading* as absent **in this checkout** are stale, and they are preserved as that checkout's
+> history. Since then: the screen closed `REJECTED` at the researcher-fixed `λ₂ = 0.01` (dense
+> support, all three partial correlations `+0.4911`), DG-0007 is registered and pre-registered with
+> **no result**, and the post-TR-0007 reconciliation — including the exact-solve reading that makes
+> the published `λ₂` axis empty of a scale fix — is
+> [`POST_TR0007_SYNTHESIS.md`](./POST_TR0007_SYNTHESIS.md) (§5 lists every stale sentence by file and
+> line). Source: `research/taskrelation-literature` `9955166`, `a53f29d`, integrated here.
+
+
 **Status:** theory only. [DEC-0014](../../../../improvements/taskrelation/research/DECISIONS.md) names `TR-0008` as a **project-original** directed head-summary mechanism; this checkout's [STATE.md](../../../../improvements/taskrelation/research/STATE.md) says it is **not registered** and the exact rule is not set. The published aligned-vector methods [AMTL](https://proceedings.mlr.press/v48/leeb16.pdf) and the primary-verified [GAMTL](https://www.ijcai.org/Proceedings/2019/0444.pdf) are *motivation*, not faithful algorithms over 12/1251/4-way wavCSE heads. Do not prescribe an equation for an unregistered TR-0008 or change its protocol. [ASYMMETRIC_RELATIONS.md](ASYMMETRIC_RELATIONS.md), [DIRECTIONAL_EVIDENCE.md](DIRECTIONAL_EVIDENCE.md), [VARIANT_BENCHMARK_PROTOCOL.md](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md).
 
 ## Three increasingly demanding claims

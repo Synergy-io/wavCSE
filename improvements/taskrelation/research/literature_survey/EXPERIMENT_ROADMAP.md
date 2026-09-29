@@ -1,5 +1,18 @@
 # Scientific experiment roadmap — minimum discriminating observations
 
+> **Status note (2026-09-29, integration).** This document was written against checkout
+> `664c572` / `9955166`, before the TR-0007 screen closed and before DG-0007 was registered. Its
+> reasoning, derivations and predictions are unchanged and none of its claims is withdrawn; only
+> sentences that report a *corrected seed-42 TR-0007 result*, a *DG-0007 record*, or an *edge-support
+> reading* as absent **in this checkout** are stale, and they are preserved as that checkout's
+> history. Since then: the screen closed `REJECTED` at the researcher-fixed `λ₂ = 0.01` (dense
+> support, all three partial correlations `+0.4911`), DG-0007 is registered and pre-registered with
+> **no result**, and the post-TR-0007 reconciliation — including the exact-solve reading that makes
+> the published `λ₂` axis empty of a scale fix — is
+> [`POST_TR0007_SYNTHESIS.md`](./POST_TR0007_SYNTHESIS.md) (§5 lists every stale sentence by file and
+> line). Source: `research/taskrelation-literature` `9955166`, `a53f29d`, integrated here.
+
+
 **Not an authorization or study plan.** No architecture, configs, study registration or compute here. This is conditional sequencing across **already named** mechanisms: historical MTRL, independent DG-0007 normalization question, [TR-0007](../../../../improvements/taskrelation/research/studies/TR-0007/PLAN.md) p-MSSL and the **not-registered** project-original TR-0008 direction question ([DEC-0014](../../../../improvements/taskrelation/research/DECISIONS.md)). These three estimate **different objects** ([RELATION_SEMANTICS.md](RELATION_SEMANTICS.md)); choosing a winner would be premature. The present checkout has **no DG-0007 result, no corrected TR-0007 screen result and no TR-0008 registered result**. The appended [TR-0007 NOTE](../../../../improvements/taskrelation/research/studies/TR-0007/NOTE.md) records DEC-0016 authorization for a seed-42 screen, while older PLAN/STATE headers and `STUDIES.jsonl.blocked_on` retain stale earlier-gate language; authorization is not execution. Historic seed-0 DagsHub results use another code line and are not a replacement. Parallel worktree outcomes are not read or treated as evidence here.
 
 **Single fixed comparison protocol when mechanism arms are evaluated:** [VARIANT_BENCHMARK_PROTOCOL](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md) §§1–5: frozen WavLM Large all 25 layers with `smp(.5)`, three tasks, shared trunk 1024→512→2000, 30 epochs, 2048 batch, fixed sampler/composition/step count, AdamW, epoch checkpoint; historical normalized MTRL and matched wavCSE baseline are mandatory controls. DG-0007 correction is a separate diagnostic comparator, **not silently the new control**. One seed screens only; registered confirmation requires matched seeds0–4, per-task paired intervals and LOSO for any ER generalization claim. Test data do not set thresholds, hyperparameters or study sequence. TR-0007 remains researcher-fixed λ₂=.01 at screen; no extra grid or rewritten gate.

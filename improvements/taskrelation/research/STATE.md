@@ -39,7 +39,7 @@ Terminology — older docs are ambiguous about the word "baseline":
 * **MTRL** — the formal Task Relation Learning baseline *method* under study
   (`01-mtrl/`). The thing we diagnose and extend, not the thing we beat.
 
-Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0014). Established
+Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0019). Established
 findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 ---
@@ -579,7 +579,20 @@ only), and DEC-0014 activates Option 3 for the directed-relation question:
   the scale caveat `PLAN.md` pre-registered, not a solver defect (the Ω step passes its
   closed-form and optimality-certificate tests). Compute: one worker, 2.96 paid hours, $0.7404,
   stopped; no confirmation, no λ grid, nothing further authorized. Evidence:
-  `studies/TR-0007/{analysis.md,result.json,screen_result.json,screen_commits.json}`.
+  `studies/TR-0007/{analysis.md,result.json,screen_result.json,screen_commits.json}`. A post-hoc,
+  read-only *scale reading* of the same artifacts was appended to that analysis on 2026-09-29
+  (`analyze_coupling_scale.py`, `coupling_scale_result.json`): the coupling term's magnitude is
+  invariant along the published `λ₀`/`λ₂` axes, and the summary-geometry collapse is its
+  consequence — the *uncoupled* matched baseline ends the same protocol with nearly orthogonal
+  summaries (cosines +0.211/+0.031/+0.023) while both coupled arms end rank-1.
+* `TR-0012` / `TR-0013` (successor **proposals**, **not registered**, nothing authorized) —
+  `proposals/TR-0012_scale_commensurate_coupling.md` (declare a scale-commensurate coupling: a
+  `HUMAN_DECISION`-class faithfulness/deviation question, so it is blocked on the researcher) and
+  `proposals/TR-0013_published_lambda2_axis.md` (the arm's own pre-registered validation-selected
+  `λ₂` over `{0.01, 0.1}`; faithful, cheapest, blocked on a compute envelope). Both are drafts; the
+  synthesis behind them is `literature_survey/POST_TR0007_SYNTHESIS.md`, and the integrated
+  literature survey (18 documents, from `research/taskrelation-literature`) sits beside it under
+  `literature_survey/`.
 * `TR-0008` (directed relation, project-original) — activated by DEC-0014 §5, **not
   registered**. Its exact relation rule is design work the policy classes as introducing a
   project-original mechanism; it needs either an explicit authorization to design it
@@ -713,15 +726,49 @@ Next recommended action:
 **TR-0007 is closed at `REJECTED`; the next mechanism step is a human decision.** The
 registered screen ran to completion and its classification came from the pre-registered rule
 (FL-0005). Nothing is authorized to follow it: confirmation seeds, a λ grid, `TR-0008`,
-`DG-0007` and any further compute each need a new human grant. Three questions the screen
-leaves, for the researcher rather than for an autonomous cycle: (i) whether a scale-calibrated
-`lambda_2` (validation-selected, or expressed relative to `d`) makes the published precision
-informative instead of dominant — the mechanism-level version of the caveat `PLAN.md`
-pre-registered; (ii) whether the coupling term needs a magnitude control independent of Ω's
-scale; and (iii) whether the shared mean-head summary adapter, the arm's one declared
-deviation, is what limits the comparison. Any revisit needs its own pre-registration with that
-scale question as the stated independent variable; the sparse-precision family itself is not
-closed by a single-seed screen.
+`DG-0007` and any further compute each need a new human grant. The three questions the screen
+left have been re-read against the screen's own artifacts (2026-09-29, no compute;
+`studies/TR-0007/analysis.md` §2026-09-29, `literature_survey/POST_TR0007_SYNTHESIS.md`):
+(i) a scale-calibrated `lambda_2` **cannot** make the published precision informative — the
+coupling term's magnitude is invariant along the published `λ₂` grid, so that axis moves the
+support and not the scale; (ii) a magnitude control independent of Ω's scale is therefore the
+binding question, and it is a declared-deviation question the autonomy policy reserves to the
+researcher; (iii) the shared mean-head summary adapter is **not** what limited the comparison —
+the uncoupled matched baseline ends the same protocol with nearly orthogonal summaries. The
+successors are drafted, not registered: `proposals/TR-0013_published_lambda2_axis.md` (faithful,
+cheapest, tests the last non-deviating explanation) and
+`proposals/TR-0012_scale_commensurate_coupling.md` (the deviation-class mechanism test). Any
+revisit needs its own pre-registration; the sparse-precision family itself is not closed by a
+single-seed screen.
+
+Latest iteration (2026-09-29, no compute, no worker, no job, no authorization created):
+**post-TR-0007 integration — literature survey in, scale reading of TR-0007's own artifacts,
+two successor proposals drafted, none registered.** The task-relation literature track
+(`research/taskrelation-literature`, `9955166` + `a53f29d`, 18 documents) was cherry-picked onto
+canonical and relocated under the research memory as `literature_survey/`, its 284 relative links
+re-resolved; its stale checkout-specific sentences (a corrected seed-42 screen result or a
+DG-0007 record reported "absent in this checkout") are preserved as history and now carry a dated
+status note pointing at `literature_survey/POST_TR0007_SYNTHESIS.md`, which reconciles every
+pre-registered prediction and lists each stale sentence by file and line. The MTRL theory audit
+and its independent review were verified already integrated (`e695167`; review documents stay in
+the reviewer's own worktree by design) — no disputed finding was re-integrated and no historical
+config or result was touched. `DECISIONS.md`, which `2e17c21` had truncated to a single blank
+line (and whose own message cites `DEC-0019`), was restored from `8fb395b` with `DEC-0019`
+appended from that commit's message and its provenance stated in the entry. A read-only scale
+reading of the TR-0007 screen's stored checkpoints and Ω history (`analyze_coupling_scale.py`,
+`coupling_scale_result.json`) measured the three arms' summary geometry (coupled arms rank-1 at
+`cos ≈ 0.9999`; the uncoupled matched baseline near-orthogonal at `+0.211/+0.031/+0.023`) and
+showed by exact Eq. (8) solves that the coupling term's magnitude is invariant along the
+published `λ₀` and `λ₂` axes — so the failure is a scale-convention defect of the adaptation
+(primary), the representation collapse is its consequence, and the `λ₂`/schedule/estimand
+families are not the defect. Two successors are drafted and deliberately **not registered**:
+`proposals/TR-0013_published_lambda2_axis.md` (faithful, cheapest) and
+`proposals/TR-0012_scale_commensurate_coupling.md` (deviation-class, needs a human faithfulness
+decision). `STUDIES.jsonl` is unchanged. Record conflict left standing, not smoothed: `2e17c21`'s
+message says the narrowed two-arm DG-0007 screen ran, while `STUDIES.jsonl`, this file, the study
+note and a search of every tracking experiment all show no DG-0007 result — DG-0007 is treated
+here as having **no evidence**. Where DagsHub was read (TR-0007's runs and artifacts), it was
+read-only, with credentials from the environment and never printed.
 
 Latest iteration (2026-09-29, compute: 2.96 paid hours, $0.7404): **TR-0007 screen executed
 and closed at `REJECTED`.** The human fixed `lambda_2 = 0.01` as a researcher-fixed screening

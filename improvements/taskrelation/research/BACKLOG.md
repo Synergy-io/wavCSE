@@ -477,7 +477,13 @@ under `DEC-0015`/`DEC-0016`; p-MSSL did not beat either control (0.9662 vs 0.975
 and 0.9748 matched baseline at the protocol checkpoint; SI −1.79pp/−1.67pp) and the mechanism's
 Ω was shown to be coupling-dominated at the researcher-fixed `lambda_2 = 0.01`. Negative
 evidence: FL-0005. Analysis: `studies/TR-0007/analysis.md`; result: `result.json`. No further
-stage is authorized (confirmation, λ grids and new compute need a new human grant).
+stage is authorized (confirmation, λ grids and new compute need a new human grant). A post-hoc,
+read-only *scale reading* of the same artifacts was appended on 2026-09-29
+(`studies/TR-0007/analyze_coupling_scale.py`, `coupling_scale_result.json`; verdict unchanged): the
+coupling term's magnitude is invariant along the published `λ₀`/`λ₂` axes, so the fixed `λ₂` is not
+the quantity that could have rescued the arm. Successors proposed, not registered:
+`proposals/TR-0012_scale_commensurate_coupling.md`, `proposals/TR-0013_published_lambda2_axis.md`;
+synthesis: `literature_survey/POST_TR0007_SYNTHESIS.md`.
 
 ### Hypothesis
 
@@ -515,6 +521,68 @@ at 0.9644. Listed in `studies/TR-0007/NOTE.md`; this arm's screen is a protocol 
 the registered seed 42 and the human decides whether it is still worth its compute.
 
 ---
+
+## TR-0012 — scale-commensurate relation coupling (PROPOSED, not registered)
+
+**Status:** `BLOCKED` — proposal and pre-registration draft only
+(`../proposals/TR-0012_scale_commensurate_coupling.md`). No `STUDIES.jsonl` entry, no study folder,
+no config, no authorization, no run. Blocked on a **human faithfulness/deviation decision** (the
+intervention is a declared deviation on a published arm: `.agents/policies/autonomy.md`
+HUMAN_DECISION class, and `DEC-0015` closed the "do not invent a new normalisation" question for the
+TR-0007 phase) and on a compute envelope.
+
+* **Observation motivating it:** the p-MSSL screen's coupling term carries `≈ 3d` in value and
+  `≥ 6.9e3` in gradient against a batch-mean loss of `≈ 0.5` and task gradients of `≈ 1e-2`, at
+  every `(λ₀, λ₂)` the paper publishes; the summary geometry collapse the screen recorded is that
+  domination's consequence, not its cause (`studies/TR-0007/analysis.md` §2026-09-29,
+  `coupling_scale_result.json`, `literature_survey/POST_TR0007_SYNTHESIS.md` §2-§4).
+* **Falsifiable hypothesis:** imposing the *same* published relation object at a magnitude the
+  optimizer can weigh against the task loss removes the domination and makes the run a readable test
+  of the relation set (gates G1-G3 in the draft).
+* **Independent variable:** the coupling term's magnitude policy — one pre-registered calibrated
+  scalar; the Ω step, the estimator and the learned relation object stay exactly as published.
+* **Matched control:** historical classical MTRL (retained, `DEC-0017`) plus the matched wavCSE
+  baseline; protocol §1 held constant.
+* **Cheapest adequate experiment:** the three-arm seed-42 screen with in-run geometry/gradient
+  instrumentation, `≈ 1.8` GPU-h.
+* **Expected information gain:** the first design in which a learned relation is imposed at a
+  strength comparable with the task loss — both outcomes (promotion, or a clean attributable null)
+  are informative; no relation arm in this programme has produced either.
+* **Literature motivated:** yes — it targets the normalisation Eq. (3)/(4b)/(8) is written in
+  (`λ₀ = 1` presumes the paper's sum-normalised likelihood), and the same class of finding as the
+  MTRL audit's `normalize_w` deviation (`audits/2026-09-29-mtrl-theory-to-implementation-audit.md`).
+* **Category-boundary check:** how strongly a learned task-relation object is imposed is Task
+  Relation Learning (Zhang & Yang 2021 §2.4); no per-task scalar weights, no gradient surgery, no
+  low-rank/clustering/decomposition (`FRAMEWORK.md` R7, `DEC-0005` §3).
+
+---
+
+## TR-0013 — the published `λ₂` axis (PROPOSED, not registered)
+
+**Status:** `BLOCKED` — proposal and pre-registration draft only
+(`../proposals/TR-0013_published_lambda2_axis.md`). The arm stays a faithful published
+implementation, so this one needs no faithfulness decision; it needs a compute envelope.
+
+* **Observation motivating it:** the screen ran one researcher-fixed `λ₂ = 0.01` (`DEC-0016`) and the
+  arm's own README (deviation 3) and `DEC-0015` §3 pre-register validation selection over the
+  paper's two smallest grid values as an open human item; that item is still open.
+* **Falsifiable hypothesis (H-λ):** a validation-selected `λ₂` restores a resolvable run. Competing
+  H-scale: it cannot, because the coupling's magnitude is `λ₂`-invariant for values that keep an
+  edge and `λ₂ ≥ 1` removes all edges while keeping `3d` on the diagonal.
+* **Independent variable:** the `λ₂` policy (`0.01` fixed → validation-selected over `{0.01, 0.1}`,
+  budget-matched to the control's two-value selection).
+* **Matched control:** both mandatory controls, unchanged protocol.
+* **Cheapest adequate experiment:** 5 runs at seed 42 (two candidate values + two controls),
+  `≈ 1.5-1.8` GPU-h.
+* **Expected information gain:** closes the last non-deviating explanation of TR-0007's failure at
+  the lowest cost, and its most likely outcome is what justifies TR-0012.
+* **Literature motivated:** yes — it *is* the paper's own selection procedure (Algorithm 1 /
+  JMLR §4.1 grid).
+* **Category-boundary check:** a protocol correction inside the published method, not a mechanism
+  change; TR-0007's category analysis carries over.
+
+---
+
 
 ## DG-0005 — Data-regime hypothesis
 

@@ -1,5 +1,18 @@
 # DG-0007 normalization correction: testable MTRL predictions
 
+> **Status note (2026-09-29, integration).** This document was written against checkout
+> `664c572` / `9955166`, before the TR-0007 screen closed and before DG-0007 was registered. Its
+> reasoning, derivations and predictions are unchanged and none of its claims is withdrawn; only
+> sentences that report a *corrected seed-42 TR-0007 result*, a *DG-0007 record*, or an *edge-support
+> reading* as absent **in this checkout** are stale, and they are preserved as that checkout's
+> history. Since then: the screen closed `REJECTED` at the researcher-fixed `λ₂ = 0.01` (dense
+> support, all three partial correlations `+0.4911`), DG-0007 is registered and pre-registered with
+> **no result**, and the post-TR-0007 reconciliation — including the exact-solve reading that makes
+> the published `λ₂` axis empty of a scale fix — is
+> [`POST_TR0007_SYNTHESIS.md`](./POST_TR0007_SYNTHESIS.md) (§5 lists every stale sentence by file and
+> line). Source: `research/taskrelation-literature` `9955166`, `a53f29d`, integrated here.
+
+
 **Scope and evidence boundary.** Theory only; no implementation, study registration, authorization or protocol change. In **this** worktree at commit `9955166`, [STUDIES.jsonl](../../../../improvements/taskrelation/research/STUDIES.jsonl) has no `DG-0007` entry or result; no `studies/DG-0007/` directory is present. The user reports that a separate parallel agent is working on DG-0007; its design/outcomes are **not** evidence available in this checkout. This document defines conditional predictions, not its run plan or outcome. `OBSERVED` = [local model code](../../../../improvements/taskrelation/01-mtrl/mtrl_model.py) or [confirmed evidence](EMPIRICAL_SYNTHESIS.md); `DERIVED` = algebra; `HYPOTHESIZED` = pending comparison. [Zhang & Yeung UAI 2010](https://event.cwi.nl/uai2010/papers/UAI2010_0144.pdf) §2 Eqs. (3),(7),(13), [prior MTRL literature ledger](PRIMARY_LITERATURE.md). In this checkout [protocol §2](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md) still names **historical normalized MTRL** the in-category control. Do not silently replace it or assume DG-0007 has changed that decision.
 
 ## Exact implemented contrast, not a claim of faithful Zhang–Yeung replication

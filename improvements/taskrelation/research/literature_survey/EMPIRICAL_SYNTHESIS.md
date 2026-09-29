@@ -1,5 +1,18 @@
 # Empirical synthesis — DG-0001 and DG-0002
 
+> **Status note (2026-09-29, integration).** This document was written against checkout
+> `664c572` / `9955166`, before the TR-0007 screen closed and before DG-0007 was registered. Its
+> reasoning, derivations and predictions are unchanged and none of its claims is withdrawn; only
+> sentences that report a *corrected seed-42 TR-0007 result*, a *DG-0007 record*, or an *edge-support
+> reading* as absent **in this checkout** are stale, and they are preserved as that checkout's
+> history. Since then: the screen closed `REJECTED` at the researcher-fixed `λ₂ = 0.01` (dense
+> support, all three partial correlations `+0.4911`), DG-0007 is registered and pre-registered with
+> **no result**, and the post-TR-0007 reconciliation — including the exact-solve reading that makes
+> the published `λ₂` axis empty of a scale fix — is
+> [`POST_TR0007_SYNTHESIS.md`](./POST_TR0007_SYNTHESIS.md) (§5 lists every stale sentence by file and
+> line). Source: `research/taskrelation-literature` `9955166`, `a53f29d`, integrated here.
+
+
 **Evidence labels:** **OBSERVED** = number read from existing JSON; **DERIVED** = explicit calculation from those numbers; **HYPOTHESIZED** = prediction not measured. This is an analysis of completed records, not a new study or result. Data sources: [DG-0001 screen](../../../../improvements/taskrelation/research/task_relations/empirical_transfer.json), [raw LOSO](../../../../improvements/taskrelation/research/task_relations/loso_transfer.json), [Stage-D optimizer controls](../../../../improvements/taskrelation/research/task_relations/optimization_control.json), [DG-0001 full result](../../../../improvements/taskrelation/research/studies/DG-0001/result.json); [DG-0002 seed-level confirmation](../../../../improvements/taskrelation/research/studies/DG-0002/confirmation_result.json), [DG-0002 initial screen](../../../../improvements/taskrelation/research/studies/DG-0002/result.json). Interpretive checks: [DG-0001 analysis](../../../../improvements/taskrelation/research/studies/DG-0001/analysis.md), [DG-0002 analysis](../../../../improvements/taskrelation/research/studies/DG-0002/analysis.md), [FINDINGS F8–F10](../../../../improvements/taskrelation/research/FINDINGS.md). `SI` in records = `SID` here. All performance deltas are **accuracy fractions**, not percentage-point numerals.
 
 ## Recorded study conditions and limits
