@@ -233,15 +233,63 @@ class PlanTests(unittest.TestCase):
 
     def test_plan_arms_run_the_three_registered_configs(self):
         configs = {arm["arm"]: arm["config"] for arm in self.plan["arms"]}
+        # The arm's config lives in its architecture folder; the controls get
+        # Study-local copies so their runs carry TR-0007's identity too
+        # (DG-0002's pattern), rather than being untagged sweep runs.
         self.assertEqual(
             configs["p-mssl"], "improvements/taskrelation/04-mssl/mssl_config.yml")
         self.assertEqual(
             configs["classical-mtrl"],
-            "improvements/taskrelation/01-mtrl/mtrl_poolingwinner_25L_config.yml")
+            "improvements/taskrelation/research/studies/TR-0007/configs/classical-mtrl.yml")
         self.assertEqual(
             configs["wavcse-baseline"],
-            "improvements/base/configs/base_poolingwinner_25L_config.yml")
-        self.assertEqual(self.plan["method"], "p-mssl")
+            "improvements/taskrelation/research/studies/TR-0007/configs/wavcse-baseline.yml")
+
+    def test_every_arm_config_carries_the_study_identity(self):
+        for arm in self.plan["arms"]:
+            path = os.path.join(REPO_ROOT, arm["config"])
+            with open(path, "r", encoding="utf-8") as handle:
+                config = yaml.safe_load(handle)
+            research = config.get("research")
+            self.assertIsNotNone(research, "{} has no research block".format(path))
+            self.assertEqual(research["study_id"], "TR-0007")
+            self.assertEqual(research["stage"], "screen")
+            self.assertEqual(research["method"], arm["method"])
+            self.assertEqual(
+                mlflow_utils.build_research_run_name(config, arm["arm"], "ks_si_er"),
+                "TR-0007__screen__{}__ks_si_er__smp25__s42".format(arm["arm"]),
+            )
+            self.assertTrue(os.path.exists(os.path.join(REPO_ROOT, research["run_note_file"])))
+            self.assertTrue(config["mlflow"]["experiment_name"])
+
+    def test_controls_stay_matched_and_untuned(self):
+        # Protocol §5: the controls are the protocol's own configs, unchanged
+        # apart from the study's provenance block and output roots.
+        pairs = (
+            ("classical-mtrl",
+             "improvements/taskrelation/01-mtrl/mtrl_poolingwinner_25L_config.yml"),
+            ("wavcse-baseline",
+             "improvements/base/configs/base_poolingwinner_25L_config.yml"),
+        )
+        for arm_name, original in pairs:
+            with open(os.path.join(REPO_ROOT, self.plan_config(arm_name)), "r", encoding="utf-8") as handle:
+                copy = yaml.safe_load(handle)
+            with open(os.path.join(REPO_ROOT, original), "r", encoding="utf-8") as handle:
+                source = yaml.safe_load(handle)
+            source.pop("research", None)
+            copy.pop("research", None)
+            self.assertEqual(copy["paths"]["root_data_path"], source["paths"]["root_data_path"])
+            self.assertEqual(copy["upstream"], source["upstream"])
+            self.assertEqual(copy["pooling"], source["pooling"])
+            self.assertEqual(copy["training"], source["training"])
+            self.assertEqual(copy["evaluation"], source["evaluation"])
+            self.assertEqual(copy["model"], source["model"])
+
+    def plan_config(self, arm_name):
+        for arm in self.plan["arms"]:
+            if arm["arm"] == arm_name:
+                return arm["config"]
+        raise AssertionError("arm {} is not registered".format(arm_name))
 
     def test_plan_declares_the_15_canonical_embedding_objects_and_layout(self):
         requirements = self.inputs["requirements"]

@@ -58,11 +58,19 @@ graphical lasso (Eqs. (8)–(11)) versus MTRL's closed-form covariance.
 
 ## The three registered arms (seed 42)
 
-| Arm | Implementation | Config | Identity |
+| Arm | Config used by the plan | Copies (unchanged apart from the study's provenance block and output roots) | Experiment |
 |---|---|---|---|
-| 1. p-MSSL (candidate) | `improvements/taskrelation/04-mssl/` | `04-mssl/mssl_config.yml` | published (Gonçalves et al. 2016), p-MSSL |
-| 2. classical MTRL (in-category control) | `improvements/taskrelation/01-mtrl/` | `01-mtrl/mtrl_poolingwinner_25L_config.yml` | formal baseline method (DEC-0001) |
-| 3. matched wavCSE baseline | `improvements/base/` | base 25-layer protocol config | reference to beat (F4) |
+| 1. p-MSSL (candidate) | `04-mssl/mssl_config.yml` | — (its architecture folder owns it) | `taskrelation-mssl` |
+| 2. classical MTRL (in-category control) | `studies/TR-0007/configs/classical-mtrl.yml` | `01-mtrl/mtrl_poolingwinner_25L_config.yml` | `taskrelation-mtrl` |
+| 3. matched wavCSE baseline | `studies/TR-0007/configs/wavcse-baseline.yml` | `base/configs/base_poolingwinner_25L_config.yml` | `wavcse-baseline` |
+
+Every arm's config carries the `research:` block (`study_id: TR-0007`, `stage: screen`,
+`method: <arm>`), so the three runs of this Study are reconstructible by tag across the three
+experiments the naming convention assigns them to (`improvements/README.md`: one experiment per
+category/architecture, runs grouped across experiments by `study_id`/`stage`/`method` tags, not by
+co-location). The control configs are byte-identical to their source configs in every shared block
+(`upstream`, `dataset`, `pooling`, `training`, `evaluation`, `model`), asserted by
+`test_tr0007_protocol.py::test_controls_stay_matched_and_untuned`.
 
 The controls are the ones the protocol fixes (§2); the candidate is the only arm this study
 implements.
@@ -206,8 +214,8 @@ retain_for_reuse_hours: 0
 
 ## Provenance
 
-* MLflow/DagsHub: tracking URI `https://dagshub.com/Ke-vin-S/wavCSE.mlflow`, experiment
-  `taskrelation-mssl` (the documented `taskrelation-<model>` convention). Credentials reach
+* MLflow/DagsHub: tracking URI `https://dagshub.com/Ke-vin-S/wavCSE.mlflow`; experiments as in
+  the arm table above (the documented `taskrelation-<model>` / `wavcse-*` convention). Credentials reach
   the worker only as `MLFLOW_TRACKING_USERNAME` / `MLFLOW_TRACKING_PASSWORD` through the
   backend's `environment_secrets` allow-list; they are never written into this plan, a
   config, a jobspec body or a research record.

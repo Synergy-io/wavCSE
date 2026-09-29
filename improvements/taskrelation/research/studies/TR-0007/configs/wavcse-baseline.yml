@@ -1,0 +1,86 @@
+# TR-0007 screen arm: the matched plain-wavCSE baseline.
+#
+# Unchanged from improvements/base/configs/base_poolingwinner_25L_config.yml except for this header, the study-local
+# results/checkpoints roots, the single-GPU device index, and the appended
+# `research:` block: the protocol holds every shared condition constant across
+# arms, and the arm is identified (not re-tuned) by the study tags.
+
+log_level: INFO
+seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
+
+device:
+  type: cuda
+  index: 0
+
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/embedding
+  results_root: improvements/taskrelation/research/studies/TR-0007/outputs/wavcse-baseline/results
+  checkpoints_root: improvements/taskrelation/research/studies/TR-0007/outputs/wavcse-baseline/checkpoints
+
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: smp
+  layer_pooling_param: 0.5
+
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+
+training:
+  num_epochs: 30
+  batch_size: 2048
+  learning_rate: 0.0025
+  weight_decay: 0.00000005
+  saved_checkpoint_count: 1
+  shuffle_train: true
+  shuffle_val: false
+  pin_memory: true
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 4
+  patience: 5
+  factor: 0.5
+  l1_lambda: 0.0000001
+  l2_lambda: 0.00001
+
+evaluation:
+  batch_size: 2048
+  shuffle: false
+  pin_memory: true
+  drop_last: false
+  num_workers: 4
+
+# ----------------------------
+# MLflow / DagsHub tracking
+# ----------------------------
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: wavcse-baseline
+
+# TR-0007 arm provenance: the run carries the study's identity tags and the
+# DagsHub run note, so the study is reconstructible across the experiments the
+# arm's own architecture owns (see improvements/README.md's naming convention).
+research:
+  study_id: TR-0007
+  stage: screen
+  family: task_relation_learning
+  method: wavcse-baseline
+  hypothesis_slug: sparse-precision-relation-estimator
+  task_set: ks_si_er
+  representation: smp25
+  parent_study: LT-0002
+  agent_generated: true
+  status: pre_registered
+  run_note_file: improvements/taskrelation/research/studies/TR-0007/NOTE.md
