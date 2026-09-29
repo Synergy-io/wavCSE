@@ -566,11 +566,24 @@ only), and DEC-0014 activates Option 3 for the directed-relation question:
 * `LT-0002` — **complete** (2026-09-22); 15 papers verified across the two selected
   families, verdicts and eligibility gates in `studies/LT-0002/analysis.md`.
   Family B has a clean published pass (MSSL); family A has none.
-* `TR-0007` (MSSL, published) and `TR-0008` (directed relation, project-original) —
-  **named and activated by DEC-0014 §5 and not yet registered**: no
-  `studies/TR-0007/` or `studies/TR-0008/` folder, no `STUDIES.jsonl` record and
-  no configs exist yet. Pre-registration under `VARIANT_BENCHMARK_PROTOCOL.md` is
-  the next step; any other `TR-xxxx` still requires its own human authorization.
+* `TR-0007` (MSSL, published) — **registered 2026-09-29, `BLOCKED` at pre-registration**:
+  `studies/TR-0007/` holds the gate (`NOTE.md`) and the registry entry carries
+  `escalated_to_human`. The committed `04-mssl` draft solves a *rescaled* graphical lasso
+  (`− log|Ω|`, off-diagonal ℓ₁, `S = WWᵀ/d`) instead of the verified published Eq. 8
+  (`− d log|Ω|`, `λ₂‖Ω‖₁`, `S = (1/d)WᵀW`); with `d = 2001` those are different estimators
+  at the same `λ₂`, so the mechanism's normalisation — and therefore its `λ₂` and its
+  solver tests — is a faithfulness/deviation decision reserved for the researcher. The arm
+  is also not runnable yet (no `mssl_config.yml`, no `mssl` branch in
+  `run_improvements.py`), which is mechanical and follows the decision. No `PLAN.md`, no
+  configs and no compute plan exist, and none may until the gate is answered.
+* `TR-0008` (directed relation, project-original) — activated by DEC-0014 §5, **not
+  registered**. Its exact relation rule is design work the policy classes as introducing a
+  project-original mechanism; it needs either an explicit authorization to design it
+  autonomously or a design review (Option C of the TR-0007 gate).
+* the exact commit is **local-only**: `origin` publishes
+  `feature/mssl-task-relation-study` at `05fa10c`, so any worker request is refused until
+  the developer pushes the commit `preflight` resolves. Publication is a developer action,
+  never performed by a cycle.
 * `TR-xxxx` variant Studies — one shared matched protocol, screen then confirm.
 * Deferred (not cancelled): the `DG-xxxx` diagnostics below.
 
@@ -632,9 +645,10 @@ DG-0005 matched A0/A1 confirmation, seeds `0,1,2,3,4`, ten runs at commit
 
 Current active Study:
 
-`NONE`. No `TR-xxxx` is open. `TR-0007` and `TR-0008` are named and activated by
-DEC-0014 but are not registered; every other `TR-xxxx` still requires its own
-explicit human authorization under DEC-0009/DEC-0010.
+`NONE` RUNNING. `TR-0007` is registered (`BLOCKED`, pre-registration) and carries the
+faithfulness gate described under *Current Pending Work*; `TR-0008` is named and activated
+by DEC-0014 but not registered. Every other `TR-xxxx` still requires its own explicit human
+authorization under DEC-0009/DEC-0010.
 
 Result (CONFIRMED, F10):
 
@@ -662,18 +676,50 @@ Unresolved questions:
 
 Next recommended action:
 
-**Variant benchmark, stage 2 — pre-register `TR-0007` and `TR-0008`.** Stage 1
-(`LT-0002` literature verification) is complete: the two families have verified
-cards and eligibility verdicts, family B (better relation estimator /
+**Variant benchmark, stage 2 — answer the TR-0007 faithfulness gate, then
+pre-register.** Stage 1 (`LT-0002` literature verification) is complete: the two families
+have verified cards and eligibility verdicts, family B (better relation estimator /
 task-parameter representation) has a clean published pass (MSSL), and family A
-(asymmetric/directed) has none, which is why DEC-0014 records that arm as
-project-original. Each arm is pre-registered as one `TR-xxxx` Study under
-`VARIANT_BENCHMARK_PROTOCOL.md` on the shared protocol (pooling `smp` 0.5, all 25
+(asymmetric/directed) has none, which is why DEC-0014 records that arm as project-original.
+`TR-0007` is now registered and **blocked at pre-registration**: the committed draft's Ω
+step is a rescaled graphical lasso, not the published Eq. 8, so its `λ₂` — and hence the
+arm's strength and its solver tests — cannot be fixed without a faithfulness/deviation
+decision the policy reserves for the researcher (`studies/TR-0007/NOTE.md`, Option A
+faithful / Option B declared deviation / Option C defer to `TR-0008`). Once answered: write
+`PLAN.md`, the arm config and `compute/plan.json`, implement the chosen convention, fix the
+test-side defects, commit, publish the commit, then request the compute envelope. Each arm
+is pre-registered as one `TR-xxxx` Study under `VARIANT_BENCHMARK_PROTOCOL.md` on the shared protocol (pooling `smp` 0.5, all 25
 layers, 30 epochs, batch 2048, seeds 0–4, classical MTRL and wavCSE baseline as
 the two controls), screen first, confirm before any promotion. The deferred
 diagnostics stay on the backlog.
 
-Latest iteration (2026-09-22, no compute): pre-registered post-hoc bound on
+Latest iteration (2026-09-29, no compute): **ARC v1 zero-cost integration exercise,
+research-side.** No GPU run, no worker, no job, no authorization. Established: the deployed
+compute backend resolves the `wavcse-infra` checkout, its read-only verbs (`status`,
+`resolve`, `preflight`, `reap` dry-run) reach the control plane, and the controller had no
+ARC state root, no leases and no envelope. Installed and enabled the crash-independent
+reaper timer on the controller (`reap-install --install --enable`; service
+`wavcse-arc-reaper.service`, timer `wavcse-arc-reaper.timer`, 300 s, `Persistent=true`); its
+first executing pass reconciled zero scopes and stopped nothing. Two unambiguous ARC
+integration defects were found, fixed with regression tests and committed: a sharded
+canonical artifact could not be declared (the loader-layout contract accepted exactly one
+archive per dataset, while the artifact pipeline must shard above the 5 GB single-PUT
+ceiling), and the layout extractor required dataset-prefixed TAR members while the
+published archives are dataset-relative (`Session1/…`, `speech_commands_v0.01/…`), which
+would have refused every canonical artifact before training; the installer also reported a
+privilege boundary as a traceback instead of a refusal. The manifest's recorded
+loader-root layout is now validated against the plan's declared inputs before an entry can
+become COLLECTED. Input readiness was re-established read-only for all three datasets
+(`speechcommand` 5 shards, `voxceleb` 9 shards, `iemocap` 1 tar: 15 objects, every shard
+manifest digest cross-checked against its set manifest, every object verified at its
+declared size), and `embedding_layout.loader_pooling` on the protocol config resolves
+`wavlm_large/mean`, matching the manifests' recorded layout. `preflight` reports the exact
+commit is **not** available to workers, so publication is required before any worker
+request. `TR-0007` was registered and blocked at pre-registration on a faithfulness
+decision (see *Current Pending Work*); `DG-0005`'s analysis and all earlier records are
+unchanged, and no metric of any run was touched.
+
+Previous iteration (2026-09-22, no compute): pre-registered post-hoc bound on
 DG-0005's ER norm drop (`studies/DG-0005/analyze_noise_shape.py`, pre-registered
 at `2ac7f3d`, results in `noise_shape_result.json`). Estimator-size scaling
 explains the middle-phase drop on its own (share `1.03` `[0.975, 1.082]`) but at
@@ -686,7 +732,7 @@ new finding, no GPU work. No metric of any run was changed. Commits:
 DG-0005 confirmation runs on DagsHub keep `study_decision=CONFIRMED` and their
 run note was re-pushed with the post-hoc bound (DEC-0012).
 
-Previous iteration (2026-09-22, no compute): analysis/synthesis pass. Created
+Earlier iteration (2026-09-22, no compute): analysis/synthesis pass. Created
 `FRAMEWORK.md`, refreshed `MTRL_DIAGNOSTIC_SYNTHESIS.md` so it no longer
 prescribes the closed DEC-0007 sequence, annotated the TR-0002/TR-0003/TR-0004
 gates, and recorded DEC-0011. No Study was created, no run was launched and no
