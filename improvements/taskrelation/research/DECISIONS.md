@@ -579,3 +579,48 @@ stays labelled **normalization-corrected MTRL**, never "faithful Zhang & Yeung M
    coverage alone.
 5. No mechanism, no architecture and no historical number changes. No metric of any run was
    touched.
+
+---
+
+## DEC-0018 — HUMAN DECISION: DG-0007 screen authorized, bounded at $3.00 and a 3-hour window
+
+**Status:** ACTIVE — 2026-09-29 (human-authored decision; recorded by an agent cycle)
+
+**Decision (human): the DG-0007 screen runs now, on its own worker.**
+The researcher fixed a hard remaining wall-clock window of **3 hours** and a maximum
+incremental DG-0007 compute budget of **$3.00**, and authorized preparing and executing the
+pre-registered `DG-0007` **screen** in parallel on a **separate, DG-0007-owned worker** rather
+than waiting for `TR-0007` to finish for worker reuse.
+
+**Scientific scope authorized — exactly this, and nothing else.**
+
+* stage `screen`, seed `42`;
+* arms `mtrl_norm_corrected`, `mtrl`, `wavcse-baseline`;
+* the frozen protocol: all 25 WavLM layers, `smp` 0.5, historical MTRL `normalize_w: true`,
+  normalization-corrected MTRL `normalize_w: false`, the matched baseline, the frozen
+  canonical embeddings, and the pre-registered decision rules.
+
+**Explicitly not authorized:** confirmation seeds `0–4`; LOSO; additional arms; protocol
+changes; hyperparameter changes; additional persistent resources; more than one DG-0007
+worker; total DG-0007 GPU spend above `$3.00`; execution beyond the 3-hour window. Starting
+confirmation requires a separate authorization even if the screen passes.
+
+**Envelope granted.** `authorizations/DG-0007.yaml`: `max_gpu_hourly_usd 0.80`,
+`max_total_gpu_usd 3.00`, `max_wall_clock_hours 3`, one simultaneous worker with replacements
+allowed, an existing network volume allowed under the `200 GB` / `EU-RO-1` selector, no new
+persistent resources, `60 GB` container disk, destroyed on completion.
+
+**Isolation requirement (binding).** `TR-0007`'s worker `8jy5oamk8dydd9` is owned by
+`TR-0007`: it must not be stopped, restarted, modified, adopted, leased, reused or otherwise
+interfered with, and the live `~/projects/wavCSE` worktree must not be changed while
+`TR-0007` orchestration is using it. DG-0007 is therefore orchestrated from an independent
+clean checkout, and its worker is separate.
+
+**Consequences.**
+
+1. The screen is the study's screening stage only; it can produce `PROMOTING`/`REJECTED`
+   evidence, never a promoted claim (F1).
+2. Any ER statement from this screen is screening context; a speaker-independent LOSO
+   evaluation remains required for an ER claim (F3).
+3. The persistent network volume is not destroyed with the worker; it outlives the scope by
+   design and is a warm cache only, never the home of an only copy.
