@@ -17,9 +17,13 @@ method_scope:
   quarantined_unvalidated: [tsm, pmr]
 
 progression_gate:
-  mechanism_requires_diagnostic_evidence: true
+  # Amended by DEC-0013 (2026-09-22, human): diagnostic-first sequencing is
+  # deferred, so a named diagnostic is no longer a precondition for a mechanism
+  # study. The published-method gate is unchanged.
+  mechanism_requires_diagnostic_evidence: false
   mechanism_requires_published_method: true
   allow_arbitrary_architecture_generation: false
+  amended_by: DEC-0013
 
 optimization:
   type: multi_objective

@@ -39,7 +39,7 @@ Terminology — older docs are ambiguous about the word "baseline":
 * **MTRL** — the formal Task Relation Learning baseline *method* under study
   (`01-mtrl/`). The thing we diagnose and extend, not the thing we beat.
 
-Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0013). Established
+Binding scope decisions: `DECISIONS.md` (DEC-0001 … DEC-0014). Established
 findings: `FINDINGS.md` — authoritative over the one-line summaries below.
 
 ---
@@ -54,7 +54,10 @@ sequencing is **deferred**, and the programme now implements and compares
 with asymmetric/directed relations and a better relation estimator or
 task-parameter representation. The published-method and category gates are
 unchanged; only one relation method (classical MTRL) has ever been evaluated
-here, so this space is unexplored rather than exhausted.
+here, so this space is unexplored rather than exhausted. DEC-0014 (human,
+2026-09-22) then recorded that family A (asymmetric/directed) has no clean
+published pass, so that arm is **project-original** and must be labelled as
+such; family B keeps faithful-implementation status.
 
 **Active artifact:** `FRAMEWORK.md` — the cross-study method-selection framework
 (conditioned-quantity table, relational-vs-optimization classification, evidence
@@ -557,10 +560,18 @@ The same important result should be traceable between both.
 
 # Current Pending Work
 
-Mechanism work is **authorized for benchmarking** under DEC-0013 (published methods only):
+Mechanism work is **authorized for benchmarking** under DEC-0013 (published methods
+only), and DEC-0014 activates Option 3 for the directed-relation question:
 
-* `LT-0002` — **RUNNING**; source verification for the two selected families (asymmetric/directed relations; better relation estimator or task-parameter representation). Blocks any variant implementation until its cards exist.
-* `TR-xxxx` variant Studies — to be registered per verified method, one shared matched protocol, screen then confirm.
+* `LT-0002` — **complete** (2026-09-22); 15 papers verified across the two selected
+  families, verdicts and eligibility gates in `studies/LT-0002/analysis.md`.
+  Family B has a clean published pass (MSSL); family A has none.
+* `TR-0007` (MSSL, published) and `TR-0008` (directed relation, project-original) —
+  **named and activated by DEC-0014 §5 and not yet registered**: no
+  `studies/TR-0007/` or `studies/TR-0008/` folder, no `STUDIES.jsonl` record and
+  no configs exist yet. Pre-registration under `VARIANT_BENCHMARK_PROTOCOL.md` is
+  the next step; any other `TR-xxxx` still requires its own human authorization.
+* `TR-xxxx` variant Studies — one shared matched protocol, screen then confirm.
 * Deferred (not cancelled): the `DG-xxxx` diagnostics below.
 
 * DG-0001 — complete; optimizer exposure dominates its raw transfer matrix (F8);
@@ -609,7 +620,10 @@ Last fully completed Study:
 
 `DG-0005 — ER data-regime gradient-scale control` (2026-09-22), decision
 **CONFIRMED**. Ten matched runs at commit `8032a937`; F10 established and F9
-refined. `LT-0001` remains the last completed literature Study (REJECTED).
+refined. `LT-0002 — published relation-learning variants for two selected
+families` (2026-09-22, decision `COMPLETE - CANDIDATES_FOUND`, 0 GPU-hours) is
+the most recent completed literature Study; `LT-0001` remains the last rejected
+one.
 
 Most recent completed execution stage:
 
@@ -618,8 +632,9 @@ DG-0005 matched A0/A1 confirmation, seeds `0,1,2,3,4`, ten runs at commit
 
 Current active Study:
 
-`NONE`. No `TR-xxxx` is open and none may open without explicit human
-authorization under DEC-0009/DEC-0010.
+`NONE`. No `TR-xxxx` is open. `TR-0007` and `TR-0008` are named and activated by
+DEC-0014 but are not registered; every other `TR-xxxx` still requires its own
+explicit human authorization under DEC-0009/DEC-0010.
 
 Result (CONFIRMED, F10):
 
@@ -641,20 +656,22 @@ Unresolved questions:
    updates: train ≈0.99 vs validation ≈0.82, final train−val gap `0.134 → 0.174`
    at the screening seed) versus noise growing faster than `1/√n`. Per-step
    dispersion cannot answer it, and the untriggered A2 arm would not either.
-2. Whether any of this justifies Option-3 work is a human scope decision under
-   DEC-0009/DEC-0010, not an autonomous one.
+2. Whether any of this justifies Option-3 work was a human scope decision under
+   DEC-0009/DEC-0010; DEC-0014 has since answered it for the directed-relation
+   question (Option 3 activated; project-original labelling mandatory).
 
 Next recommended action:
 
-**Variant benchmark, stage 1 — literature verification (`LT-0002`).** No code is
-written before the two families have verified paper cards: which published
-methods implement directed/asymmetric relations, and which implement a better
-relation estimator or task-parameter representation, under what assumptions, and
-whether those assumptions survive disjoint datasets with 12 / 1251 / 4-class
-heads. Then one pre-registered `TR-xxxx` Study per variant on a single shared
-protocol (pooling `smp` 0.5, all 25 layers, 30 epochs, batch 2048, seeds 0–4,
-classical MTRL and wavCSE baseline as the two controls), screen first, confirm
-before any promotion. The deferred diagnostics stay on the backlog.
+**Variant benchmark, stage 2 — pre-register `TR-0007` and `TR-0008`.** Stage 1
+(`LT-0002` literature verification) is complete: the two families have verified
+cards and eligibility verdicts, family B (better relation estimator /
+task-parameter representation) has a clean published pass (MSSL), and family A
+(asymmetric/directed) has none, which is why DEC-0014 records that arm as
+project-original. Each arm is pre-registered as one `TR-xxxx` Study under
+`VARIANT_BENCHMARK_PROTOCOL.md` on the shared protocol (pooling `smp` 0.5, all 25
+layers, 30 epochs, batch 2048, seeds 0–4, classical MTRL and wavCSE baseline as
+the two controls), screen first, confirm before any promotion. The deferred
+diagnostics stay on the backlog.
 
 Latest iteration (2026-09-22, no compute): pre-registered post-hoc bound on
 DG-0005's ER norm drop (`studies/DG-0005/analyze_noise_shape.py`, pre-registered

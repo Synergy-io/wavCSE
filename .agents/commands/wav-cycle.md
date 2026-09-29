@@ -19,7 +19,7 @@ negative transfer, and the repository, not the conversation, is the memory.
 
 ## Steps
 
-1. Reconcile state before acting. Read `.omp/RULES.md`,
+1. Reconcile state before acting. Read
    `improvements/taskrelation/research/OBJECTIVE.md`, `improvements/taskrelation/research/STATE.md`,
    `improvements/taskrelation/research/FINDINGS.md`, `improvements/taskrelation/research/DECISIONS.md`,
    `improvements/taskrelation/research/FAILURES.md`, `improvements/taskrelation/research/BACKLOG.md`,
@@ -28,10 +28,12 @@ negative transfer, and the repository, not the conversation, is the memory.
    runtime state through the project's runtime tooling (the `infra` CLI). Treat a
    disagreement between a record and runtime reality as unresolved until you know
    which is stale.
-2. Recover interrupted work first: if a Study is ACTIVE, SCREENING, CONFIRMING or waiting on
-   jobs, analysis or LOSO, continue it; a new cycle is not a reason to open a new Study.
-3. Otherwise resolve a pending confirmation before exploring: a Study left PROMISING must be
-   confirmed or explicitly retired, not left open while fresh mechanisms are explored.
+2. Recover interrupted work first: if a Study's `STUDIES.jsonl` status is not terminal
+   (`complete` / `confirmed` / `rejected`), or it is waiting on jobs, analysis or LOSO, continue
+   it; a new cycle is not a reason to open a new Study.
+3. Otherwise resolve a pending verdict before exploring: a screen verdict of `PROMISING`
+   (`VARIANT_BENCHMARK_PROTOCOL.md` §3) must be confirmed or explicitly retired, not left open
+   while fresh mechanisms are explored.
 4. Otherwise choose the highest-information READY question in
    `improvements/taskrelation/research/BACKLOG.md`, stating the current evidence,
    the uncertainty, one falsifiable hypothesis, a competing explanation, the

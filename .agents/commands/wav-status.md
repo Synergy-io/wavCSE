@@ -22,7 +22,7 @@ Boundaries: read-only, no-commit, no-paid-compute
 ## Steps
 
 1. Reconcile the durable record before saying anything:
-   `.omp/AGENTS.md`, `.omp/RULES.md`,
+   `.omp/AGENTS.md`,
    `improvements/taskrelation/research/OBJECTIVE.md`,
    `improvements/taskrelation/research/STATE.md`,
    `improvements/taskrelation/research/FINDINGS.md`,

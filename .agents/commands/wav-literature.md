@@ -49,9 +49,11 @@ Boundaries: mutates-research-state, no-paid-compute
 5. Verify each candidate's method category against the programme's taxonomy
    before treating it as relevant, and mark diagnostics, controls and
    conceptual inspiration as such.
-6. Retain only the papers that address the observed problem: store them under
-   `improvements/taskrelation/research/literature/papers/` and add a card under
-   `improvements/taskrelation/research/literature/`.
+6. Retain only the papers that address the observed problem: add a verified card
+   under `improvements/taskrelation/research/literature/` and record the source's
+   identity and the checks made against it in that card. There is no
+   `literature/papers/` directory in this repository — the cards are the retained
+   record of verified sources.
 7. Compare candidates by assumption rather than by reported accuracy, and update
    the comparison table in
    `improvements/taskrelation/research/literature/INDEX.md`.

@@ -86,6 +86,14 @@ Every claim in this framework therefore carries its condition: pooling, layers, 
 
 ## 6. Decision points currently open (human)
 
+> **Status update (pointer, not analysis).** DEC-0013 (human, 2026-09-22)
+> re-scoped the programme to a benchmark of published relation-learning variants
+> and deferred diagnostic-first sequencing, so option (a) is no longer a
+> precondition for mechanism work; DEC-0014 (human, 2026-09-22) activated option
+> (c) for the directed-relation question as a project-original arm. Option (b)
+> was not taken. The analysis below is retained as written; `DECISIONS.md` is
+> binding where the two disagree.
+
 The programme is gated on a scope decision, not on compute (DEC-0009, DEC-0010).
 
 **(a) Bounded diagnostic first, now narrower** (DEC-0012). The middle-phase drop is already accounted for by estimator size, so what remains is the **late-phase mean-gradient component** (≥20% of the late log-drop). The discriminating measurement is `‖E g‖`, the pool-mean gradient, which is estimator-noise-free; it needs instrumentation of the existing A0/A1 arms rather than a new composition sweep, and no mechanism is implied. This is the only question whose answer would change what the framework can claim about scale.
@@ -115,7 +123,10 @@ Items 1 and 2 are cheap and directly answer framework questions; items 3–5 are
 1. Measure the quantities in §1 under a pinned representation, with explicit seeds and recorded provenance.
 2. Classify each quantity as relational or optimization (§2) before proposing anything.
 3. Apply the rules in §4; if a rule's condition is unmet, the comparison is inadmissible.
-4. A mechanism proposal must pass both gates of DEC-0005 and state which framework row it addresses, with its promotion protocol fixed in advance (R8).
+4. A mechanism proposal must satisfy the gate in force — the published-method gate
+   (DEC-0013; DEC-0005's diagnostic gate is deferred, and a project-original
+   mechanism needs the Option-3 authorization, DEC-0014) — and state which
+   framework row it addresses, with its promotion protocol fixed in advance (R8).
 5. Report the conditioned table even when the conclusion is negative — the characterisation is the contribution.
 
 ---

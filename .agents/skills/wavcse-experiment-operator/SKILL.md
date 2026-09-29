@@ -25,10 +25,10 @@ The record lives under `improvements/taskrelation/research/`: `OBJECTIVE.md`, `S
 - `DECISIONS.md` entries bind until the human changes them or new evidence explicitly supersedes
   them.
 - Before opening a study, search `STUDIES.jsonl` and `FINDINGS.md` so an already-tested hypothesis
-  is not rediscovered as new (`DEC-0006`). `.omp/RULES.md` carries the repository-level invariants.
+  is not rediscovered as new (`DEC-0006`). `AGENTS.md` carries the repository-level invariants.
 
 ## Study types and identifier prefixes
-Fixed prefixes; never reuse an ID (`.omp/RULES.md`, `STATE.md`):
+Fixed prefixes; never reuse an ID (`AGENTS.md`, `STATE.md`):
 
 - `BL-xxxx` baseline/reproduction; `DG-xxxx` diagnostic; `TR-xxxx` Task Relation Learning mechanism;
   `AB-xxxx` ablation; `LT-xxxx` experiment derived directly from literature investigation
@@ -43,12 +43,13 @@ One study tests one primary scientific hypothesis, and a study is not one MLflow
 span a screening seed, confirmation seeds, ablations and LOSO evaluation (`STATE.md`).
 
 ## Registering a study
-- Every training run carries a Study ID (`.omp/RULES.md`). `studies/<STUDY_ID>/` holds `PLAN.md` and
+- Every training run carries a Study ID (`AGENTS.md`). `studies/<STUDY_ID>/` holds `PLAN.md` and
   `NOTE.md`, plus `result.json` (or `confirmation_result.json`) and `analysis.md` once results exist
-  (`BACKLOG.md`, DG-0001 "Study record"). Register in `STUDIES.jsonl` with `study_id`, `type`,
+  (`BACKLOG.md`, DG-0001 "Study record"); DG-0001 predates the template and uses `STUDY.md`. Register
+  in `STUDIES.jsonl` with `study_id`, `type`,
   `status`, `stage`, `hypothesis` and `outcome` (`DEC-0006`).
 - Preserve `created_at`, `started_at`, `completed_at` and status-transition dates in ISO 8601; never
-  rewrite historical timestamps (`.omp/RULES.md`, "Research Time Tracking").
+  rewrite historical timestamps (`AGENTS.md`, "Research Time Tracking").
 
 ## The plan a study must state before compute
 `BACKLOG.md` ("Agent Backlog Rules") requires: the observation motivating it, a falsifiable
@@ -73,7 +74,7 @@ gate).
   was computed — it promotes no new finding (`DEC-0012`, `studies/DG-0005/analyze_noise_shape.py`).
 
 ## Controls and comparability
-- Hold every factor constant unless it is the explicit independent variable (`.omp/RULES.md`;
+- Hold every factor constant unless it is the explicit independent variable (`AGENTS.md`;
   `FINDINGS.md` F2: pooling, layer selection, data, epochs, optimization, evaluation protocol,
   random-seed treatment).
 - Terminology: the **wavCSE baseline** (`improvements/base/`) is the reference to beat and the
@@ -88,7 +89,7 @@ gate).
 - Never lower `dataset.subset_percentage` (it also subsets validation and test), never "fix" the
   inert `scheduler_patience` key inside one arm, and do not fix unrelated code
   (`VARIANT_BENCHMARK_PROTOCOL.md` §8). Never silently modify the baseline evaluation protocol
-  (`.omp/RULES.md`). §10 lists what invalidates a comparison outright: unmatched pooling or layer
+  (`AGENTS.md`). §10 lists what invalidates a comparison outright: unmatched pooling or layer
   selection, a different epoch budget, checkpoint tag or seed treatment, optimizer exposure without
   a matching control, selecting on the test split, a screened seed versus a control's confirmed
   seeds, or an ordinary-split ER delta as an ER result.
@@ -137,13 +138,14 @@ over all ten folds, never one fold (`improvements/base/README.md`); folds use a 
 - A learned relation or diagnostic pattern is not evidence of useful transfer: 25L `smp` KS↔SI is
   maximally stable near `+1/3` while neither KS nor SI gains materially, so Ω magnitude is not a
   transfer or utility proxy, and retrospective relation variance alone cannot select a mechanism
-  (`FINDINGS.md` F6, `FRAMEWORK.md` row 8; `BACKLOG.md` DG-0004). Report the conditioned result even
-  when the conclusion is negative — the characterisation is the contribution (`FRAMEWORK.md` §8.5).
+  (`FINDINGS.md` F6, `FRAMEWORK.md` R8; `BACKLOG.md` DG-0004). Report the conditioned result even
+  when the conclusion is negative — the characterisation is the contribution (`FRAMEWORK.md` §8
+  item 5).
 
 ## Failure is not falsification
 - Record failed experiments; never delete negative evidence, and reclassify historical evidence
   rather than erasing it: F9 was refined by F10 and its withdrawn task-intrinsic rationale is
-  recorded as withdrawn (`.omp/RULES.md`, `DEC-0006`, `DEC-0010`; `FINDINGS.md` F9/F10).
+  recorded as withdrawn (`AGENTS.md`, `DEC-0006`, `DEC-0010`; `FINDINGS.md` F9/F10).
 - `FAILURES.md` statuses in use: `ESTABLISHED NEGATIVE RESULT`, `ESTABLISHED NEGATIVE DIAGNOSTIC`,
   `ESTABLISHED NEGATIVE LITERATURE RESULT`, `ESTABLISHED NEGATIVE JUSTIFICATION`. Distinguish
   infrastructure failure from falsification: a rerun after an infrastructure failure does not create
@@ -154,7 +156,7 @@ over all ten folds, never one fold (`improvements/base/README.md`); folds use a 
   different science: fix the infrastructure, keep the scientific configuration unchanged.
 
 ## Hyperparameter tuning policy
-Tuning is allowed only when scientifically justified (`.omp/RULES.md`, "Hyperparameter Tuning"):
+Tuning is allowed only when scientifically justified (`AGENTS.md`, "Hyperparameter Tuning"):
 begin from literature-recommended, theoretically natural or matched baseline settings; change only
 mechanism-relevant hyperparameters; select on validation, never test; use a small predefined space;
 record every attempted configuration; keep budget comparable across arms; freeze the configuration
@@ -180,24 +182,27 @@ membership, splits, preprocessing, label mapping or precision to make a job fast
   `status`, plus the rest of the set in that module), and every run also carries a DagsHub run note
   (`NOTE.md`) (`VARIANT_BENCHMARK_PROTOCOL.md` §7, `DEC-0006`).
 - Commit the implementation and config before launching and record the SHA in the study and in
-  `STUDIES.jsonl` (`VARIANT_BENCHMARK_PROTOCOL.md` §7, `.omp/RULES.md`). `resolve_git_commit()`
+  `STUDIES.jsonl` (`VARIANT_BENCHMARK_PROTOCOL.md` §7, `AGENTS.md`). `resolve_git_commit()`
   returns the checked-out HEAD the execution actually used; record only the commit actually executed
   — a later documentation-only commit does not change the commit a run reports (`STATE.md`).
 
 ## Reporting is read-only
 A status or weekly summary reconstructs state from the record and changes nothing: no code, no
 research files, no experiments, no studies, no backlog edits, no commits
-(`.omp/commands/tr-status.md`, `.omp/commands/tr-weekly.md`). Never inflate preliminary evidence,
-hide negative results, claim significance without evidence, call a run a study, or count a smoke
-test as scientific progress (`.omp/commands/tr-weekly.md` §6). Classify what is reported: confirmed
-/ strong diagnostic / preliminary-screening / rejected / inconclusive. When repository records
-disagree, state the inconsistency explicitly instead of guessing which one is stale
-(`.omp/commands/tr-status.md`). Weekly reports declare an evidence cutoff and label post-cutoff
-events, excluding them from counts (`improvements/taskrelation/research/weekly/2026-09-22.md`).
+(`.agents/commands/wav-status.md`, `.agents/commands/wav-weekly.md`). Never inflate preliminary
+evidence, hide negative results, claim significance without evidence, call a run a study, or count a
+smoke test as scientific progress (`.agents/commands/wav-weekly.md`, "Must not"). Classify what is
+reported: confirmed / strong diagnostic / preliminary-screening / rejected / inconclusive. When
+repository records disagree, state the inconsistency explicitly instead of guessing which one is
+stale (`.agents/commands/wav-status.md`). Weekly reports declare an evidence cutoff and label
+post-cutoff events, excluding them from counts (`.agents/commands/wav-weekly.md` step 1;
+`improvements/taskrelation/research/weekly/2026-09-22.md`).
 
 ## Closing a study
 - Decide from the criterion declared in the plan, using the decision vocabulary in use —
-  `CONFIRMED`, `REJECTED`, `INCONCLUSIVE`, `SUPERSEDED` (`VARIANT_BENCHMARK_PROTOCOL.md` preamble) —
+  `CONFIRMED` / `REJECTED` in `STUDIES.jsonl`, `INCONCLUSIVE` for an arm that cannot run under the
+  shared protocol (`VARIANT_BENCHMARK_PROTOCOL.md` §5), `SUPERSEDED` for a backlog entry
+  (`BACKLOG.md`) —
   and the `BACKLOG.md` study statuses `DONE`, `PARTIALLY ESTABLISHED`, `AUTHORIZED-FOR-BENCHMARK`;
   backlog entry statuses are `READY`, `BLOCKED`, `ACTIVE`, `DONE`, `REJECTED`, `SUPERSEDED`, and a
   programme-level block is `NEEDS-HUMAN-REVIEW` (`DEC-0008`).
@@ -215,6 +220,6 @@ events, excluding them from counts (`improvements/taskrelation/research/weekly/2
 
 ## Never
 - Change the fixed upstream wavCSE/WavLM embedding without an explicit human scope change
-  (`.omp/RULES.md`).
+  (`AGENTS.md`).
 - Present a project-original mechanism as a published method, or a mechanism result as a diagnostic
   (`DEC-0014`).

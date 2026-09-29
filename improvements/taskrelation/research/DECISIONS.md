@@ -222,9 +222,9 @@ argument.
 **Consequences:**
 
 1. New runs must record Study ID, stage, seed, task set, pooling, layer config,
-   git commit SHA, and a DagsHub run note (`.omp/RULES.md`).
+   git commit SHA, and a DagsHub run note (`AGENTS.md`).
 2. Before starting a study, search `STUDIES.jsonl` and `FINDINGS.md`
-   (`.omp/RULES.md`).
+   (`AGENTS.md`).
 3. Failed studies are recorded in `FAILURES.md`, never deleted.
 
 ---

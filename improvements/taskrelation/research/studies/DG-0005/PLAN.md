@@ -165,7 +165,7 @@ implementation surface and the invariants any change must preserve.
     absent the pipeline is byte-equivalent to the DG-0002 baseline protocol
     (project rule: never silently modify the baseline evaluation protocol).
 14. The implementation must be committed before any run and that SHA recorded
-    for every run (`.omp/RULES.md`).
+    for every run (`AGENTS.md`).
 15. The per-step realized `valid_examples` counts are the exposure gate. An arm
     whose realized composition misses its design target is invalid, not noisy
     (F8).
