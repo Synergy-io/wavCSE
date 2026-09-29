@@ -46,6 +46,7 @@ STUDY_DIR = os.path.join(REPO_ROOT, "improvements", "taskrelation", "research",
                          "studies", "TR-0007")
 PLAN_PATH = os.path.join(STUDY_DIR, "compute", "plan.json")
 INPUTS_PATH = os.path.join(STUDY_DIR, "compute", "inputs.json")
+PLAN_TEXT = open(os.path.join(STUDY_DIR, "PLAN.md"), "r", encoding="utf-8").read()
 
 WAVLM_LARGE_LAYERS = 25
 
@@ -179,17 +180,26 @@ class FrozenProtocolTests(unittest.TestCase):
 
 
 class PublishedFormulationTests(unittest.TestCase):
-    def test_lambda_values_are_the_published_option_a_values(self):
-        model_cfg = _load_config()["model"]
+    def test_lambda_values_and_the_lambda_2_labelling(self):
+        config = _load_config()
+        model_cfg = config["model"]
         self.assertEqual(model_cfg["mssl_lambda_0"], 1.0)
         self.assertEqual(model_cfg["mssl_lambda_1"], 0.0)
         self.assertIsNone(model_cfg["mssl_admm_rho"])
         self.assertGreaterEqual(model_cfg["mssl_admm_iterations"], 1000)
         self.assertTrue(model_cfg["normalize_w"])
-        # The paper publishes no default lambda_2: it cross-validates over
-        # {0.01, 0.1, 1, 10, 100} for its classification experiments, and the
-        # Study pre-registers a value from that grid (PLAN.md).
-        self.assertIn(model_cfg["mssl_lambda_2"], (0.01, 0.1, 1, 10, 100))
+        # lambda_2 = 0.01 is a researcher-fixed screening value (DEC-0016), not
+        # a paper default: the source paper cross-validates lambda_1/lambda_2
+        # and publishes neither a value nor a transferable scale.
+        self.assertEqual(model_cfg["mssl_lambda_2"], 0.01)
+        self.assertEqual(config["mssl"]["lambda_2_selection"], "researcher-fixed")
+        # The label is machine-readable provenance, so it reaches MLflow with
+        # the rest of the flattened config.
+        plan = jobspec.load_plan(PLAN_PATH)
+        labels = {arm["arm"]: arm["labels"] for arm in plan["arms"]}
+        self.assertIn("researcher-fixed", labels["p-mssl"]["lambda_2_selection"])
+        flat_plan = " ".join(PLAN_TEXT.split())
+        self.assertIn("not a value prescribed by the paper", flat_plan)
 
     def test_lambda_2_has_no_default_in_the_implementation(self):
         model_cls = _load_mssl_model_class()

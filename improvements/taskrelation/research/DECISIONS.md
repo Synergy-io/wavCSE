@@ -461,3 +461,62 @@ intact in `studies/TR-0007/NOTE.md`. This is a record repair, not a new scientif
    screen seed 42, and the human decides whether it is still worth its compute.
 5. No compute is created by this decision: `authorizations/TR-0007.yaml` still does not exist,
    and the arm's screen plan is prepared but not submitted.
+
+---
+
+## DEC-0016 — HUMAN DECISION: TR-0007 screen runs with a researcher-fixed lambda_2 = 0.01; narrow screen authorization granted
+
+**Status:** ACTIVE — 2026-09-29 (human-authored decision; recorded by an agent cycle)
+
+**Previous direction:** `DEC-0015` chose Option A (faithful published formulation) and left one
+input explicitly open: `lambda_2`, which the source paper selects on data and for which it
+publishes no value. `studies/TR-0007/PLAN.md` pre-registered two admissible resolutions: a
+validation-selected grid (five-run screen) or a researcher-fixed value (three-run screen).
+
+**Decision (human): the fixed value.** The TR-0007 screen runs `lambda_2 = 0.01`,
+`lambda_0 = 1.0`, with **no** validation-selection grid. Rationale recorded by the human: keep
+the initial diagnostic screen small and inexpensive.
+
+**Labelling (binding).** `lambda_2 = 0.01` is a **researcher-fixed screening value**. It is
+**not** a value prescribed by the paper: the paper selects `lambda_1`/`lambda_2` by
+cross-validation (Algorithm 1) and publishes no transferable default, and its scale is not
+transferable between representations. That limitation stays visible in the study record, in
+the plan, and in the DagsHub/MLflow provenance of every run of this screen
+(`lambda_2_selection: researcher-fixed`).
+
+**Purpose of the run.** This is a **screen**, not confirmation and not hyperparameter
+optimisation: it asks whether the faithful, corrected p-MSSL implementation shows enough
+evidence to justify further compute. Three arms only — p-MSSL, classical MTRL, matched wavCSE
+baseline — at seed 42 under the frozen protocol, all 25 layers, nothing tuned during the run.
+
+**Historical DagsHub runs (preservation rule).** The TR-0007 runs already in DagsHub from code
+lines absent from this repository's history are **historical evidence only**: never deleted,
+overwritten, relabelled or merged into this screen, never substituted for one of this screen's
+arms, and their provenance limitation is recorded wherever they are cited. The new runs must be
+distinguishable by exact git SHA, `study_id`, `stage`, `seed`, `lambda_2`,
+`lambda_2_selection`, layer policy and protocol version.
+
+**Compute policy for this screen (human).** Minimise expected cost to a verified scientific
+result — not GPU performance, not utilisation, not reuse of a previously preferred class.
+Refresh provider inventory and prices before any worker is created, prefer the cheapest
+compatible worker (VRAM, storage, direct SSH, artifact materialisation, cloud tier, existing
+network-volume constraint, envelope), keep one worker for all three arms, and stop compute when
+the screen is done. Scientific parameters are never changed to fit cheaper hardware.
+
+**Authorization granted by the same message.** A narrow screen envelope for scope `TR-0007`,
+bounded at `0.80 USD/GPU-hour`, `5.00 USD` total, `6` paid wall-clock hours, one worker,
+replacements allowed, the existing network volume allowed, no new persistent resources,
+`60 GB` container disk, destroy on completion. It authorizes **only** the three-arm seed-42
+screen. It does **not** authorize confirmation seeds, any lambda grid, other architecture
+experiments, `TR-0008`, `DG-0007`, or additional persistent resources, and it may not be
+widened by an agent.
+
+**Consequences.**
+
+1. `studies/TR-0007/compute/plan.json` carries `lambda_2` in the arm's labels, the label
+   `lambda_2_selection: researcher-fixed`, and the cheapest compatible worker found at
+   execution time.
+2. The screen is classified `PROMISING` / `REJECTED` / `INCONCLUSIVE` by the criteria
+   pre-registered in `PLAN.md`; the goalposts do not move after seeing the result.
+3. Confirmation remains a separate, later, explicitly human-authorized stage. A `PROMISING`
+   screen does not trigger it.

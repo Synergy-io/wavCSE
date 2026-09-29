@@ -154,29 +154,17 @@ is enforced executably, not only in prose: see *Executable validation* below.
 No other hyperparameter may change. In particular, the protocol values above are frozen and
 were not re-tuned.
 
-## Open item — λ₂, the one pre-registration input the paper does not supply (HUMAN_DECISION)
+## λ₂ — researcher-fixed screening value (DEC-0016)
 
-The source paper fixes λ₀ = 1 and **selects λ₂ on data**; the repository's literature record
-says the same ("the paper uses stability selection to choose them"). Two coherent
-pre-registrations exist, and they differ in run count and in what a `REJECTED` outcome means:
-
-* **(i) Validation-selected λ₂ (recommended).** The paper's own procedure, restricted by
-  protocol §6: select λ₂ on the **validation** split at the screen seed from the paper's
-  published classification grid restricted to its two smallest values `{0.01, 0.1}` (2 values,
-  matching the control's own two-value λ selection budget), with the selection metric
-  pre-declared (aggregate validation accuracy at the protocol checkpoint; ties → the sparser
-  Ω), every attempt recorded, the value frozen before the three-arm comparison. Cost: two
-  extra MSSL runs at seed 42 (+1.2 GPU-h; the screen becomes 5 runs ≈ 3.0 GPU-h). A
-  controller-side scan (2026-09-29, CPU, no compute) shows this is the live region for this
-  summary: at `normalize_w: true` the off-diagonal support goes from 4/6 non-zero at
-  λ₂ = 0.01 to 0/6 at λ₂ = 0.1, i.e. the grid spans "mechanism live" → "Ω diagonal".
-* **(ii) Fixed λ₂ named by the researcher.** Keeps the registered screen at exactly three
-  runs (≈1.8 GPU-h) but requires a value the paper does not publish; a `REJECTED` outcome then
-  reads "MSSL at that λ₂ did not help", not "MSSL did not help".
-
-Until the human answers, this plan pre-registers **(i)** and `mssl_config.yml` carries
-`mssl_lambda_2: 0.01` — the smallest value of the paper's own grid, i.e. the grid point whose
-mechanism is verifiably live — as the value that variant (ii) would freeze.
+The screen runs **λ₂ = 0.01**, fixed by the researcher (DEC-0016) to keep the initial
+diagnostic screen small and inexpensive. **This is a researcher-fixed screening value, not a
+value prescribed by the paper.** The source paper selects λ₁/λ₂ by cross-validation
+(Algorithm 1) and publishes no transferable default; its numeric scale is also not
+transferable between representations because Eq. (8) is not scale free. No validation-selection
+grid is run, so `lambda_2 = 0.01` carries no selection evidence: a `REJECTED` screen reads
+"MSSL did not help at this fixed λ₂", not "MSSL cannot help". The limitation is carried in the
+plan, in the arm config, and in every run's MLflow params/tags
+(`lambda_2_selection: researcher-fixed`).
 
 ## Cheapest adequate experiment
 
@@ -192,12 +180,24 @@ sparse-precision family for this representation and feeds the framework's select
 
 ## Expected compute and GPU allocation
 
-* Screen: 3 runs (5 with variant (i)) ≈ 1.8 (3.0) GPU-h on a single 1×GPU worker.
+* Screen: 3 runs ≈ 1.0 GPU-h of training (measured: the comparable 30-epoch protocol runs in
+  the tracking record took 17.8–20.7 min each) on a single 1×GPU worker, plus materialisation
+  and setup, all inside the 6 h envelope.
 * Confirmation (later stage, not submitted now): 9.0 GPU-h.
+* Worker: the cheapest compatible offer in the network volume's datacenter at execution time
+  (inventory refreshed 2026-09-29: `NVIDIA RTX A4500` 20 GB at `$0.25/h`, against
+  `NVIDIA RTX PRO 4000 Blackwell` at `$0.57/h` and `RTX 4090` at `$0.74/h` in the same
+  datacenter; the 20 GB card is ample for the frozen experiment, so expected total cost — not
+  hourly price alone, and not a previously used model — decides).
 * At most one worker at a time; no parallel worker. `df -h` and `nvidia-smi` are checked by
   the backend before any worker request; container disk ≤ 60 GB.
 
-## Proposed authorization envelope (reproduced from Phase 4 for human review; NOT created yet)
+## Authorization envelope (granted 2026-09-29, DEC-0016; screen only)
+
+The envelope below was granted by the human for **this screen only**. It is written to
+`../../authorizations/TR-0007.yaml`, committed, and read from the committed revision by the
+backend; nothing in it authorizes confirmation, a λ grid, other experiments or new persistent
+resources.
 
 ```
 max_gpu_hourly_usd: 0.80
@@ -253,6 +253,13 @@ decomposition. It stays inside `improvements/taskrelation/`.
   is needed for exposure; any deviation invalidates the comparison (protocol §10).
 * **Relation saturation**: a diagonal Ω means the mechanism is inert; the per-epoch relation
   object and its optimality certificate are logged so this is visible rather than inferred.
+* **Raw-dataset provisioning (infrastructure, not science).** The loader's dataset classes
+  subclass `torchaudio`'s dataset readers, which require the *raw* voice datasets at
+  `paths.root_data_path` (`~/voice_dataset/<dataset>`); the compute backend declares and
+  materialises the *embedding* artifacts only. Before any job is submitted, the worker's raw
+  dataset tree is verified read-only (existing network volume / pre-provisioned scratch). If it
+  is absent, the run stops as an infrastructure blocker rather than reimplementing dataset
+  provisioning in ad-hoc shell — and no scientific parameter is changed to work around it.
 
 ## Prior evidence on DagsHub (record conflict, recorded not smoothed over)
 

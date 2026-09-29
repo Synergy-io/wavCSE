@@ -389,6 +389,20 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
             },
         )
         mlflow.log_param("task_type", task_type)
+        # Worker/GPU provenance: a result must be traceable to the machine that
+        # produced it, and the compute backend's environment names the worker
+        # without leaking anything secret. Never a reason a run may fail.
+        try:
+            worker_gpu = torch.cuda.get_device_name(device) if torch.cuda.is_available() else "cpu"
+        except Exception as exc:  # pragma: no cover - defensive only
+            worker_gpu = "unknown ({})".format(type(exc).__name__)
+        mlflow.log_param("worker_gpu", worker_gpu)
+        mlflow.set_tag("worker_gpu", worker_gpu)
+        for env_key in ("INFRA_WORKER_ID", "INFRA_WORKER_NAME", "INFRA_JOB_ID",
+                        "INFRA_PROVIDER", "INFRA_GPU", "INFRA_GIT_COMMIT"):
+            value = os.environ.get(env_key)
+            if value:
+                mlflow.set_tag(env_key.lower(), value)
 
         # Build model
         model = build_model(model_type, cfg, task_type, layer_pooling_param)

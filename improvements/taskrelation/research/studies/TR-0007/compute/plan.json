@@ -39,7 +39,8 @@
         "lambda_2": "0.01",
         "normalize_w": "true",
         "omega_step": "eq8-graphical-lasso-admm",
-        "experiment": "taskrelation-mssl"
+        "experiment": "taskrelation-mssl",
+        "lambda_2_selection": "researcher-fixed (DEC-0016; the paper selects lambda_2 on data and publishes no default)"
       }
     },
     {
@@ -67,7 +68,8 @@
         "environment": "single-gpu-worker",
         "mtrl_lambda": "0.01",
         "normalize_w": "true",
-        "experiment": "taskrelation-mtrl"
+        "experiment": "taskrelation-mtrl",
+        "lambda_2_selection": "researcher-fixed (DEC-0016; the paper selects lambda_2 on data and publishes no default)"
       }
     },
     {
@@ -93,7 +95,8 @@
         "implementation": "matched-wavcse-baseline",
         "layer_policy": "all-25",
         "environment": "single-gpu-worker",
-        "experiment": "wavcse-baseline"
+        "experiment": "wavcse-baseline",
+        "lambda_2_selection": "researcher-fixed (DEC-0016; the paper selects lambda_2 on data and publishes no default)"
       }
     }
   ],
@@ -125,7 +128,7 @@
     }
   ],
   "worker": {
-    "gpu_type": "NVIDIA RTX PRO 4000 Blackwell",
+    "gpu_type": "NVIDIA RTX A4500",
     "cloud": "SECURE",
     "gpu_count": 1,
     "image": "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",

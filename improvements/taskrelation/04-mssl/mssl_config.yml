@@ -50,12 +50,13 @@ model:
   # summary, so a feature-selecting l1 has no analogue there.
   mssl_lambda_1: 0.0
   # Eq. (3)/(4b)'s l1 penalty on Omega (Eq. 8's lambda_2, applied as
-  # lambda_2/d by the solver). The paper does not fix this value: Algorithm 1
-  # selects it by cross-validation and its classification experiments use the
-  # grid {0.01, 0.1, 1, 10, 100}. 0.01 is that published grid's smallest value
-  # and the Study pre-registers it here (see
-  # improvements/taskrelation/research/studies/TR-0007/NOTE.md); it is not the
-  # outcome of a search in this Study.
+  # lambda_2/d by the solver). RESEARCHER-FIXED SCREENING VALUE (DEC-0016):
+  # the paper does not publish a default -- Algorithm 1 selects lambda_1 and
+  # lambda_2 on data and its classification experiments cross-validate over
+  # {0.01, 0.1, 1, 10, 100} -- so 0.01 carries no selection evidence and must
+  # never be described as prescribed by the paper. It is not the outcome of a
+  # search in this Study either: no grid was run (DEC-0016). Every run of this
+  # screen carries lambda_2_selection = researcher-fixed in its provenance.
   mssl_lambda_2: 0.01
   # Eq. (9)-(11) ADMM penalty parameter for the Omega step. null starts the
   # solver at its scale-consistent default 1/mean(diag(S)) and lets it
@@ -85,10 +86,15 @@ training:
   l1_lambda: 0.0000001
   l2_lambda: 0.00001
 
-# MSSL-specific: the control's MTRL schedule (warmup then every epoch).
+# MSSL-specific: the control's MTRL schedule (warmup then every epoch), plus
+# the provenance of lambda_2's value. `researcher-fixed` is logged as an MLflow
+# param with the rest of the config, so the screen's runs state in the tracking
+# record that lambda_2 = 0.01 was fixed by the researcher (DEC-0016) and not
+# selected by the paper's cross-validation.
 mssl:
   warmup_epochs: 3
   omega_update_frequency: 1
+  lambda_2_selection: researcher-fixed
 
 evaluation:
   batch_size: 2048

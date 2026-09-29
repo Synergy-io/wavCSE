@@ -200,3 +200,40 @@ record policy), they are *not* this Study's runs, and they used a different impl
 seed 0 rather than the registered screen seed 42. Recorded here so the earlier negative
 screen cannot be rediscovered as new, and so the human decides whether the corrected
 implementation still warrants its own screen.
+
+---
+
+# 2026-09-29 — Screen authorized with a researcher-fixed lambda_2 (DEC-0016)
+
+Appended. The pre-registration record above stays as the state the Study was in before paid
+execution.
+
+**Human decision (DEC-0016).** The screen runs `lambda_2 = 0.01`, `lambda_0 = 1.0`, with **no**
+validation-selection grid, to keep the initial diagnostic screen small and inexpensive. The
+value is a **researcher-fixed screening value**: the source paper selects `lambda_1`/`lambda_2`
+by cross-validation (Algorithm 1) and publishes neither a value nor a transferable scale, so
+`0.01` must never be described as prescribed by the paper, and a `REJECTED` screen reads "p-MSSL
+did not help at this fixed lambda_2", not "p-MSSL cannot help". The label travels with the run:
+`mssl.lambda_2_selection = researcher-fixed` is logged as an MLflow parameter (the config is
+flattened into params), and the plan's arm labels carry it too.
+
+**Scope of the authorization (screen only).** Three arms at seed 42 under the frozen protocol
+(p-MSSL, classical MTRL, matched wavCSE baseline; all 25 layers; `smp` 0.5; 30 epochs; batch
+2048; AdamW lr 0.0025). Bounds: 0.80 USD/GPU-hour, 5.00 USD total, 6 paid wall-clock hours, one
+worker, replacements allowed, the existing network volume allowed, no new persistent resources,
+60 GB container disk, destroy on completion. Confirmation, any lambda grid, other experiments,
+`TR-0008`, `DG-0007` and new persistent resources are **not** authorized. Nothing is tuned
+during the screen.
+
+**Compute choice.** Provider inventory and prices were refreshed at execution time. The
+cheapest compatible offer inside the network volume's datacenter was selected on expected total
+cost, not on the highest hourly price or on a previously used GPU model; the run reuses one
+worker for all three arms.
+
+**Historical runs remain historical.** The `TR-0007__screen__*` runs already in DagsHub come
+from code lines absent from this repository's history and are retained, unrelabelled and
+unmodified, as historical evidence only. They are not substituted for any arm of this screen,
+and their provenance limitation (unknown commit line, seed 0, a different implementation with
+its own `covariance_normalization` knob, no `lambda_2_selection` tag) is stated wherever they
+are cited. This screen's runs are identifiable by their exact git SHA, `study_id`, `stage`,
+`seed`, `lambda_2`, `lambda_2_selection`, layer policy and protocol version.
