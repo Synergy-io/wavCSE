@@ -405,6 +405,20 @@ def _prepare(infra, worker_id, worker=None):
             "worker {} health check failed: {}".format(worker_id, _failure_text(health)),
             action="health",
         )
+    payload = health.payload if isinstance(health.payload, dict) else {}
+    if payload.get("ready") is False:
+        raise ReconcilableError(
+            "worker {} reports readiness {} rather than READY: {}".format(
+                worker_id,
+                payload.get("readiness_state") or "unknown",
+                "; ".join(
+                    "{}: {}".format(check.get("name"), check.get("detail"))
+                    for check in payload.get("checks", [])
+                    if check.get("status") != "PASS"
+                ) or "no failing check was reported",
+            ),
+            action="health",
+        )
     return None
 
 

@@ -217,7 +217,16 @@ class InfraCli(object):
         return self.run("worker", "show", worker_id, "--read-only", json_output=True).payload
 
     def worker_health(self, worker_id):
-        return self.run("worker", "health", worker_id, json_output=True).payload
+        """Return the readiness-ladder result, not its payload.
+
+        Callers walk the ladder by exit code (`worker_wait_ssh` and
+        `worker_bootstrap` return the same shape), so the payload is available
+        on `.payload` for anyone who needs the checks themselves. Returning the
+        bare payload here made every readiness walk raise AttributeError after
+        a paid worker had already been created.
+        """
+
+        return self.run("worker", "health", worker_id, json_output=True)
 
     def volume_list(self):
         result = self.run("volume", "list", "--read-only", json_output=True).payload or {}

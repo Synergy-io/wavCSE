@@ -191,3 +191,37 @@ class CliTests(ComputeTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_worker_health_returns_a_result_the_readiness_ladder_can_walk(self):
+        """Regression: worker_health used to return its payload.
+
+        `worker.ensure_worker` walks the readiness ladder by exit code, and it
+        does so *after* a paid worker exists: returning a dict made every
+        provisioning attempt die with AttributeError on a live worker. The
+        contract is the same shape `worker_wait_ssh` and `worker_bootstrap`
+        return, with the JSON payload available on `.payload`.
+        """
+
+        from improvements.compute import infra_cli
+
+        captured = {}
+
+        def fake_run(*args, **kwargs):
+            captured["args"] = args
+            captured["json_output"] = kwargs.get("json_output")
+            return infra_cli.InfraResult(
+                returncode=0,
+                stdout='{"ready": true, "readiness_state": "READY"}',
+                stderr="",
+                payload={"ready": True, "readiness_state": "READY"},
+            )
+
+        location = type("Location", (), {"checkout": "/nonexistent", "cli": "/bin/true"})()
+        client = infra_cli.InfraCli(location)
+        client.run = fake_run
+        result = client.worker_health("worker-1")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.payload["readiness_state"], "READY")
+        self.assertEqual(captured["args"], ("worker", "health", "worker-1"))
+        self.assertTrue(captured["json_output"])
