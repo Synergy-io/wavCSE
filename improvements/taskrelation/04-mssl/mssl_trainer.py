@@ -18,12 +18,34 @@ entries additionally carry the Omega solver's own optimality certificate for
 that snapshot (`dual_violation`, `relative_duality_gap` -- see
 `mssl_model.optimality_certificate`), which the MTRL arm's analytic step has
 no analogue for.
+
+MSSL's entries also carry the mechanism bundle this arm's study needs (the
+coupling term's *scale* is the TR-0007 finding), all measured per epoch and
+never fed back into training:
+
+* `omega_eigenvalues`, `trace`, `support_edges` / `zero_offdiagonals` and the
+  partial correlations -- the relation object itself;
+* `summary_cosines`, `summary_gram`, `summary_gram_eigenvalues`,
+  `summary_row_norms` and `summary_raw_row_norms` -- the task-parameter
+  summary's geometry, which is what the coupling reshapes;
+* `coupling_value` = `lambda_0 * tr(W Omega W^T)` at that snapshot, read off
+  the same `W` the coupling term uses.
+
+Separately, `coupling_scale.json` records one *gradient-scale* probe per epoch
+on the first training batch -- `||d L_task/d theta||` over all trainable
+parameters and over the classifier heads, `||d coupling/d theta||` over the
+same sets, their ratio, and the coupling value on that batch. The probe uses
+`torch.autograd.grad(..., retain_graph=True)`, which never writes optimizer
+`.grad` buffers, so the measured step is the same step the run would have
+taken without instrumentation (`test_mssl_mechanism_probe.py` asserts this
+bit-exactly).
 """
 
 import os
 import json
+import math
 import logging
-from typing import Dict
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -58,6 +80,7 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
         ignore_index: int = -1,
         mssl_warmup_epochs: int = 3,
         omega_update_frequency: int = 1,
+        lambda_2_selection: str = "unspecified",
     ):
         super().__init__(
             model=model,
@@ -73,12 +96,24 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
 
         self.mssl_warmup_epochs = mssl_warmup_epochs
         self.omega_update_frequency = omega_update_frequency
+        self.lambda_2_selection = str(lambda_2_selection)
         self.current_epoch = 0
         self.omega_history = []
+        # Mechanism instrumentation (see the module docstring): one gradient-scale
+        # probe per epoch on the first training batch, plus the coupling value and
+        # the summary/Omega geometry recorded with each Omega snapshot. Everything
+        # here is read-only with respect to training.
+        self.coupling_history: List[Dict] = []
+        self._probe_batch_seen = 0
+        self._relation_parameter_names = tuple(
+            name for name, _ in self.model.named_parameters()
+            if name.startswith("classifiers.")
+        )
 
         logging.info(
             "MSSL warmup epochs: %d, omega_update_frequency: %d",
-            mssl_warmup_epochs, omega_update_frequency,
+            mssl_warmup_epochs,
+            omega_update_frequency,
         )
 
     def _optimality_certificate(self, omega: torch.Tensor):
@@ -103,19 +138,76 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
             self.model.mssl_lambda_0,
         )
 
+    def _summary_geometry(self) -> Dict:
+        """Summary Gram, row norms and pairwise cosines at the current parameters.
+
+        `summary_cosines` are the Gram's off-diagonals of the normalised summary
+        (the adapter's output when `normalize_w` is on); `summary_raw_row_norms`
+        are the rows' norms before that normalisation, which the normalised
+        matrix cannot show. Reporting only, never fed back into training.
+        """
+        summary = self.model.get_task_parameter_matrix().detach().float().cpu()
+        gram = summary @ summary.transpose(0, 1)
+        raw_norms = self.model.get_raw_task_parameter_matrix().norm(dim=1)
+        return {
+            "summary_gram": [[self._round(value, 6) for value in row] for row in gram],
+            "summary_cosines": [
+                self._round(gram[0, 1], 6),
+                self._round(gram[0, 2], 6),
+                self._round(gram[1, 2], 6),
+            ],
+            "summary_gram_eigenvalues": [
+                self._round(value, 6) for value in torch.linalg.eigvalsh(gram.double())
+            ],
+            "summary_row_norms": [self._round(value, 6) for value in summary.norm(dim=1)],
+            "summary_raw_row_norms": [self._round(value, 6) for value in raw_norms],
+        }
+
+    def _coupling_value(self, omega: torch.Tensor) -> float:
+        """`lambda_0 * tr(W Omega W^T)` exactly, from the same W the loss uses."""
+        with torch.no_grad():
+            W = self.model.get_task_parameter_matrix().detach().float().cpu()
+            value = float(self.model.mssl_lambda_0) * float(
+                torch.trace(W.double().transpose(0, 1) @ omega.double() @ W.double())
+            )
+        return self._round(value, 4)
+
+    @staticmethod
+    def _round(value, digits: int) -> float:
+        return round(float(value), digits)
+
     def _record_omega(self, epoch: int) -> None:
         omega = self.model.get_omega_matrix()
         omega_list = omega.tolist()
         partial_list = self.model.get_partial_correlations().tolist()
         dual_violation, relative_duality_gap = self._optimality_certificate(omega)
+        num_tasks = self.model.num_tasks
+        omega_double = omega.double()
+        off_diagonal = omega_double - torch.diag(torch.diagonal(omega_double))
+        upper = torch.triu(off_diagonal, diagonal=1)
+        zero_offdiagonals = int((upper == 0.0).sum().item())
 
-        self.omega_history.append({
+        entry = {
             "epoch": epoch,
             "omega": omega_list,
             "partial_correlations": partial_list,
             "dual_violation": dual_violation,
             "relative_duality_gap": relative_duality_gap,
-        })
+            "lambda_2": float(self.model.mssl_lambda_2),
+            "lambda_0": float(self.model.mssl_lambda_0),
+            "omega_trace": self._round(torch.trace(omega.double()), 4),
+            "omega_eigenvalues": [
+                self._round(value, 4) for value in torch.linalg.eigvalsh(omega.double())
+            ],
+            "mean_abs_offdiagonal": self._round(
+                off_diagonal.abs().sum() / max(num_tasks * (num_tasks - 1), 1), 4
+            ),
+            "zero_offdiagonals": zero_offdiagonals,
+            "support_edges": int(num_tasks * (num_tasks - 1) / 2) - zero_offdiagonals,
+            "coupling_value": self._coupling_value(omega),
+        }
+        entry.update(self._summary_geometry())
+        self.omega_history.append(entry)
 
         if mlflow.active_run() is not None:
             metrics = {}
@@ -172,6 +264,138 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
         logging.info("MSSL Omega history (%d snapshots) saved to %s",
                      len(self.omega_history), path)
 
+    # ---- mechanism instrumentation (read-only; see the module docstring) ----
+
+    def _trainable_parameters(self) -> List[torch.nn.Parameter]:
+        return [parameter for parameter in self.model.parameters()
+                if parameter.requires_grad]
+
+    def _head_parameters(self) -> List[torch.nn.Parameter]:
+        return [parameter for name, parameter in self.model.named_parameters()
+                if parameter.requires_grad and name.startswith("classifiers.")]
+
+    @staticmethod
+    def _gradient_norm(output: torch.Tensor,
+                       parameters: List[torch.nn.Parameter]) -> Optional[float]:
+        """||d output / d parameters||_2, without writing optimizer `.grad` buffers.
+
+        `torch.autograd.grad` returns the gradients instead of accumulating them
+        into `parameter.grad`, and the graph is kept so the training step's own
+        `backward()` still sees it. Returns None when `output` does not depend on
+        any of `parameters`.
+        """
+        gradients = torch.autograd.grad(
+            output, parameters, retain_graph=True, allow_unused=True
+        )
+        total = 0.0
+        for gradient in gradients:
+            if gradient is not None:
+                total += float(gradient.detach().double().pow(2).sum().item())
+        if total == 0.0 and all(gradient is None for gradient in gradients):
+            return None
+        return math.sqrt(total)
+
+    def _probe_gradient_scales(self, task_loss: torch.Tensor,
+                               coupling: Optional[torch.Tensor]) -> None:
+        """Record one epoch's task/coupling gradient scales on the probe batch."""
+        all_parameters = self._trainable_parameters()
+        head_parameters = self._head_parameters()
+        task_all = self._gradient_norm(task_loss, all_parameters)
+        task_heads = self._gradient_norm(task_loss, head_parameters)
+        record = {
+            "epoch": self.current_epoch,
+            "warmup_epochs": int(self.mssl_warmup_epochs),
+            "task_loss_value": self._round(task_loss.detach().item(), 6),
+            "task_grad_norm_all": None if task_all is None else self._round(task_all, 6),
+            "task_grad_norm_heads": (
+                None if task_heads is None else self._round(task_heads, 6)
+            ),
+            "relation_value": None,
+            "relation_grad_norm_all": None,
+            "relation_grad_norm_heads": None,
+            "relation_over_task_grad_ratio_heads": None,
+            "relation_over_task_grad_ratio_all": None,
+        }
+        if coupling is not None:
+            relation_all = self._gradient_norm(coupling, all_parameters)
+            relation_heads = self._gradient_norm(coupling, head_parameters)
+            record.update({
+                "relation_value": self._round(coupling.detach().item(), 6),
+                "relation_grad_norm_all": (
+                    None if relation_all is None else self._round(relation_all, 6)
+                ),
+                "relation_grad_norm_heads": (
+                    None if relation_heads is None else self._round(relation_heads, 6)
+                ),
+            })
+            if relation_heads is not None and task_heads:
+                record["relation_over_task_grad_ratio_heads"] = self._round(
+                    relation_heads / task_heads, 6
+                )
+            if relation_all is not None and task_all:
+                record["relation_over_task_grad_ratio_all"] = self._round(
+                    relation_all / task_all, 6
+                )
+        self.coupling_history.append(record)
+
+        if mlflow.active_run() is not None:
+            metrics = {"task_grad_norm_heads": record["task_grad_norm_heads"]}
+            if record["relation_grad_norm_heads"] is not None:
+                metrics["relation_grad_norm_heads"] = record["relation_grad_norm_heads"]
+                metrics["relation_value"] = record["relation_value"]
+            if record["relation_over_task_grad_ratio_heads"] is not None:
+                metrics["relation_over_task_grad_ratio"] = (
+                    record["relation_over_task_grad_ratio_heads"]
+                )
+            mlflow.log_metrics(
+                {key: value for key, value in metrics.items() if value is not None},
+                step=self.current_epoch,
+            )
+
+        logging.info(
+            "MSSL gradient scale probe | epoch=%d | ||g_task||_heads=%.6g | "
+            "||g_coupling||_heads=%s | ratio=%s | coupling=%.6g",
+            self.current_epoch,
+            record["task_grad_norm_heads"],
+            record["relation_grad_norm_heads"],
+            record["relation_over_task_grad_ratio_heads"],
+            record["relation_value"] if record["relation_value"] is not None else 0.0,
+        )
+
+    def _save_coupling_scale(self) -> None:
+        if not self.coupling_history:
+            return
+        onset = [
+            record["epoch"] for record in self.coupling_history
+            if record["relation_value"] is not None
+        ]
+        path = os.path.join(self.results_dir, "coupling_scale.json")
+        payload = {
+            "task_array": self.task_array,
+            "method": "mssl",
+            "probe": "first training batch of every epoch",
+            "gradient_parameter_sets": {
+                "all": "every trainable parameter of the model",
+                "heads": "parameters whose name starts with 'classifiers.'",
+            },
+            "lambda_0": float(self.model.mssl_lambda_0),
+            "lambda_1": float(self.model.mssl_lambda_1),
+            "lambda_2": float(self.model.mssl_lambda_2),
+            "lambda_2_selection": self.lambda_2_selection,
+            "normalize_w": bool(self.model.normalize_w),
+            "warmup_epochs": int(self.mssl_warmup_epochs),
+            "coupling_onset_epoch": onset[0] if onset else None,
+            "history": self.coupling_history,
+        }
+        with open(path, "w") as handle:
+            json.dump(payload, handle, indent=2)
+
+        if mlflow.active_run() is not None:
+            mlflow.log_artifact(path, artifact_path="mechanism")
+
+        logging.info("MSSL coupling scale history (%d epochs) saved to %s",
+                     len(self.coupling_history), path)
+
     def _process_batch(self, batch, train_mode: bool):
         input_seq, labels_list = self._unpack_batch(batch)
 
@@ -211,14 +435,26 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
         for parameter in self.model.parameters():
             l1_reg = l1_reg + torch.sum(torch.abs(parameter))
             l2_reg = l2_reg + torch.sum(torch.square(parameter))
+        # The task term (the batch-mean weighted cross-entropy) before the
+        # regularizers and the coupling: the scale the coupling is compared with.
+        task_loss_term = loss_all
         loss_all = loss_all + self.l1_lambda * l1_reg + self.l2_lambda * l2_reg
 
         # === MSSL MODIFICATION: coupling term tr(W Omega W^T), post-warmup ===
+        coupling_term = None
         if self.current_epoch >= self.mssl_warmup_epochs:
-            loss_all = loss_all + self.model.get_relation_loss()
+            coupling_term = self.model.get_relation_loss()
+            loss_all = loss_all + coupling_term
         # === MSSL MODIFICATION END ===
 
         if train_mode:
+            self._probe_batch_seen += 1
+            is_probe_batch = self._probe_batch_seen == 1
+            if is_probe_batch:
+                # Read-only measurement on the epoch's first training batch: it
+                # writes no `.grad` buffer and keeps the graph, so the backward
+                # below and the optimizer step are unchanged.
+                self._probe_gradient_scales(task_loss_term, coupling_term)
             loss_all.backward()
             self.optimizer.step()
 
@@ -255,6 +491,7 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
 
         for ep in range(1, self.num_epochs + 1):
             self.current_epoch = ep
+            self._probe_batch_seen = 0
             logging.info("epoch_start | epoch=%d/%d", ep, self.num_epochs)
 
             train_stats = self._process_data_loader(self.train_dataloader, train_mode=True)
@@ -342,4 +579,5 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
         )
 
         self._save_omega_history()
+        self._save_coupling_scale()
         self.plot_metrics()

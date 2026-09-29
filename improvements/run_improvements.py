@@ -259,6 +259,10 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
             ignore_index=ignore_index,
             mssl_warmup_epochs=mssl_cfg.get("warmup_epochs", 3),
             omega_update_frequency=mssl_cfg.get("omega_update_frequency", 1),
+            # Provenance of the lambda_2 value, carried into the run's mechanism
+            # artifact so the recorded diagnostics state which selection rule
+            # produced the penalty they were measured under.
+            lambda_2_selection=mssl_cfg.get("lambda_2_selection", "unspecified"),
         )
     else:
         # GBC and original use the standard trainer

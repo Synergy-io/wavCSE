@@ -118,6 +118,32 @@ and `../research/studies/TR-0007/`):
    key — a validation-selected `lambda_2` over the paper's two smallest grid
    values, awaiting the human decision — under which `0.01` is the value this
    config freezes.
+   **Status note (2026-09-29, TR-0013):** the human approved that item as its own
+   screen (`TR-0013`), and it is implemented as study-local configs
+   (`../research/studies/TR-0013/configs/mssl-l2-0p01.yml`, `…-0p1.yml`) rather
+   than by editing this config — `0.01` stays the value this folder's config
+   freezes, and the TR-0013 runs carry their own `lambda_2_selection` label.
+
+## Mechanism instrumentation
+
+The trainer records the mechanism bundle the arm's studies need, per epoch,
+without touching training:
+
+* `omega_history.json` — the published Ω snapshot plus its own optimality
+  certificate, and additionally the snapshot's spectrum, trace, support/edge
+  count, and the summary Gram / cosines / row norms that the coupling reshapes;
+* `coupling_scale.json` — one gradient-scale probe per epoch (the first
+  training batch): `||∂L_task/∂θ||` and `||∂(coupling)/∂θ||` over all trainable
+  parameters and over the classifier heads, their ratio, and the coupling's
+  value. The probe uses `torch.autograd.grad(..., retain_graph=True)`, which
+  writes no optimizer `.grad` buffer; `../research/tests/test_mssl_mechanism_probe.py`
+  asserts a training step with the probe is bit-identical to one without it.
+
+Both files also go to MLflow (`omega/`, `mechanism/`). The bundle exists because
+the arm's scale behaviour is its measured failure mode (TR-0007's
+coupling-scale domination, `../research/studies/TR-0007/analysis.md`): a result
+for this arm is only interpretable beside the coupling's magnitude, the
+relation/task gradient ratio, the summary geometry and the support.
 
 ## Running
 
@@ -163,3 +189,7 @@ ordinary ER split leaks speakers.
 pre-registration (`PLAN.md`) and run note (`NOTE.md`) and, per protocol §7,
 every result and every attempted configuration. MLflow/DagsHub keeps the
 execution record; the repository keeps the interpretation.
+`../research/studies/TR-0013/` holds the second screen of the same arm — the
+`lambda_2` axis, validation-selected over the paper's two smallest grid values
+`{0.01, 0.1}` — with its own pre-registration, configs, mechanism artifacts and
+analysis.

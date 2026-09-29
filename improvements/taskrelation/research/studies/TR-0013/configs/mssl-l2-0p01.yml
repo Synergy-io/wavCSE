@@ -1,0 +1,131 @@
+# TR-0013 screen arm 1: p-MSSL at the paper's smallest published lambda_2.
+#
+# This is `improvements/taskrelation/04-mssl/mssl_config.yml` (the arm TR-0007
+# screened at the researcher-fixed lambda_2 = 0.01) with exactly three changes:
+# `paths.results_root`/`paths.checkpoints_root` (study-local, per arm) and the
+# `research:` identity block. `model.mssl_lambda_2` is the arm's registered
+# value; the value itself is unchanged from TR-0007's candidate, so this run is
+# TR-0013's matching anchor for the lambda_2 = 0.1 arm under one commit.
+#
+# TR-0013's independent variable is the *lambda_2 policy*: researcher-fixed
+# (TR-0007, DEC-0016) -> validation-selected over the paper's two smallest grid
+# values {0.01, 0.1} (paper Algorithm 1 selects lambda_1/lambda_2 on data and
+# publishes no default; JMLR 17(33) section 4.1). Both values are executed as
+# runs and recorded; selection is made on the validation split, never on test.
+# See ../../PLAN.md and ../../NOTE.md.
+
+log_level: INFO
+seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
+
+device:
+  type: cuda
+  index: 0
+
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/embedding
+  results_root: improvements/taskrelation/research/studies/TR-0013/outputs/mssl-l2-0p01/results
+  checkpoints_root: improvements/taskrelation/research/studies/TR-0013/outputs/mssl-l2-0p01/checkpoints
+
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: smp
+  layer_pooling_param: 0.5
+
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+  # MSSL-specific (paper Eq. references; see 04-mssl/README.md for the
+  # declared deviations). Identical to TR-0007's candidate except lambda_2.
+  # Eq. (3)'s coupling coefficient on tr(W Omega W^T) in the W step (Eq. 4a).
+  # The paper's value in all experiments is 1.
+  mssl_lambda_0: 1.0
+  # Eq. (3)'s l1 penalty on W. 0 is the paper's own named
+  # exclusive-Gaussian-prior case.
+  mssl_lambda_1: 0.0
+  # Eq. (3)/(4b)'s l1 penalty on Omega (Eq. 8's lambda_2, applied as
+  # lambda_2/d by the solver). TR-0013 registers the paper's two smallest grid
+  # values, {0.01, 0.1}; this arm is the 0.01 end.
+  mssl_lambda_2: 0.01
+  # Eq. (9)-(11) ADMM penalty parameter for the Omega step. null starts the
+  # solver at its scale-consistent default 1/mean(diag(S)) and lets it
+  # rebalance by the residual rule of Boyd et al. (2011) section 3.4.1.
+  mssl_admm_rho: null
+  # Maximum ADMM iterations for one Omega step; the solver stops earlier on
+  # its own optimality certificate.
+  mssl_admm_iterations: 2000
+  # Row-normalise the task-parameter summary W before forming S -- the same
+  # convention as the MTRL control.
+  normalize_w: true
+
+training:
+  num_epochs: 30
+  batch_size: 2048
+  learning_rate: 0.0025
+  weight_decay: 0.00000005
+  saved_checkpoint_count: 1
+  shuffle_train: true
+  shuffle_val: false
+  pin_memory: true
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 4
+  patience: 5
+  factor: 0.5
+  l1_lambda: 0.0000001
+  l2_lambda: 0.00001
+
+# MSSL-specific: the control's MTRL schedule (warmup then every epoch), plus
+# the provenance of lambda_2's value. TR-0013 changes the *policy*: lambda_2 is
+# selected on validation over the paper's two smallest published grid values,
+# so this run's value carries selection evidence that TR-0007's fixed 0.01
+# explicitly did not. The label travels into the run's MLflow params (the
+# config is flattened) and into the mechanism artifact.
+mssl:
+  warmup_epochs: 3
+  omega_update_frequency: 1
+  lambda_2_selection: validation-selected-over-published-grid-0.01-0.1
+
+evaluation:
+  batch_size: 2048
+  shuffle: false
+  pin_memory: true
+  drop_last: false
+  num_workers: 4
+
+# ----------------------------
+# MLflow / DagsHub tracking
+# ----------------------------
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: taskrelation-mssl
+
+# TR-0013 arm provenance: the run carries the study's identity tags and the
+# DagsHub run note, so the study is reconstructible across the experiments the
+# arm's own architecture owns (see improvements/README.md's naming convention).
+research:
+  study_id: TR-0013
+  stage: screen
+  family: task_relation_learning
+  method: p-mssl-l2-0p01
+  hypothesis_slug: published-lambda2-axis
+  task_set: ks_si_er
+  representation: smp25
+  parent_study: TR-0007
+  protocol: variant-benchmark-protocol
+  lambda_2: "0.01"
+  lambda_2_selection: validation-selected-over-published-grid-0.01-0.1
+  agent_generated: true
+  status: pre_registered
+  run_note_file: improvements/taskrelation/research/studies/TR-0013/NOTE.md

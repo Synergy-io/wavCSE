@@ -468,6 +468,22 @@ class DownstreamMultiTaskModelMSSL(nn.Module):
         return W
 
     @torch.no_grad()
+    def get_raw_task_parameter_matrix(self) -> torch.Tensor:
+        """The same summary adapter *before* the optional row normalisation.
+
+        Reporting only (never fed to the solver or the coupling term): the
+        per-epoch mechanism record needs the summary's own scale beside its
+        geometry, and with ``normalize_w`` on every row of the normalised
+        matrix has unit norm by construction, which would hide it.
+        """
+        rows = []
+        for head in self.classifiers:
+            w_mean = head.weight.mean(dim=0)
+            b_mean = head.bias.mean().unsqueeze(0)
+            rows.append(torch.cat([w_mean, b_mean]))
+        return torch.stack(rows, dim=0).detach().cpu().float()
+
+    @torch.no_grad()
     def update_omega(self) -> torch.Tensor:
         """Omega step (Eq. 4b / Eq. 8): graphical lasso on S = (1/d) W W^T.
 

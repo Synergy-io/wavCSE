@@ -1,0 +1,40 @@
+# TR-0013 — compute authorization (SCREEN ONLY)
+#
+# Granted by the researcher in the session of 2026-09-29, in the same instruction that
+# approved the study: TR-0013 is approved for a paid SCREEN; TR-0012 is NOT approved for
+# paid execution. It authorizes the registered four-run lambda_2 screen under the frozen
+# protocol, and nothing else: no confirmation seeds, no lambda_2 value outside
+# {0.01, 0.1}, no additional architecture experiment, no TR-0012, no TR-0008, no DG-0007,
+# no ER LOSO, no new persistent resources. An agent must not widen it; a change to any
+# field is a new human grant.
+#
+# `container_disk_gb_max` is 120 rather than TR-0007's 60 because two of TR-0007's three
+# pre-science job-preparation failures were 60 GB container-disk ENOSPC during checkout
+# and input materialization; a larger scratch disk is an infrastructure choice that
+# removes a known failure mode and changes no scientific parameter.
+schema_version: 1
+scope: TR-0013
+granted_by: Kevin Sanjula (human grant, TR-0013 screen approval, session 2026-09-29)
+granted_at: "2026-09-29T23:05:00+00:00"
+expires_at: "2026-10-06T23:05:00+00:00"
+
+budget:
+  max_gpu_hourly_usd: 0.80      # ceiling handed to the control plane's price guard
+  max_total_gpu_usd: 3.00       # cumulative for this scope, from provider facts
+  max_wall_clock_hours: 4       # cumulative paid wall clock
+
+concurrency:
+  max_simultaneous_workers: 1
+  replacement_workers_allowed: true
+
+resources:
+  existing_network_volume_allowed: true
+  network_volume_selector:      # reuses an existing volume; never creates one
+    min_size_gb: 200
+    datacenter: EU-RO-1
+  new_persistent_resources: false
+  container_disk_gb_max: 120
+
+stop_policy:
+  destroy_on_completion: true
+  retain_for_reuse_hours: 0

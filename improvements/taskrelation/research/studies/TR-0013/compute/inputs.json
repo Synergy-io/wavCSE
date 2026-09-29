@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "artifact": "embeddings/v1/speechcommand-wavlm-large-mean/training-000.tar",
+      "destination": "embeddings/speechcommand/training-000.tar",
+      "sha256": "54d0e06690d338e3c5c9ffac5700060d132e03a25832052e27d984037ec74deb",
+      "size_bytes": 2099210240,
+      "required": true,
+      "membership": "list of speechcommand verified against embeddings/v1/speechcommand-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/speechcommand-wavlm-large-mean/training-001.tar",
+      "destination": "embeddings/speechcommand/training-001.tar",
+      "sha256": "443a5f64284b07c3062c53d5f27303c2b11ef82a36e541038362fc03e87c9a24",
+      "size_bytes": 2099210240,
+      "required": true,
+      "membership": "list of speechcommand verified against embeddings/v1/speechcommand-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/speechcommand-wavlm-large-mean/training-002.tar",
+      "destination": "embeddings/speechcommand/training-002.tar",
+      "sha256": "f95803149d38070a945b61fc626c853a4fcf1b5a362a05d35d2da96aacd1ab0e",
+      "size_bytes": 1163806720,
+      "required": true,
+      "membership": "list of speechcommand verified against embeddings/v1/speechcommand-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/speechcommand-wavlm-large-mean/validation-000.tar",
+      "destination": "embeddings/speechcommand/validation-000.tar",
+      "sha256": "0944bbbb8d80ba1b68db66b6047d0910350a93998f3245d0b28613d8a2cc5b2b",
+      "size_bytes": 713523200,
+      "required": true,
+      "membership": "list of speechcommand verified against embeddings/v1/speechcommand-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/speechcommand-wavlm-large-mean/testing-000.tar",
+      "destination": "embeddings/speechcommand/testing-000.tar",
+      "sha256": "d897277b3e8b7c2f54521c0266fbc97febb6c9286b2161ee10195a549e6751a2",
+      "size_bytes": 717404160,
+      "required": true,
+      "membership": "list of speechcommand verified against embeddings/v1/speechcommand-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/voxceleb-wavlm-large-mean/train-000.tar",
+      "destination": "embeddings/voxceleb/train-000.tar",
+      "sha256": "096b16c9373bbb9f37cbc8a5678fe0810499573b842c62eb54e8ac070cb1b644",
+      "size_bytes": 2099210240,
+      "required": true,
+      "membership": "list of voxceleb verified against embeddings/v1/voxceleb-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/voxceleb-wavlm-large-mean/train-001.tar",
+      "destination": "embeddings/voxceleb/train-001.tar",
+      "sha256": "b96d444e97be73e08beafbae099c5a19714dbffe69218a530ddacc0de48579d6",
+      "size_bytes": 2099210240,
+      "required": true,
+      "membership": "list of voxceleb verified against embeddings/v1/voxceleb-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/voxceleb-wavlm-large-mean/train-002.tar",
+      "destination": "embeddings/voxceleb/train-002.tar",
+      "sha256": "07d578224acf9a3465589a1e91c82027898250933df7f971aa676fac7f2d8318",
+      "size_bytes": 2099210240,
+      "required": true,
+      "membership": "list of voxceleb verified against embeddings/v1/voxceleb-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/voxceleb-wavlm-large-mean/train-003.tar",
+      "destination": "embeddings/voxceleb/train-003.tar",
+      "sha256": "83357fd1540f7a34d973fea434bd3c0de305e3f154c7f129ce4dffa92d0fc2e1",
+      "size_bytes": 2099210240,
+      "required": true,
+      "membership": "list of voxceleb verified against embeddings/v1/voxceleb-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/voxceleb-wavlm-large-mean/train-004.tar",
+      "destination": "embeddings/voxceleb/train-004.tar",
+      "sha256": "490781ce7f7896cf6b46dc966511004672dacbf96b990de82cf04bc3486ac418",
+      "size_bytes": 2099210240,
+      "required": true,
+      "membership": "list of voxceleb verified against embeddings/v1/voxceleb-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/voxceleb-wavlm-large-mean/train-005.tar",
+      "destination": "embeddings/voxceleb/train-005.tar",
+      "sha256": "0abfc4b67304ed244415af8bed393fd683a6effa98e1325cd1783876b045437f",
+      "size_bytes": 2099210240,
+      "required": true,
+      "membership": "list of voxceleb verified against embeddings/v1/voxceleb-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/voxceleb-wavlm-large-mean/train-006.tar",
+      "destination": "embeddings/voxceleb/train-006.tar",
+      "sha256": "711de66bbc9e5d45c24031aeceb292b163690802ff028a95d74f99f4ea106582",
+      "size_bytes": 1927178240,
+      "required": true,
+      "membership": "list of voxceleb verified against embeddings/v1/voxceleb-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/voxceleb-wavlm-large-mean/dev-000.tar",
+      "destination": "embeddings/voxceleb/dev-000.tar",
+      "sha256": "39c325c9c0781195590870cd4d1952489d65fb937019d0915621ded2ae5e8655",
+      "size_bytes": 724654080,
+      "required": true,
+      "membership": "list of voxceleb verified against embeddings/v1/voxceleb-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/voxceleb-wavlm-large-mean/test-000.tar",
+      "destination": "embeddings/voxceleb/test-000.tar",
+      "sha256": "20fd95458547966650715426073f0054e3c9ae4cf06c188192ba6fd5bd7fe69d",
+      "size_bytes": 866027520,
+      "required": true,
+      "membership": "list of voxceleb verified against embeddings/v1/voxceleb-wavlm-large-mean/shards.json"
+    },
+    {
+      "artifact": "embeddings/v1/iemocap-wavlm-large-mean.tar",
+      "destination": "embeddings/iemocap/iemocap-wavlm-large-mean.tar",
+      "sha256": "8a121f3f5354902391908b682915dbcfa061bd747375c4c471fdf9525e9209d8",
+      "size_bytes": 580966400,
+      "required": true,
+      "membership": "list of iemocap verified against embeddings/v1/iemocap-wavlm-large-mean.manifest.json"
+    }
+  ]
+}
