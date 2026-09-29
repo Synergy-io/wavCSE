@@ -119,3 +119,84 @@ On a decision: write `PLAN.md`, the arm config and `compute/plan.json` (screen: 
 three arms — MSSL, MTRL control, wavCSE baseline — under the shared protocol), fix the
 solver tests to the chosen convention, commit, then publish the exact commit (it is
 currently local-only) before requesting the compute envelope.
+---
+
+# 2026-09-29 — Human gate answered: OPTION A (faithful published formulation)
+
+Appended, not substituted: the pre-registration gate above stays on record as the state the
+Study was in when the decision was taken.
+
+## Decision (human, DEC-0015)
+
+**Option A — implement the published MSSL formulation faithfully.** The arm stays a
+faithful published-method implementation (DEC-0013 §3, DEC-0014 §4); it is not a declared
+deviation and not a project-original mechanism. Full contract and pre-registration:
+`PLAN.md`.
+
+## Correction to the equation the gate was stated against (primary source)
+
+The gate table above quoted the published Ω step as
+`min tr(SΩ) − d log|Ω| + λ₂‖Ω‖₁`. Re-read directly from the JMLR PDF
+(https://jmlr.org/papers/volume17/15-215/15-215.pdf) on 2026-09-29, the paper writes:
+
+* Eq. (4b): `f_W(Ω; X, Y, λ₀, λ₂) = λ₀ tr(W Ω Wᵀ) − d log|Ω| + λ₂ ‖Ω‖₁`
+* Eq. (8): `min_{Ω≻0} λ₀ tr(S Ω) − log|Ω| + (λ₂/d) ‖Ω‖₁`, `S = (1/d) WᵀW`, followed by
+  "As λ₂ is a user defined parameter, the factor 1/d can be incorporated into λ₂."
+* Algorithm 1: "Input: λ₀, λ₁, λ₂ > 0. // penalty parameters chosen by cross-validation";
+  §4.1: "The parameter λ₀ was set to one in all experiments."
+
+So the gate's rendering was a mis-transcription: it mixed Eq. (4b)'s `−d log|Ω|` barrier with
+Eq. (8)'s data term `tr(SΩ)`, which is a *third* convention (Eq. (8) with λ₀ = 1/d). The two
+faithful renderings — Eq. (4b) (`−d log|Ω|`, data term `tr(WΩWᵀ)`) and Eq. (8)
+(`tr(SΩ) − log|Ω| + (λ₂/d)‖Ω‖₁`, `S = (1/d)WᵀW`) — are the same estimator and are exactly the
+ingredients Option A names; the correct transcription is now in
+`../../literature/goncalves-2016-mssl.md`. The literature card's "Eq. 8" line carried the
+same error and is corrected there; the historical text in this NOTE is left intact.
+
+## What the gate's substantive point was, and how it is now settled
+
+The draft's solver objective (`λ₀ tr(SΩ) − log|Ω| + λ₂‖Ω‖₁`, λ₀ = 1) *is* Eq. (8) with the
+`1/d` absorbed into λ₂ — the paper's own stated freedom — so it was never a different
+estimator family, only a different convention for the numeric λ₂ (and therefore for its
+scale, and thus for the strength of the mechanism). Option A fixes the convention: `λ₂` is
+the paper's Eq. (3) penalty, the `1/d` of Eq. (8) is applied by the solver, and `d =
+W.shape[1]` is an explicit argument. The implementation now also:
+
+* returns the ADMM's split variable `Z`, which carries the ℓ₁ support exactly;
+* certifies each solve with the problem's own primal–dual optimality certificate;
+* rescales nothing, and adapts ρ by Boyd et al. (2011) §3.4.1 — the reference the paper
+  cites for the ADMM derivation — with float64 arithmetic, because the mean-head summary
+  enters Eq. (8) at scale ~1e-4 and a fixed ρ silently fails to converge there
+  (measured: the old solver returned Ω ≈ 63·I where the optimum is Ω ≈ 7e4·I).
+
+## λ₂ — the one input the paper does not fix (still open, still a human decision)
+
+The paper publishes λ₀ = 1 and selects λ₁, λ₂ on data (stability selection for its regression
+experiments; cross-validation over `{0.01, 0.1, 1, 10, 100}` for its classification
+experiments). No default λ₂ exists in the paper or in this repository's record, and its
+numeric scale is not transferable between representations. `PLAN.md` pre-registers the
+recommended resolution (select λ₂ on the validation split from the paper's grid restricted to
+`{0.01, 0.1}`, budget-matched to the control's two-value λ selection) and states the
+fixed-value alternative; the choice changes the screen's run count from three to five, so it
+is put to the researcher rather than assumed.
+
+## Evidence in the tracking record that this branch did not know about
+
+On 2026-09-29 the DagsHub MLflow repository was inspected read-only (zero-cost
+authentication check, no run created). It already contains TR-0007 evidence from an earlier
+code line that is not in this repository's history (commits `10aaaea3…`, `3df542d…`; all runs
+in experiment `taskrelation-variant-benchmark`):
+
+| Run | Seed | Result (`test_epoch_acc_all`) |
+|---|---|---|
+| `TR-0007__screen__p-mssl__…` | 0 | 0.9607 (KS 0.9867 / SI 0.9519 / ER 0.7703) |
+| `TR-0007__screen__classical-mtrl__…` | 0 | 0.9744 (KS 0.9843 / SI 0.9789 / ER 0.7848) |
+| `TR-0007__screen__wavcse-baseline__…` | 0 | 0.9737 (KS 0.9845 / SI 0.9771 / ER 0.7884) |
+| `TR-0007__scale-corrected__p-mssl-correlation__…` | 0 | 0.9644 (KS 0.9855 / SI 0.9599 / ER 0.7703) |
+
+All four carry `status: rejected`. They are retained as evidence (never deleted, per the
+record policy), they are *not* this Study's runs, and they used a different implementation
+(the params show a `covariance_normalization` knob this repository's arm does not have) at
+seed 0 rather than the registered screen seed 42. Recorded here so the earlier negative
+screen cannot be rediscovered as new, and so the human decides whether the corrected
+implementation still warrants its own screen.

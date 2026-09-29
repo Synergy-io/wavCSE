@@ -404,3 +404,60 @@ argument.
 4. **MSSL is unaffected and remains a published arm** — it passed cleanly (`LT-0002` family B) and its input is literally the summary matrix, so it keeps its faithful-implementation status.
 5. **The benchmark therefore has two mechanism arms of different epistemic status**, and every results table must state which is literature-derived and which is project-original: `TR-0007` (MSSL, published) and `TR-0008` (directed relation, project-original).
 6. The deferred `DG-xxxx` diagnostics remain deferred; this decision does not reopen them.
+
+---
+
+## DEC-0015 — HUMAN DECISION: TR-0007 Option A (faithful published MSSL formulation); recorded with a primary-source equation correction
+
+**Status:** ACTIVE — 2026-09-29 (human-authored decision; recorded by an agent cycle)
+
+**Previous direction:** `TR-0007` was registered on 2026-09-29 and stopped at pre-registration
+(`studies/TR-0007/NOTE.md`, registry status `blocked`, `escalated_to_human`). The committed
+`04-mssl` draft's Ω step solved a rescaled graphical lasso, and the gate asked whether the arm
+should (A) implement the published normalisation faithfully, (B) keep the draft's
+normalisation as a declared deviation, or (C) defer the arm to `TR-0008`.
+
+**Evidence causing the change:** an explicit human decision, taken on the gate as written.
+
+**Decision (human): OPTION A.** Implement the published MSSL formulation faithfully, keep the
+arm classified as a faithful published-method implementation, do not retain a rescaled
+`−log|Ω|` formulation where that changes the published objective, do not invent a new
+normalisation, do not tune the formulation in this phase, and take the λ hyperparameters from
+the published method / the repository's literature record. If the recorded equations do not
+suffice for a faithful implementation, stop with the missing scientific information instead of
+guessing. All 25 layers, the frozen seed-42 three-arm screen and the existing protocol stay
+unchanged; confirmation is a later stage.
+
+**Correction recorded with the decision.** The equation the gate was stated against was a
+mis-transcription. Re-read from the JMLR PDF on 2026-09-29, the paper's Ω step is Eq. (4b)
+`λ₀ tr(WΩWᵀ) − d log|Ω| + λ₂‖Ω‖₁` = Eq. (8) `λ₀ tr(SΩ) − log|Ω| + (λ₂/d)‖Ω‖₁`, `S = (1/d)WᵀW`,
+with λ₀ = 1 in all experiments and λ₂ cross-validated per data set. The gate's rendering mixed
+Eq. (4b)'s barrier with Eq. (8)'s data term and so described neither. The primary source
+governs; `literature/goncalves-2016-mssl.md` is corrected and the historical gate text is kept
+intact in `studies/TR-0007/NOTE.md`. This is a record repair, not a new scientific finding.
+
+**Consequences.**
+
+1. `04-mssl` implements Eq. (4b)/(8) with λ₀ = 1, the `1/d` of Eq. (8) applied inside the
+   solver for an explicit `d`, off-diagonal ℓ₁ per the cited graphical lasso, ADMM with Boyd
+   et al. (2011) §3.4.1 residual balancing, and the problem's own primal–dual optimality
+   certificate. λ₂ has no default in the model class: the paper selects it on data.
+2. `lambda_1 = 0` is the paper's own named "exclusive Gaussian prior" case and the only
+   defensible setting for a mean-head summary W; it is a declared deviation, as is the shared
+   summary adapter. Both are labelled in every table.
+3. **λ₂ remains the one human input.** The paper publishes no default and its scale is not
+   transferable; `studies/TR-0007/PLAN.md` pre-registers the recommended resolution (validation
+   selection from the paper's published classification grid restricted to `{0.01, 0.1}`,
+   budget-matched to the control's two-value selection), which would make the screen five runs
+   instead of three. The researcher chooses between that and a fixed value; no run may be
+   submitted before the choice is recorded.
+4. **Evidence conflict recorded, not smoothed over.** The DagsHub tracking repository already
+   contains TR-0007 screen runs from an earlier code line absent from this repository's history
+   (commits `10aaaea3…`, `3df542d…`; experiment `taskrelation-variant-benchmark`; seed 0;
+   `p-mssl` 0.9607 vs `classical-mtrl` 0.9744 and `wavcse-baseline` 0.9737 at
+   `test_epoch_acc_all`; all tagged `rejected`, plus a `scale-corrected` `p-mssl-correlation`
+   run at 0.9644). They are retained as evidence and listed in `studies/TR-0007/NOTE.md`. The
+   corrected implementation's screen is therefore a protocol correction at the registered
+   screen seed 42, and the human decides whether it is still worth its compute.
+5. No compute is created by this decision: `authorizations/TR-0007.yaml` still does not exist,
+   and the arm's screen plan is prepared but not submitted.

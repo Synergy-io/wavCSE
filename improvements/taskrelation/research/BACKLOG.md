@@ -281,7 +281,7 @@ evidence proves these are not interchangeable.
 
 ## TR-0001 — Sparse/selective relation learning
 
-**Status:** BLOCKED — gate: DG evidence of pair-selectivity + an LT-xxxx published method (DEC-0005)
+**Status:** SUPERSEDED-FOR-PUBLISHED-METHODS — the DEC-0005 gate is superseded by DEC-0013 for verified published methods; this family's instantiation is `TR-0007` (p-MSSL sparse precision, pre-registered 2026-09-29 under DEC-0015). The historical gate text is retained below.
 
 ### Hypothesis
 
@@ -469,6 +469,49 @@ Avoid methods whose main contribution becomes generic representation learning.
 ---
 
 # P1 — ER-specific scientific controls
+
+## TR-0007 — MSSL sparse-precision relation estimator (published arm, family B)
+
+**Status:** PRE-REGISTERED (2026-09-29) — `DEC-0015` (human) chose Option A, the faithful
+published formulation. Awaiting two human inputs before submission: the λ₂ rule (below) and
+`authorizations/TR-0007.yaml`. Registry: `STUDIES.jsonl`; plan: `studies/TR-0007/PLAN.md`.
+
+### Hypothesis
+
+Under the shared variant protocol, replacing classical MTRL's trace-normalised Ω with
+p-MSSL's sparse graphical-lasso **precision** (Gonçalves, Von Zuben & Banerjee, JMLR 17(33),
+2016) keeps pair-specific relation information and beats both classical MTRL and the matched
+wavCSE baseline without material regression on any task.
+
+### Why published (DEC-0013 §3, DEC-0014 §4)
+
+`LT-0002` verified the source and its equations against the JMLR PDF and returned a clean
+faithfulness pass for this family. The arm is therefore a **faithful published-method
+implementation**, labelled as such in every table; its declared deviations are the shared
+mean-head summary adapter and `λ₁ = 0` (the paper's own exclusive-Gaussian-prior case).
+
+### Relation to TR-0001
+
+`TR-0001` (sparse/selective relation learning) is this mechanism *family*; its DEC-0005 gate
+is superseded for published methods by DEC-0013, and TR-0007 is its instantiation. TR-0001's
+own hypothesis — that not every pair should be coupled strongly — is what the per-epoch Ω
+support of this arm finally measures under a matched protocol.
+
+### Open item (human)
+
+λ₂ is cross-validated by the source paper and has no published default or transferable scale;
+`studies/TR-0007/PLAN.md` pre-registers validation selection from the paper's grid restricted
+to `{0.01, 0.1}` (five-run screen) against a researcher-fixed value (three-run screen).
+
+### Prior evidence (record conflict, not new work to redo)
+
+DagsHub already holds `TR-0007__screen__*` runs (seed 0) from an earlier code line absent from
+this repository's history: `p-mssl` 0.9607 vs `classical-mtrl` 0.9744 and `wavcse-baseline`
+0.9737 `test_epoch_acc_all`, all `rejected`, plus a `scale-corrected` `p-mssl-correlation` run
+at 0.9644. Listed in `studies/TR-0007/NOTE.md`; this arm's screen is a protocol correction at
+the registered seed 42 and the human decides whether it is still worth its compute.
+
+---
 
 ## DG-0005 — Data-regime hypothesis
 

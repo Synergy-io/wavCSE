@@ -566,16 +566,29 @@ only), and DEC-0014 activates Option 3 for the directed-relation question:
 * `LT-0002` — **complete** (2026-09-22); 15 papers verified across the two selected
   families, verdicts and eligibility gates in `studies/LT-0002/analysis.md`.
   Family B has a clean published pass (MSSL); family A has none.
-* `TR-0007` (MSSL, published) — **registered 2026-09-29, `BLOCKED` at pre-registration**:
-  `studies/TR-0007/` holds the gate (`NOTE.md`) and the registry entry carries
-  `escalated_to_human`. The committed `04-mssl` draft solves a *rescaled* graphical lasso
-  (`− log|Ω|`, off-diagonal ℓ₁, `S = WWᵀ/d`) instead of the verified published Eq. 8
-  (`− d log|Ω|`, `λ₂‖Ω‖₁`, `S = (1/d)WᵀW`); with `d = 2001` those are different estimators
-  at the same `λ₂`, so the mechanism's normalisation — and therefore its `λ₂` and its
-  solver tests — is a faithfulness/deviation decision reserved for the researcher. The arm
-  is also not runnable yet (no `mssl_config.yml`, no `mssl` branch in
-  `run_improvements.py`), which is mechanical and follows the decision. No `PLAN.md`, no
-  configs and no compute plan exist, and none may until the gate is answered.
+* `TR-0007` (MSSL, published arm) — **pre-registered 2026-09-29; `DEC-0015` (human) chose
+  Option A, the faithful published formulation.** The arm is now wired:
+  `04-mssl/README.md`, `04-mssl/mssl_config.yml`, the `mssl` dispatch in
+  `run_improvements.py` and `studies/TR-0007/PLAN.md` exist, and the Ω step implements
+  Eq. (4b)/Eq. (8) with `λ₀ = 1`, the `1/d` applied inside the solver for an explicit `d`,
+  off-diagonal ℓ₁ per the cited graphical lasso, and its own primal–dual optimality
+  certificate. The gate's equation was a mis-transcription (Eq. 4b's barrier with Eq. 8's
+  data term); the primary source governs, the literature card is corrected and the historical
+  gate text is preserved in `studies/TR-0007/NOTE.md`. The three formerly red solver tests
+  are fixed — the analytic gradient was transposed, the bit-exact-zero assertions tested the
+  wrong variable, and the ADMM silently failed to converge at the summary's 1e-4 scale (it
+  returned `Ω ≈ 63·I` where the optimum is `Ω ≈ 7e4·I`); the module is back inside
+  `make check`. Two inputs remain the researcher's: the **λ₂ rule** (`PLAN.md` pre-registers
+  validation selection from the paper's own grid `{0.01, 0.1}`, five-run screen, against a
+  fixed value at three runs) and the **compute envelope** (not created). Plan and exact-commit
+  preflight are prepared; nothing was submitted.
+  * Record conflict: DagsHub already holds `TR-0007__screen__*` runs (seed 0, commits
+    `10aaaea3…`/`3df542d…`, experiment `taskrelation-variant-benchmark`) from a code line
+    absent from this repository's history — `p-mssl` 0.9607 vs `classical-mtrl` 0.9744 and
+    `wavcse-baseline` 0.9737 (`test_epoch_acc_all`), all tagged `rejected`, plus a
+    `scale-corrected` `p-mssl-correlation` run at 0.9644. Retained as evidence and listed in
+    `studies/TR-0007/NOTE.md`; the human decides whether the corrected implementation still
+    warrants its own screen.
 * `TR-0008` (directed relation, project-original) — activated by DEC-0014 §5, **not
   registered**. Its exact relation rule is design work the policy classes as introducing a
   project-original mechanism; it needs either an explicit authorization to design it
@@ -676,24 +689,50 @@ Unresolved questions:
 
 Next recommended action:
 
-**Variant benchmark, stage 2 — answer the TR-0007 faithfulness gate, then
-pre-register.** Stage 1 (`LT-0002` literature verification) is complete: the two families
-have verified cards and eligibility verdicts, family B (better relation estimator /
-task-parameter representation) has a clean published pass (MSSL), and family A
-(asymmetric/directed) has none, which is why DEC-0014 records that arm as project-original.
-`TR-0007` is now registered and **blocked at pre-registration**: the committed draft's Ω
-step is a rescaled graphical lasso, not the published Eq. 8, so its `λ₂` — and hence the
-arm's strength and its solver tests — cannot be fixed without a faithfulness/deviation
-decision the policy reserves for the researcher (`studies/TR-0007/NOTE.md`, Option A
-faithful / Option B declared deviation / Option C defer to `TR-0008`). Once answered: write
-`PLAN.md`, the arm config and `compute/plan.json`, implement the chosen convention, fix the
-test-side defects, commit, publish the commit, then request the compute envelope. Each arm
-is pre-registered as one `TR-xxxx` Study under `VARIANT_BENCHMARK_PROTOCOL.md` on the shared protocol (pooling `smp` 0.5, all 25
-layers, 30 epochs, batch 2048, seeds 0–4, classical MTRL and wavCSE baseline as
-the two controls), screen first, confirm before any promotion. The deferred
-diagnostics stay on the backlog.
+**TR-0007: answer the λ₂ rule, then authorize the screen.** Stage 1 (`LT-0002`) and the
+faithfulness gate (`DEC-0015`, Option A) are closed. Controller-side work is complete: the arm
+is wired, all 25 layers are enforced executably
+(`research/tests/test_tr0007_protocol.py`), the published Eq. (8) convention is pinned by
+tests that are back inside `make check`, MLflow/DagsHub credentials were verified with a
+zero-cost read-only authentication check against the real endpoint, and the deterministic
+screen plan plus the exact-commit preflight are prepared. Two human inputs remain: **(1)** the
+λ₂ rule — the source paper publishes no default and selects λ₂ on data, so `PLAN.md`
+pre-registers validation selection from the paper's grid restricted to `{0.01, 0.1}`
+(five-run screen, budget-matched to the control's two-value λ selection) with a
+researcher-fixed value as the three-run alternative; and **(2)**
+`authorizations/TR-0007.yaml`, which does not exist. After those, the screen is
+submittable as registered (seed 42, three arms, one run per arm under
+`VARIANT_BENCHMARK_PROTOCOL.md`, screen then confirm, LOSO for any ER claim). `TR-0008`
+(directed relation, project-original) still needs its own authorization to be designed, and
+the deferred `DG-xxxx` diagnostics stay on the backlog.
 
-Latest iteration (2026-09-29, no compute): **ARC v1 zero-cost integration exercise,
+Latest iteration (2026-09-29, no compute): **TR-0007 Option A implemented and pre-registered.**
+No GPU run, no worker, no job, no S3 or volume mutation, no authorization created. The human
+gate on `TR-0007` was answered (`DEC-0015`: Option A, faithful published MSSL formulation) and
+recorded append-only in `studies/TR-0007/NOTE.md`, with a primary-source correction of the
+equation the gate had been stated against (the paper's Ω step is Eq. 4b
+`λ₀ tr(WΩWᵀ) − d log|Ω| + λ₂‖Ω‖₁` = Eq. 8 `λ₀ tr(SΩ) − log|Ω| + (λ₂/d)‖Ω‖₁`, `S = (1/d)WᵀW`,
+`λ₀ = 1` in all experiments; the card and `DEC-0015` carry the corrected text, the historical
+gate text is preserved). The arm now implements that objective: Eq. (8) with the `1/d` applied
+inside the solver for an explicit `d = W.shape[1]`, off-diagonal ℓ₁ per the graphical lasso the
+paper cites, ADMM with Boyd et al. §3.4.1 residual balancing in float64, the split variable `Z`
+returned so the ℓ₁ support is exact, and a primal–dual optimality certificate per solve. The
+`mssl` arm was wired into `run_improvements.py` with its own config (`taskrelation-mssl`,
+`study_id`/`stage`/`method` research tags) and README; all 25 layers are enforced executably,
+not only in prose. The three formerly red solver tests were corrected: the analytic coupling
+gradient was transposed (`summary @ omega` for `2λ₀ Ω W`), the sparsity assertions demanded
+bit-exact float32 zeros from the variable that does not carry the ℓ₁ support, and the old ADMM
+was shown to fail silently at the summary's 1e-4 scale — it returned `Ω ≈ 63·I` against an
+optimum of `Ω ≈ 7e4·I`, so a scale-free initialization, residual balancing and float64 were
+required. DagsHub authentication was verified zero-cost and read-only against the real
+endpoint; the screen plan and preflight are prepared but **nothing was submitted**, and
+`authorizations/TR-0007.yaml` still does not exist. A record conflict was found and is
+recorded rather than smoothed over: the tracking repository already holds `TR-0007__screen__*`
+runs from a code line absent from this repository's history (seed 0; `p-mssl` 0.9607 vs
+0.9744/0.9737 for the controls; all `rejected`). Two inputs remain the researcher's: the λ₂
+rule and the compute envelope.
+
+Previous iteration (2026-09-29, no compute): **ARC v1 zero-cost integration exercise,
 research-side.** No GPU run, no worker, no job, no authorization. Established: the deployed
 compute backend resolves the `wavcse-infra` checkout, its read-only verbs (`status`,
 `resolve`, `preflight`, `reap` dry-run) reach the control plane, and the controller had no

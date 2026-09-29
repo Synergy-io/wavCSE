@@ -22,7 +22,7 @@ An explicit learned `m × m` **sparse task precision matrix `Ω`**, interpreted 
 
 Alternating minimization of a biconvex objective (Eq. 1/3): the `W` step is an `ℓ₁`-penalized quadratic solved by FISTA; the `Ω` step is exactly the graphical-lasso problem
 
-`min_{Ω≻0} tr(S Ω) − d log|Ω| + λ₂‖Ω‖₁`, with `S = (1/d) WᵀW`,
+`min_{Ω≻0} λ₀ tr(S Ω) − log|Ω| + (λ₂/d)‖Ω‖₁`, with `S = (1/d) WᵀW` (corrected 2026-09-29; see *Transcription correction* below),
 
 solved by ADMM whose `Ω` update is an SVD and whose `Z` update is element-wise soft-thresholding. Alternation converges to a partial optimum. Each task’s empirical loss is scaled by `1/n_k` (Eq. 3) so a high-sample task cannot dominate the fit. Classification enters through the GLM link (Bernoulli/logistic; multinomial, Poisson, Gamma listed as supported conditional distributions).
 
@@ -56,3 +56,28 @@ Moderate. Requirements: a mean-head-summary matrix (already produced for the con
 6. **Primary-source verification — PASS.** Authors, venue, year and equations checked against the JMLR PDF (JMLR 17(33), 2016); the `p`-MSSL/r-MSSL split, Eq. (3), Eq. (8) and the ADMM steps are from the source.
 
 **Verdict: PASS — implementable as published.** Project note: the repo’s quarantined `PMR` (`models/pmr_model.py`, DEC-0004) is *not* this method — it learns a precision by gradient descent in a single combined loss, whereas published MSSL alternates FISTA with an ADMM graphical-lasso `Ω` step. A faithful MSSL arm is therefore new work; whether it un-quarantines the PMR line is a human decision, not a literature one.
+
+---
+
+## Transcription correction (2026-09-29)
+
+The Ω step line of this card originally read `min_{Ω≻0} tr(SΩ) − d log|Ω| + λ₂‖Ω‖₁` with
+`S = (1/d)WᵀW`. Re-read from the primary source (JMLR 17(33), https://jmlr.org/papers/volume17/15-215/15-215.pdf),
+the paper writes:
+
+* Eq. (4b): `f_W(Ω; X, Y, λ₀, λ₂) = λ₀ tr(WΩWᵀ) − d log|Ω| + λ₂‖Ω‖₁`
+* Eq. (8): `min_{Ω≻0} λ₀ tr(SΩ) − log|Ω| + (λ₂/d)‖Ω‖₁`, `S = (1/d)WᵀW`, immediately followed
+  by "As λ₂ is a user defined parameter, the factor 1/d can be incorporated into λ₂."
+* ADMM: Eq. (9) `L_ρ(Θ,Z,U) = λ₀ tr(SΘ) − log|Θ| + λ₂‖Z‖₁ + (ρ/2)‖Θ−Z+U‖²_F − (ρ/2)‖U‖²_F`,
+  Eq. (10a) the Ω/Θ update, Eq. (10b) the Z update, Eq. (11) `Z^{l+1} = S_{λ₂/ρ}(Θ^{l+1}+U^l)`.
+* Algorithm 1: "Input: λ₀, λ₁, λ₂ > 0. // penalty parameters chosen by cross-validation";
+  initialization "Ω⁰ is initialized with identity matrix and W⁰ with random numbers in
+  [-0.5, 0.5]"; §4.1: "The parameter λ₀ was set to one in all experiments."
+
+The original line mixed Eq. (4b)'s `−d log|Ω|` barrier with Eq. (8)'s data term, which
+describes neither. The two faithful renderings are Eq. (4b) (`−d log|Ω|`, data term
+`tr(WΩWᵀ)`) and Eq. (8) (`tr(SΩ) − log|Ω| + (λ₂/d)‖Ω‖₁`); they are the same estimator. The
+ℓ₁ term is on the off-diagonal, following the graphical lasso of Friedman, Hastie &
+Tibshirani (2008) that the paper cites for this step. Consequence for the project: `λ₂` in the
+arm's config is the paper's Eq. (3) penalty, and the `1/d` of Eq. (8) is applied inside the
+solver (see `../../04-mssl/mssl_model.py` and `DEC-0015`).
