@@ -1,0 +1,120 @@
+# wavCSE-MSSL at the 25-layer pooling winner: smp (softmax pooling), lambda=0.5
+# -- the same protocol cell as the in-category MTRL control
+# (01-mtrl/mtrl_poolingwinner_25L_config.yml) and the matched wavCSE baseline.
+#
+# Published method: Goncalves, Von Zuben & Banerjee (2016), "Multi-task Sparse
+# Structure Learning", JMLR 17(33) -- p-MSSL. Every setting outside `model`'s
+# MSSL keys and the `mssl:` block is copied verbatim from the control, so the
+# arm differs from the control only in the relation mechanism (see
+# improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md, section 5).
+
+log_level: INFO
+seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
+
+device:
+  type: cuda
+  index: 1
+
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/embedding
+  results_root: results_mssl_25L_poolingwinner
+  checkpoints_root: checkpoints_mssl_25L_poolingwinner
+
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: smp
+  layer_pooling_param: 0.5
+
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+  # MSSL-specific (paper Eq. references; see README.md for the deviations)
+  # Eq. (3)'s coupling coefficient on tr(W Omega W^T) in the W step (Eq. 4a).
+  # The paper's value in all experiments is 1 ("The parameter lambda_0 was set
+  # to one in all experiments").
+  mssl_lambda_0: 1.0
+  # Eq. (3)'s l1 penalty on W. 0 disables it, which is the paper's own named
+  # exclusive-Gaussian-prior case (Eq. 2); our W is a mean-of-head-rows
+  # summary, so a feature-selecting l1 has no analogue there.
+  mssl_lambda_1: 0.0
+  # Eq. (3)/(4b)'s l1 penalty on Omega (Eq. 8's lambda_2, applied as
+  # lambda_2/d by the solver). The paper does not fix this value: Algorithm 1
+  # selects it by cross-validation and its classification experiments use the
+  # grid {0.01, 0.1, 1, 10, 100}. 0.01 is that published grid's smallest value
+  # and the Study pre-registers it here (see
+  # improvements/taskrelation/research/studies/TR-0007/NOTE.md); it is not the
+  # outcome of a search in this Study.
+  mssl_lambda_2: 0.01
+  # Eq. (9)-(11) ADMM penalty parameter for the Omega step. null starts the
+  # solver at its scale-consistent default 1/mean(diag(S)) and lets it
+  # rebalance by the residual rule of Boyd et al. (2011) section 3.4.1.
+  mssl_admm_rho: null
+  # Maximum ADMM iterations for one Omega step; the solver stops earlier on
+  # its own optimality certificate.
+  mssl_admm_iterations: 2000
+  # Row-normalise the task-parameter summary W before forming S -- the same
+  # convention as the MTRL control.
+  normalize_w: true
+
+training:
+  num_epochs: 30
+  batch_size: 2048
+  learning_rate: 0.0025
+  weight_decay: 0.00000005
+  saved_checkpoint_count: 1
+  shuffle_train: true
+  shuffle_val: false
+  pin_memory: true
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 4
+  patience: 5
+  factor: 0.5
+  l1_lambda: 0.0000001
+  l2_lambda: 0.00001
+
+# MSSL-specific: the control's MTRL schedule (warmup then every epoch).
+mssl:
+  warmup_epochs: 3
+  omega_update_frequency: 1
+
+evaluation:
+  batch_size: 2048
+  shuffle: false
+  pin_memory: true
+  drop_last: false
+  num_workers: 4
+
+# ----------------------------
+# MLflow / DagsHub tracking
+# ----------------------------
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: taskrelation-mssl
+
+# Study provenance (same key set as the DG-0002 study configs; read by
+# improvements/mlflow_utils.py for tags and the DagsHub run note).
+research:
+  study_id: TR-0007
+  stage: screen
+  family: task_relation_learning
+  method: p-mssl
+  hypothesis_slug: sparse-precision-relation-estimator
+  task_set: ks_si_er
+  representation: smp25
+  parent_study: LT-0002
+  agent_generated: true
+  status: pre_registered
+  run_note_file: improvements/taskrelation/research/studies/TR-0007/NOTE.md

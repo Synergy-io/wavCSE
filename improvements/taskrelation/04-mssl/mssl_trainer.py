@@ -13,7 +13,11 @@ in the relation mechanism:
      by the optimizer.
 
 Both arms record a per-epoch relation snapshot to `omega_history.json` in the
-same JSON shape, so relation behaviour is comparable across arms.
+same JSON shape, so relation behaviour is comparable across arms. MSSL's
+entries additionally carry the Omega solver's own optimality certificate for
+that snapshot (`dual_violation`, `relative_duality_gap` -- see
+`mssl_model.optimality_certificate`), which the MTRL arm's analytic step has
+no analogue for.
 """
 
 import os
@@ -27,9 +31,15 @@ import mlflow
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../downstream"))
+# The Omega solver's optimality certificate lives in the sibling
+# `mssl_model.py`. This folder has no importable package path (a leading digit
+# plus a hyphen), so import it off its own directory, the same way
+# run_improvements.py loads these modules by file path.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from trainer.trainer_model import MultiTasksModelTrainer
 from trainer.trainer_utils import BatchStats, masked_ce_loss, masked_accuracy
+from mssl_model import optimality_certificate
 
 
 class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
@@ -71,15 +81,40 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
             mssl_warmup_epochs, omega_update_frequency,
         )
 
+    def _optimality_certificate(self, omega: torch.Tensor):
+        """Score an Omega snapshot against the solver's own optimality conditions.
+
+        Reconstructs exactly the sample covariance `model.update_omega()` solved
+        against -- S = (1/d) W W^T for the current summary W, with d the number
+        of summary columns -- and evaluates Eq. (8)'s primal-dual certificate
+        (see `mssl_model.optimality_certificate`). This reports the quantity the
+        ADMM stopped on, so a value above the solver's tolerance means the
+        snapshot is not a certified solution of the Omega step.
+        """
+        with torch.no_grad():
+            W = self.model.get_task_parameter_matrix().detach()
+            d = int(W.shape[1])
+            sample_covariance = (W @ W.transpose(0, 1)) / float(d)
+        return optimality_certificate(
+            omega,
+            sample_covariance.cpu(),
+            self.model.mssl_lambda_2,
+            d,
+            self.model.mssl_lambda_0,
+        )
+
     def _record_omega(self, epoch: int) -> None:
         omega = self.model.get_omega_matrix()
         omega_list = omega.tolist()
         partial_list = self.model.get_partial_correlations().tolist()
+        dual_violation, relative_duality_gap = self._optimality_certificate(omega)
 
         self.omega_history.append({
             "epoch": epoch,
             "omega": omega_list,
             "partial_correlations": partial_list,
+            "dual_violation": dual_violation,
+            "relative_duality_gap": relative_duality_gap,
         })
 
         if mlflow.active_run() is not None:
@@ -93,6 +128,8 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
                         else f"omega_diag_{task_i}"
                     )
                     metrics[key] = omega_list[i][j]
+            metrics["omega_dual_violation"] = dual_violation
+            metrics["omega_relative_duality_gap"] = relative_duality_gap
             mlflow.log_metrics(metrics, step=epoch)
 
         num_tasks = self.model.num_tasks
@@ -102,12 +139,15 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
         possible_off_diag = num_tasks * (num_tasks - 1)
         logging.info(
             "MSSL Omega updated at epoch %d: mean|off-diagonal|=%.6f, "
-            "trace=%.6f, zero off-diagonals=%d/%d",
+            "trace=%.6f, zero off-diagonals=%d/%d, dual_violation=%.3g, "
+            "relative_duality_gap=%.3g",
             epoch,
             off_diag.sum().item() / max(possible_off_diag, 1),
             torch.trace(omega).item(),
             zero_off_diag,
             possible_off_diag,
+            dual_violation,
+            relative_duality_gap,
         )
 
     def _save_omega_history(self) -> None:

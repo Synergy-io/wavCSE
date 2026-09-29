@@ -73,6 +73,7 @@ MODEL_CATEGORY = {
     "tsm": "taskrelation",
     "pmr": "taskrelation",
     "mtrl": "taskrelation",
+    "mssl": "taskrelation",
 }
 
 # "01-mtrl" (and any future "0N-<name>" self-contained architecture folder)
@@ -92,6 +93,7 @@ def _load_module_from_path(module_name: str, file_path: str):
 # taskrelation/configs/ dir (see CONFIG_PATH_OVERRIDES usage in main()).
 CONFIG_PATH_OVERRIDES = {
     "mtrl": os.path.join("taskrelation", "01-mtrl", "mtrl_config.yml"),
+    "mssl": os.path.join("taskrelation", "04-mssl", "mssl_config.yml"),
     "gbc": os.path.join("taskrelation", "03-gbc", "gbc_config.yml"),
 }
 
@@ -144,6 +146,24 @@ def build_model(model_type: str, cfg: dict, task_type: str, layer_pooling_param)
             mtrl_lambda=model_cfg.get("mtrl_lambda", 0.01),
             omega_epsilon=model_cfg.get("omega_epsilon", 1e-4),
             normalize_w=model_cfg.get("normalize_w", False),
+        )
+    elif model_type == "mssl":
+        mssl_dir = os.path.join(os.path.dirname(__file__), "taskrelation", "04-mssl")
+        mssl_module = _load_module_from_path(
+            "mssl_model", os.path.join(mssl_dir, "mssl_model.py")
+        )
+        # mssl_lambda_2 is the one MSSL knob the published method does not fix
+        # (its Algorithm 1 selects it on data), so it is required from the
+        # config: a bare [] lookup raises KeyError instead of silently
+        # inheriting a placeholder penalty.
+        return mssl_module.DownstreamMultiTaskModelMSSL(
+            **common_args,
+            mssl_lambda_2=model_cfg["mssl_lambda_2"],
+            mssl_lambda_0=model_cfg.get("mssl_lambda_0", 1.0),
+            mssl_lambda_1=model_cfg.get("mssl_lambda_1", 0.0),
+            mssl_admm_rho=model_cfg.get("mssl_admm_rho"),
+            mssl_admm_iterations=model_cfg.get("mssl_admm_iterations", 2000),
+            normalize_w=model_cfg.get("normalize_w", True),
         )
     elif model_type == "original":
         from model.downstream_model import DownstreamMultiTaskModel
@@ -217,6 +237,28 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
             ignore_index=ignore_index,
             mtrl_warmup_epochs=mtrl_cfg.get("warmup_epochs", 3),
             omega_update_frequency=mtrl_cfg.get("omega_update_frequency", 1),
+        )
+    elif model_type == "mssl":
+        mssl_dir = os.path.join(os.path.dirname(__file__), "taskrelation", "04-mssl")
+        mssl_trainer_module = _load_module_from_path(
+            "mssl_trainer", os.path.join(mssl_dir, "mssl_trainer.py")
+        )
+        trainer_cls = live_trainer(
+            mssl_trainer_module.MultiTasksModelTrainerMSSL
+        )
+        mssl_cfg = cfg.get("mssl", {})
+        return trainer_cls(
+            model=model,
+            device=device,
+            task_type=task_type,
+            training_cfg=training_cfg,
+            results_root=cfg["paths"]["results_root"],
+            checkpoints_root=cfg["paths"]["checkpoints_root"],
+            training_data=training_data,
+            validation_data=validation_data,
+            ignore_index=ignore_index,
+            mssl_warmup_epochs=mssl_cfg.get("warmup_epochs", 3),
+            omega_update_frequency=mssl_cfg.get("omega_update_frequency", 1),
         )
     else:
         # GBC and original use the standard trainer
@@ -337,7 +379,14 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
             category,
             model_type,
             cfg,
-            extra_tags={"task_set": task_type},
+            extra_tags={
+                "task_set": task_type,
+                # The raw config string ("all") is already carried by the
+                # `layers` tag; the resolved count is what a reader needs to
+                # verify the protocol's layer policy without re-deriving it
+                # from the config (01-mtrl / base runs carry the same tag).
+                "layer_count": len(transformer_layer_array),
+            },
         )
         mlflow.log_param("task_type", task_type)
 
@@ -416,7 +465,7 @@ def main(argv=None):
     )
     parser.add_argument(
         "--model", type=str, default="all",
-        choices=["gbc", "tsm", "pmr", "mtrl", "original", "all"],
+        choices=["gbc", "tsm", "pmr", "mtrl", "mssl", "original", "all"],
         help="Which model variant to run"
     )
     parser.add_argument(
@@ -450,6 +499,9 @@ def main(argv=None):
     config_dir = os.path.join(os.path.dirname(__file__), "taskrelation", "configs")
 
     if args.model == "all":
+        # Study arms (mssl) are run explicitly, never as part of `all`: they
+        # carry a `research:` block and a pre-registered study, so folding them
+        # into the generic sweep would launch unregistered Studyless runs.
         models_to_run = ["gbc", "tsm", "pmr", "mtrl"]
     else:
         models_to_run = [args.model]
