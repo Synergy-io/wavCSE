@@ -101,12 +101,11 @@ make check              # agent assets + compute backend + research tests (no GP
 uv run python -m improvements.run_improvements --help    # entry-point import smoke
 ```
 
-`make check` excludes exactly one module, `research/tests/test_mssl_omega_solver.py`,
-which fails at HEAD (2 failures, 1 error) on the unregistered `04-mssl` draft; fixing
-it means deciding MSSL's intended mathematics, so it is a scientific call, not a
-mechanical repair. `make research-check-all` runs it, and `make research-check` prints
-the exclusion rather than hiding it. Never weaken or delete a failing test to make
-the gate pass.
+`make check` runs the whole research suite: no module is excluded, and `make research-check-all`
+is an alias. The MSSL solver module (`research/tests/test_mssl_omega_solver.py`) was the
+project's one known-red module until TR-0007's Option-A decision (`DEC-0015`) fixed both its
+defective assertions and the solver behaviour they had exposed; it now runs inside the gate.
+Never weaken or delete a failing test to make the gate pass.
 
 - Run the improvements entry point **as a module** from the repository root
   (`python -m improvements.run_improvements --model <name> --task_type ks_si_er`); run as a file, its
