@@ -24,8 +24,11 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 
+from improvements import embedding_root
 from improvements.compute import jobspec
+from improvements.compute.embedding_layout import EmbeddingLayoutError
 from improvements.run_identity import ENV_FILE, read_identity_file
 
 JOB_DIRECTORY_ENV = "WAVCSE_JOB_DIRECTORY"
@@ -156,7 +159,7 @@ def stage_outputs(plan, arm, seed, identity, outputs_dir):
 
 
 def write_manifest(plan, *, stage, arm, seed, identity, staged, outputs_dir,
-                   training_exit_code):
+                   training_exit_code, embedding_layout=None):
     manifest = {
         "schema_version": 1,
         "study": plan["study"],
@@ -170,9 +173,13 @@ def write_manifest(plan, *, stage, arm, seed, identity, staged, outputs_dir,
         "run_id": identity.get("run_id"),
         "checkpoint_run_id": identity.get("checkpoint_run_id"),
         "training_exit_code": training_exit_code,
-        "staged_at": None,
+        "staged_at": datetime.now(timezone.utc).isoformat(),
         "files": sorted(staged, key=lambda entry: entry["name"]),
     }
+    if embedding_layout is not None:
+        # The evidence carries the mapping it ran under, so a reader can see which
+        # verified artifacts the loader-visible root was built from.
+        manifest["embedding_layout"] = embedding_layout
     path = os.path.join(outputs_dir, "MANIFEST.json")
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(manifest, handle, sort_keys=True, indent=2)
@@ -206,9 +213,33 @@ def main(argv=None):
     identity_file = os.path.join(outputs_dir, ".run_identity.jsonl")
     os.makedirs(os.path.dirname(identity_file), exist_ok=True)
 
+    layout_summary = None
+    if plan.get("embedding_layout"):
+        # The verified inputs become the tree the loader reads, and the root is named
+        # explicitly. Failure here is fatal on purpose: a run that cannot prove which
+        # embeddings it is about to read must not read any.
+        from improvements.compute import embedding_layout
+
+        try:
+            marker = embedding_layout.prepare(
+                plan, stage=args.stage, arm=args.arm, seed=args.seed,
+                checkout_root=os.getcwd(), job_directory=job_directory,
+                commit=os.environ.get(JOB_COMMIT_ENV, ""), job_id=os.environ.get(JOB_ID_ENV, ""),
+                log=lambda line: print(line, flush=True),
+            )
+        except EmbeddingLayoutError as exc:
+            print("embedding layout failed: {}".format(exc), file=sys.stderr)
+            return 4
+        layout_summary = embedding_layout.describe(marker)
+        environment_override = marker["loader_root"]
+    else:
+        environment_override = None
+
     command = jobspec.expand_argv(plan, arm, args.seed)
     environment = dict(os.environ)
     environment[ENV_FILE] = identity_file
+    if environment_override:
+        environment[embedding_root.ENV_ROOT] = environment_override
     environment.setdefault("PYTHONUNBUFFERED", "1")
 
     print("ARC_COMMAND " + json.dumps(command), flush=True)
@@ -230,6 +261,7 @@ def main(argv=None):
             plan, stage=args.stage, arm=arm, seed=args.seed, identity=identity,
             staged=[], outputs_dir=outputs_dir,
             training_exit_code=training_exit_code,
+            embedding_layout=layout_summary,
         )
         print(
             "training failed with exit {}; no outputs were staged".format(
@@ -243,6 +275,7 @@ def main(argv=None):
     write_manifest(
         plan, stage=args.stage, arm=arm, seed=args.seed, identity=identity,
         staged=staged, outputs_dir=outputs_dir, training_exit_code=0,
+        embedding_layout=layout_summary,
     )
     if missing:
         for item in missing:

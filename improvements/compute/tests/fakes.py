@@ -7,6 +7,8 @@ contract closely enough to exercise the failure paths that matter — ambiguous
 creates, lost submissions, unverified outputs — without any of them being real.
 """
 
+import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -20,7 +22,9 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from improvements.compute import infra_cli  # noqa: E402
+from improvements.compute import infra_cli, jobspec  # noqa: E402
+from improvements.compute import state as state_module  # noqa: E402
+from improvements.compute.errors import ArtifactIntegrityError  # noqa: E402
 
 SKILL_PATH = os.path.join(".agents", "skills", "wavcse-infra-operator", "SKILL.md")
 
@@ -48,6 +52,8 @@ class FakeInfra(object):
         self.workers = list(workers or [])
         self.volumes = list(volumes or [])
         self.jobs = list(jobs or [])
+        self.objects = {}
+        self.records = {}
         self.calls = []
         self.logs = {}
         self.create_returncode = 0
@@ -81,10 +87,20 @@ class FakeInfra(object):
         return result
 
     def job_status(self, job_id):
+        """The persisted job record, as the control plane reports it.
+
+        ``jobs`` is the scripted provider-visible state a test controls; when a test
+        removes a job from it (the worker that held it has gone), the record this job
+        store still holds is what the control plane answers with, exactly as production
+        does when the Pod disappears but the job record survives.
+        """
+
         self.calls.append(("job_status", job_id))
         for job in self.jobs:
             if job.get("job_id") == job_id:
                 return dict(job)
+        if job_id in self.records:
+            return dict(self.records[job_id])
         return {"job_id": job_id, "state": "PREPARING"}
 
     def job_logs(self, job_id, tail_bytes=200000):
@@ -137,9 +153,11 @@ class FakeInfra(object):
     def job_submit(self, spec_path, worker_id):
         self.calls.append(("job_submit", str(spec_path), worker_id))
         if self.submit_returncode == 0 and isinstance(self.submit_payload, dict):
-            if not any(job.get("job_id") == self.submit_payload.get("job_id")
-                       for job in self.jobs):
-                self.jobs.append(dict(self.submit_payload))
+            record = dict(self.submit_payload)
+            if not any(job.get("job_id") == record.get("job_id") for job in self.jobs):
+                self.jobs.append(record)
+            if record.get("job_id"):
+                self.records.setdefault(record["job_id"], record)
         return InfraResult(("job", "submit"), self.submit_returncode,
                            payload=self.submit_payload)
 
@@ -150,6 +168,39 @@ class FakeInfra(object):
     def storage_verify(self, artifact, **kwargs):
         self.calls.append(("storage_verify", artifact))
         return InfraResult()
+
+    def storage_read(self, artifact, *, expected_sha256=None, max_bytes=None):
+        """Serve one registered evidence object, with the real digest contract.
+
+        Unlike the other fakes this one is not a stub: it hashes the bytes it holds and
+        fails exactly as the control plane does when they do not match the expected
+        digest, so a test cannot accidentally pass by trusting the caller's digest.
+        """
+
+        self.calls.append(("storage_read", artifact))
+        payload = self.objects.get(artifact)
+        if payload is None:
+            exc = ArtifactIntegrityError(
+                "no stored object at {!r} (the fixture registers only what was staged)"
+                .format(artifact)
+            )
+            raise exc
+        if isinstance(payload, bytes):
+            raw = payload
+        else:
+            raw = str(payload).encode("utf-8")
+        digest = hashlib.sha256(raw).hexdigest()
+        if expected_sha256 and digest != str(expected_sha256).lower():
+            raise ArtifactIntegrityError(
+                "the stored object at {!r} does not contain the expected bytes"
+                .format(artifact)
+            )
+        if max_bytes is not None and len(raw) > int(max_bytes):
+            raise ArtifactIntegrityError(
+                "the stored object at {!r} exceeds the requested read limit".format(artifact)
+            )
+        return {"artifact": artifact, "size_bytes": len(raw), "sha256": digest,
+                "text": raw.decode("utf-8")}
 
     def storage_download(self, artifact, destination, worker_id, **kwargs):
         self.calls.append(("storage_download", artifact, destination, worker_id))
@@ -171,6 +222,11 @@ class ComputeTestCase(unittest.TestCase):
         for name, value in (
             ("WAVCSE_RESEARCH_STATE", os.path.join(self.home, "state")),
             ("WAVCSE_REPO_ROOT", self.home),
+            # The host-level controller guard lives at a fixed path outside every state
+            # root, so a test must redirect it or it would contend with the real
+            # controller and write into the developer's home.
+            (state_module.CONTROLLER_LOCK_ENV,
+             os.path.join(self.home, "controller.lock")),
         ):
             self._env[name] = os.environ.get(name)
             os.environ[name] = value
@@ -266,6 +322,49 @@ class ComputeTestCase(unittest.TestCase):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
         )
         return repo
+
+    def allow_remote_commit(self, *, mechanism="test-stub"):
+        """Stub the paid-creation commit preflight with a proven-available answer.
+
+        The gate itself is exercised for real against local bare repositories in
+        ``tests/test_remote_commit.py``; a test about worker lifecycle needs the seam
+        closed, not a pushable remote, so it substitutes the proof explicitly rather
+        than relying on a default that could hide a missing gate.
+        """
+
+        from unittest import mock
+
+        from improvements.compute import remote_commit
+
+        def fake(plan, commit, **kwargs):
+            return remote_commit.CommitAvailability(
+                str(commit), plan.get("repository"), available=True,
+                mechanism=mechanism, detail="stubbed for a lifecycle test",
+            )
+
+        patcher = mock.patch.object(remote_commit, "require_plan_commit", fake)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return patcher
+
+    def refuse_remote_commit(self, reason=None):
+        """Stub the preflight with the refusal a local-only commit produces."""
+
+        from unittest import mock
+
+        from improvements.compute import remote_commit
+        from improvements.compute.errors import RepositoryConflictError
+
+        def fake(plan, commit, **kwargs):
+            raise RepositoryConflictError(
+                reason or "commit {} is not available on {}".format(
+                    commit, plan.get("repository"))
+            )
+
+        patcher = mock.patch.object(remote_commit, "require_plan_commit", fake)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return patcher
 
     def write_envelope(self, scope, *, envelope=None, repo=None, commit=True,
                        overrides=None):
@@ -404,3 +503,169 @@ def worker_record(worker_id="w-1", name="wavcse-tr-0007-abc123def456",
         "gpu_type": "NVIDIA GeForce RTX 4090",
         "gpu_count": 1,
     }
+
+
+def metrics_text(tasks, *, base=0.5, seed=0):
+    """The evaluator's metrics vocabulary, one line per task plus the all-task line."""
+
+    lines = ["loss_all={:.6f} | acc_all={:.6f}".format(1.0 - base, base)]
+    for index, task in enumerate(tasks):
+        lines.append("{} | loss={:.6f} | acc={:.6f} | samples={}".format(
+            task, 1.0 - base, base + 0.01 * (index + 1) + 0.001 * seed, 100 + index))
+    return "\n".join(lines) + "\n"
+
+
+def gradient_diagnostics_text(tasks, *, sampled_steps=3):
+    records = []
+    for step in range(1, sampled_steps + 1):
+        records.append({
+            "step": step,
+            "progress": step / float(sampled_steps),
+            "phase": "early",
+            "valid_examples": {task: 100 for task in tasks},
+            "gradient_norms": {task: 0.5 + 0.1 * step for task in tasks},
+            "pairwise_cosines": {
+                "{}_{}".format(tasks[a], tasks[b]): -0.25
+                for a in range(len(tasks)) for b in range(a + 1, len(tasks))
+            },
+        })
+    return json.dumps({
+        "task_array": list(tasks),
+        "sample_interval_steps": 1,
+        "total_training_steps": sampled_steps,
+        "sampled_steps": len(records),
+        "skipped_sample_steps_missing_tasks": 0,
+        "shared_parameter_names": ["backbone.weight"],
+        "shared_parameter_count": 1024,
+        "records": records,
+        "summary": {},
+    }, indent=2, sort_keys=True)
+
+
+def staged_evidence(plan, *, stage, arm, seed, commit, job_id,
+                    task_type=None, metrics=None, diagnostics=None,
+                    run_id=None, checkpoint_run_id=None, job_directory=None,
+                    overrides=None):
+    """Build one well-formed completed job's staged bytes and its output records.
+
+    Returns ``(objects, outputs, manifest)`` where ``objects`` maps an artifact identity
+    to the exact bytes staged at it — the same shape the control plane serves back — and
+    ``outputs`` is the ``outputs[]`` list a job record would carry for them. Tests mutate
+    a copy to reproduce a specific defect; nothing here is a stub of the validator.
+    """
+
+    arm_spec = jobspec.arm_by_name(plan, arm)
+    declared = jobspec.declared_outputs(plan, arm_spec, seed)
+    tasks = [token for token in (task_type or plan["task_type"]).split("_") if token]
+    run_id = run_id or "{}_s{:02d}".format(arm, seed)
+    checkpoint_run_id = checkpoint_run_id or "{}_s{:02d}".format(arm, seed)
+    job_directory = job_directory or "/workspace/wavcse-jobs/job-0000000000000000"
+
+    kinds = {}
+    for output in plan["outputs"]:
+        name = output["name"]
+        if output["kind"] == "checkpoint":
+            filename = "checkpoint_{}.pth".format(output["tag"])
+        elif output["kind"] == "gradient_diagnostics":
+            filename = "gradient_diagnostics.json"
+        else:
+            filename = name + ".txt"
+        kinds[filename] = output["kind"]
+
+    metrics = metrics if metrics is not None else metrics_text(tasks)
+    diagnostics = diagnostics if diagnostics is not None else \
+        gradient_diagnostics_text(tasks)
+
+    outputs = []
+    staged = []
+    objects = {}
+    for declaration in declared:
+        filename = declaration["path"].rsplit("/", 1)[-1]
+        if filename == "MANIFEST.json":
+            continue
+        kind = kinds[filename]
+        if kind == "checkpoint":
+            text = "checkpoint-bytes {} seed {}".format(arm, seed)
+            source = "{}/checkpoints/{}/{}".format(job_directory, checkpoint_run_id,
+                                                   filename)
+        elif kind == "gradient_diagnostics":
+            text = diagnostics
+            source = "{}/results/{}/{}".format(job_directory, run_id, filename)
+        else:
+            text = metrics
+            source = "{}/results/{}/{}".format(job_directory, run_id, filename)
+        raw = text.encode("utf-8")
+        objects[declaration["artifact"]] = raw
+        outputs.append({
+            "path": declaration["path"],
+            "artifact": declaration["artifact"],
+            "required": declaration["required"],
+            "persisted": True,
+            "verified_size_bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        })
+        staged.append({
+            "name": filename.rsplit(".", 1)[0],
+            "kind": kind,
+            "required": declaration["required"],
+            "target": filename,
+            "source": source,
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "size_bytes": len(raw),
+        })
+
+    manifest = {
+        "schema_version": 1,
+        "study": plan["study"],
+        "stage": stage,
+        "arm": arm,
+        "method": arm_spec.get("method", arm),
+        "seed": seed,
+        "task_type": plan["task_type"],
+        "job_id": job_id,
+        "commit": commit,
+        "run_id": run_id,
+        "checkpoint_run_id": checkpoint_run_id,
+        "training_exit_code": 0,
+        "staged_at": "2026-09-29T00:00:00+00:00",
+        "files": sorted(staged, key=lambda entry: entry["name"]),
+    }
+    for key, value in (overrides or {}).items():
+        manifest[key] = value
+    manifest_declaration = [item for item in declared
+                            if item["path"].rsplit("/", 1)[-1] == "MANIFEST.json"][0]
+    manifest_raw = json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8")
+    objects[manifest_declaration["artifact"]] = manifest_raw
+    outputs.append({
+        "path": manifest_declaration["path"],
+        "artifact": manifest_declaration["artifact"],
+        "required": True,
+        "persisted": True,
+        "verified_size_bytes": len(manifest_raw),
+        "sha256": hashlib.sha256(manifest_raw).hexdigest(),
+    })
+    return objects, outputs, manifest
+
+
+def payload_digest(payload):
+    """The digest a job record would carry for one staged payload."""
+
+    raw = payload if isinstance(payload, bytes) else str(payload).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def resign(outputs, objects):
+    """Recompute the recorded digest/size of every output from the objects staged.
+
+    Used after a fixture mutates a payload, so a test always produces bytes whose
+    recorded identity is honest and the *content* is the only thing under test.
+    """
+
+    for output in outputs:
+        payload = objects.get(output["artifact"])
+        if payload is None:
+            continue
+        raw = payload if isinstance(payload, bytes) else str(payload).encode("utf-8")
+        output["sha256"] = payload_digest(raw)
+        output["verified_size_bytes"] = len(raw)
+    return outputs

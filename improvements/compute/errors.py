@@ -60,6 +60,16 @@ class ArtifactIntegrityError(ComputeError):
     """An artifact's identity cannot be established or does not match."""
 
 
+class EvidenceError(ComputeError):
+    """A stored result's bytes are present but its content is not this run's evidence.
+
+    Distinct from :class:`ArtifactIntegrityError` on purpose: a wrong or missing digest is
+    a transfer problem, while bytes that verify and still describe the wrong run, the
+    wrong tasks or an impossible value are a *result-identity* problem. Neither is ever
+    retried as a scientific failure.
+    """
+
+
 class RepositoryConflictError(ComputeError):
     """Repository state cannot be safely reconciled or is not commit-clean."""
 

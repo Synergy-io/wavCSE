@@ -11,7 +11,13 @@ from improvements.compute.errors import (
     ReconcilableError,
     CostError,
 )
-from improvements.compute.tests.fakes import ComputeTestCase, FakeInfra, sample_plan, worker_record
+from improvements.compute.tests.fakes import (
+    ComputeTestCase,
+    FakeInfra,
+    sample_plan,
+    staged_evidence,
+    worker_record,
+)
 
 
 class StageTestCase(ComputeTestCase):
@@ -24,6 +30,7 @@ class StageTestCase(ComputeTestCase):
         self.view = envelope_module.load("TR-0007")
         self.infra = FakeInfra(workers=[worker_record()])
         self.commit_sha = jobspec.git_state()["head"]
+        self.allow_remote_commit()
 
     def job_payload(self, name, *, state="RUNNING", worker_id="w-1", outputs=None):
         return {
@@ -306,12 +313,15 @@ class AdvanceTests(StageTestCase):
 
 
 class CollectAndFinishTests(StageTestCase):
-    def complete_outputs(self):
-        return [{"path": item["path"], "artifact": item["artifact"],
-                 "required": item["required"], "persisted": True,
-                 "verified_size_bytes": 10, "sha256": "a" * 64}
-                for item in jobspec.declared_outputs(
-                    self.plan, jobspec.arm_by_name(self.plan, "mssl"), 42)]
+    def complete_outputs(self, **kwargs):
+        """The staged bytes and stored-object records of a genuinely well-formed job."""
+
+        name = self.spec_name()
+        objects, outputs, _manifest = staged_evidence(
+            self.plan, stage="screen", arm="mssl", seed=42,
+            commit=self.commit_sha, job_id="job-" + name, **kwargs)
+        self.infra.objects.update(objects)
+        return outputs
 
     def verified_entry(self, outputs):
         name = self.spec_name()
@@ -330,7 +340,8 @@ class CollectAndFinishTests(StageTestCase):
     def test_verified_outputs_are_collected(self):
         outputs = self.complete_outputs()
         record = self.verified_entry(outputs)
-        result = run_study.collect("TR-0007", self.plan, "screen", record=record)
+        result = run_study.collect("TR-0007", self.plan, "screen", record=record,
+                                   reader=self.infra)
         self.assertEqual(len(result["collected"]), 1)
         self.assertEqual(result["unverified"], [])
 
@@ -342,7 +353,8 @@ class CollectAndFinishTests(StageTestCase):
              "persisted": False},
         ]
         record = self.verified_entry(outputs)
-        result = run_study.collect("TR-0007", self.plan, "screen", record=record)
+        result = run_study.collect("TR-0007", self.plan, "screen", record=record,
+                                   reader=self.infra)
         self.assertEqual(result["collected"], [])
         self.assertEqual(len(result["unverified"]), 1)
         entry = list(record["entries"].values())[0]
@@ -353,7 +365,8 @@ class CollectAndFinishTests(StageTestCase):
         outputs = self.complete_outputs()
         outputs.pop(0)
         record = self.verified_entry(outputs)
-        result = run_study.collect("TR-0007", self.plan, "screen", record=record)
+        result = run_study.collect("TR-0007", self.plan, "screen", record=record,
+                                   reader=self.infra)
         self.assertEqual(result["collected"], [])
         self.assertEqual(len(result["unverified"]), 1)
 
@@ -361,7 +374,8 @@ class CollectAndFinishTests(StageTestCase):
         outputs = self.complete_outputs()
         outputs[0]["verified_size_bytes"] = 0
         record = self.verified_entry(outputs)
-        result = run_study.collect("TR-0007", self.plan, "screen", record=record)
+        result = run_study.collect("TR-0007", self.plan, "screen", record=record,
+                                   reader=self.infra)
         self.assertEqual(result["collected"], [])
 
     def test_wrong_digest_or_artifact_cannot_be_collected(self):
@@ -369,7 +383,8 @@ class CollectAndFinishTests(StageTestCase):
             outputs = self.complete_outputs()
             outputs[0].update(change)
             record = self.verified_entry(outputs)
-            result = run_study.collect("TR-0007", self.plan, "screen", record=record)
+            result = run_study.collect("TR-0007", self.plan, "screen", record=record,
+                                   reader=self.infra)
             self.assertEqual(result["collected"], [])
 
     def test_finish_destroys_only_after_everything_is_collected(self):
@@ -383,7 +398,8 @@ class CollectAndFinishTests(StageTestCase):
         ledger.redeem_create("TR-0007", worker_id="w-1", purpose="test",
                             envelope_digest=self.view.digest,
                             deadline="2999-01-01T00:00:00+00:00")
-        run_study.collect("TR-0007", self.plan, "screen", record=record)
+        run_study.collect("TR-0007", self.plan, "screen", record=record,
+                          reader=self.infra)
         done = run_study.finish("TR-0007", self.plan, infra=self.infra,
                                 view=self.view, record=record)
         self.assertTrue(done["finished"])

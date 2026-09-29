@@ -4,7 +4,13 @@ import unittest
 
 from improvements.compute import envelope as envelope_module
 from improvements.compute import failures, jobspec, ledger, run_study
-from improvements.compute.tests.fakes import ComputeTestCase, FakeInfra, sample_plan, worker_record
+from improvements.compute.tests.fakes import (
+    ComputeTestCase,
+    FakeInfra,
+    sample_plan,
+    staged_evidence,
+    worker_record,
+)
 
 
 class AdversarialTestCase(ComputeTestCase):
@@ -18,6 +24,7 @@ class AdversarialTestCase(ComputeTestCase):
         self.infra = FakeInfra(workers=[worker_record()])
         self.commit_sha = jobspec.git_state()["head"]
         self.name = jobspec.job_name("TR-0007", "screen", "mssl", 42)
+        self.allow_remote_commit()
 
     def payload(self, *, state="RUNNING", outputs=None):
         return {
@@ -48,20 +55,18 @@ class CrashRecoveryTests(AdversarialTestCase):
         """The job finished while nobody was watching: collect, do not resubmit."""
 
         record = self.submit()
-        expected = jobspec.declared_outputs(
-            self.plan, jobspec.arm_by_name(self.plan, "mssl"), 42)
-        self.infra.jobs = [self.payload(
-            state="SUCCEEDED",
-            outputs=[{"path": item["path"], "artifact": item["artifact"],
-                      "required": item["required"], "persisted": True,
-                      "verified_size_bytes": 10, "sha256": "a" * 64}
-                     for item in expected],
-        )]
+        name = self.name
+        objects, outputs, _manifest = staged_evidence(
+            self.plan, stage="screen", arm="mssl", seed=42,
+            commit=self.commit_sha, job_id="job-" + name)
+        self.infra.objects.update(objects)
+        self.infra.jobs = [self.payload(state="SUCCEEDED", outputs=outputs)]
         run_study.reconcile("TR-0007", self.plan, "screen", infra=self.infra,
                             record=record)
         entry = list(record["entries"].values())[0]
         self.assertEqual(entry["state"], run_study.SUCCEEDED)
-        result = run_study.collect("TR-0007", self.plan, "screen", record=record)
+        result = run_study.collect("TR-0007", self.plan, "screen", record=record,
+                                   reader=self.infra)
         self.assertEqual(len(result["collected"]), 1)
         self.assertEqual(self.infra.count("job_submit"), 1)
 

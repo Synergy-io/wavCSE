@@ -37,6 +37,18 @@ SCHEMA_VERSION = 1
 _NON_BILLING_STATES = ("STOPPED", "DESTROYED")
 _TERMINAL_STATES = ("DESTROYED",)
 
+# Lease states from which no further compute cost can accrue. ``stopped`` stays in
+# :func:`active_leases` for the restart path, so this tuple is used only where the
+# question is "can this lease still bill?" rather than "is this lease finished?".
+_CLOSED_LEASE_STATES = ("stopped", "destroyed", "vanished")
+
+# How a closed lease's cost was established. ``provider`` means the figure came from a
+# live provider read at the moment this backend ended the spend; the upper-bound marker
+# means the resource left the provider inventory before that could happen and the figure
+# is a provable ceiling derived from the last observation, never a measurement.
+FINALIZATION_PROVIDER = "measured_from_provider_at_close"
+FINALIZATION_UPPER_BOUND = "upper_bound_from_last_observation"
+
 PRECISION = "estimate_from_provider_hourly_rate"
 
 
@@ -103,7 +115,10 @@ def leases_for(scope):
 
 def active_leases(scope=None):
     leases = all_leases() if scope is None else leases_for(scope)
-    return [lease for lease in leases if lease.get("state") != "destroyed"]
+    return [
+        lease for lease in leases
+        if lease.get("state") not in ("destroyed", "vanished")
+    ]
 
 
 def pending_creates(scope=None):
@@ -111,6 +126,23 @@ def pending_creates(scope=None):
     if scope is None:
         return intents
     return [intent for intent in intents if intent.get("scope") == scope]
+
+
+def known_scopes():
+    """Every scope this controller has a lease or an unresolved intent for.
+
+    This is the enforcement universe of the reaper: a scope with no recorded lease and no
+    pending create has no ARC resource to reconcile, so nothing about it is touched.
+    """
+
+    scopes = set()
+    for lease in all_leases():
+        if lease.get("scope"):
+            scopes.add(lease["scope"])
+    for intent in pending_creates():
+        if intent.get("scope"):
+            scopes.add(intent["scope"])
+    return sorted(scopes)
 
 
 @_serialized_lease_write
@@ -331,6 +363,180 @@ def close_lease(worker_id, *, cost_usd=None, wall_clock_hours=None, state="stopp
     return updated
 
 
+@_serialized_lease_write
+def observe_workers(workers, *, scope=None, now=None):
+    """Record the provider facts about each lease's worker while it is still visible.
+
+    A Pod that disappears takes its billing facts with it: the provider exposes only a
+    current hourly rate and the start of the current billing period, and nothing at all
+    once the Pod is gone from ``worker list``. Recording those two facts here, with the
+    moment they were seen, is what later lets a vanished worker's cost be bounded from an
+    authoritative observation instead of guessed.
+
+    Only workers that match their own lease's scope prefix are recorded, so a lease can
+    never absorb facts about a resource it does not own.
+    """
+
+    now = now or state_module.utc_now()
+    path, document = _leases_document()
+    by_id = {worker.get("id"): worker for worker in workers if worker.get("id")}
+    observed = []
+    for lease in document["leases"]:
+        if scope is not None and lease.get("scope") != scope:
+            continue
+        if lease.get("state") not in ("active",):
+            continue
+        worker = by_id.get(lease.get("worker_id"))
+        if worker is None:
+            continue
+        if not worker_belongs_to(worker.get("name"), lease.get("scope")):
+            continue
+        hourly = _decimal_or_none(worker.get("hourly_cost"))
+        previous = lease.get("observation") or {}
+        highest = _decimal_or_none(previous.get("max_hourly_cost"))
+        if hourly is not None and (highest is None or hourly > highest):
+            highest = hourly
+        started = _latest_of(
+            state_module.parse_timestamp(previous.get("billing_started_at")),
+            state_module.parse_timestamp(worker.get("last_started_at")),
+            state_module.parse_timestamp(worker.get("created_at")),
+        )
+        lease["observation"] = {
+            "observed_at": state_module.isoformat(now),
+            "state": str(worker.get("state") or "UNKNOWN").upper(),
+            "hourly_cost": None if hourly is None else str(hourly),
+            "max_hourly_cost": None if highest is None else str(highest),
+            "billing_started_at": (
+                None if started is None else state_module.isoformat(started)
+            ),
+        }
+        observed.append(lease.get("worker_id"))
+    if observed:
+        _save(path, document)
+    return observed
+
+
+def _latest_of(*moments):
+    known = [moment for moment in moments if moment is not None]
+    return max(known) if known else None
+
+
+@_serialized_lease_write
+def reconcile_absent_leases(scope, workers, *, now=None):
+    """Finalize the cost of leases whose provider worker can no longer bill.
+
+    Two cases reach here, and both leave the ledger unbounded until they are resolved:
+
+    * the worker is **absent** from provider inventory — it was destroyed, evicted, or
+      terminated while nothing was watching;
+    * the worker is present but reported in a non-billing state, and no earlier read
+      recorded when its spend ended.
+
+    Either way the resource *did* bill, and the honest answer is a provable ceiling rather
+    than a measurement: the highest hourly rate ever observed for it, times the time from
+    the start of its last observed billing period to the moment the absence was observed.
+    A resource that vanished billed until it vanished and vanished no later than this
+    observation, so its true cost cannot exceed that figure. A lease with no observation
+    carrying both a rate and a start is left open and reported instead — the scope stays
+    fail-closed rather than guessing a cost it cannot bound.
+
+    The figure accumulates onto any cost already frozen on the lease, so a restart or an
+    earlier reap never resets a predecessor's spend.
+    """
+
+    now = now or state_module.utc_now()
+    path, document = _leases_document()
+    present = {worker.get("id"): worker for worker in workers if worker.get("id")}
+    finalized = []
+    unbounded = []
+    changed = False
+    for lease in document["leases"]:
+        if lease.get("scope") != scope:
+            continue
+        if lease.get("state") not in ("active",):
+            continue
+        worker_id = lease.get("worker_id")
+        worker = present.get(worker_id)
+        if worker is not None:
+            state = str(worker.get("state") or "UNKNOWN").upper()
+            if state not in _NON_BILLING_STATES:
+                continue
+            if _decimal_or_none(lease.get("closed_cost_usd")) is not None:
+                continue
+            target_state = "destroyed" if state == "DESTROYED" else "stopped"
+            reason = "the provider reports this worker {}".format(state)
+        else:
+            target_state = "vanished"
+            reason = "the worker is absent from provider inventory"
+        entry = _finalize_from_observation(lease, state=target_state, now=now,
+                                           reason=reason)
+        if entry is None:
+            observation = lease.get("observation") or {}
+            missing = []
+            if _decimal_or_none(observation.get("max_hourly_cost")) is None and \
+                    _decimal_or_none(observation.get("hourly_cost")) is None:
+                missing.append("no observed hourly price")
+            if state_module.parse_timestamp(observation.get("billing_started_at")) is None:
+                missing.append("no observed billing start")
+            if not observation:
+                missing.append("the worker was never observed while it was visible")
+            unbounded.append({
+                "worker_id": worker_id,
+                "scope": scope,
+                "state": target_state,
+                "reason": reason,
+                "missing": missing,
+            })
+            state_module.append_event(
+                {"scope": scope, "action": "lease-cost-unbounded", "worker_id": worker_id,
+                 "reason": "{}; {}".format(reason, "; ".join(missing))},
+                kind="lease-cost-unbounded",
+            )
+            changed = True
+            continue
+        finalized.append(entry)
+        changed = True
+    if changed:
+        _save(path, document)
+    return {"finalized": finalized, "unbounded": unbounded}
+
+
+def _finalize_from_observation(lease, *, state, now, reason):
+    """Freeze a bounded final cost on one lease, or return None when none is provable."""
+
+    observation = lease.get("observation") or {}
+    rate = (_decimal_or_none(observation.get("max_hourly_cost"))
+            or _decimal_or_none(observation.get("hourly_cost")))
+    started = state_module.parse_timestamp(observation.get("billing_started_at"))
+    if rate is None or rate <= 0 or started is None:
+        return None
+    hours = _elapsed_hours(started, now)
+    prior_cost = _decimal_or_none(lease.get("closed_cost_usd")) or Decimal(0)
+    prior_wall = _decimal_or_none(lease.get("closed_wall_clock_hours")) or Decimal(0)
+    lease["state"] = state
+    lease["closed_at"] = state_module.isoformat(now)
+    lease["closed_cost_usd"] = str(prior_cost + rate * hours)
+    lease["closed_wall_clock_hours"] = str(prior_wall + hours)
+    lease["finalization"] = FINALIZATION_UPPER_BOUND
+    lease["finalization_basis"] = {
+        "hourly_cost_usd": str(rate),
+        "billing_started_at": observation.get("billing_started_at"),
+        "last_observed_at": observation.get("observed_at"),
+        "last_observed_state": observation.get("state"),
+        "absent_observed_at": state_module.isoformat(now),
+    }
+    lease["finalization_reason"] = reason
+    state_module.append_event(
+        {"scope": lease.get("scope"), "action": "lease-cost-finalized",
+         "worker_id": lease.get("worker_id"), "state": state, "reason": reason,
+         "cost_usd": lease["closed_cost_usd"],
+         "wall_clock_hours": lease["closed_wall_clock_hours"],
+         "precision": FINALIZATION_UPPER_BOUND},
+        kind="lease-cost-finalized",
+    )
+    return lease
+
+
 class SpendReport(object):
     """Estimated spend and exposure for one scope."""
 
@@ -472,7 +678,7 @@ def derive_spend(workers, scope, leases=None, now=None):
     for lease in leases:
         if lease.get("scope") != scope:
             continue
-        if lease.get("state") in ("stopped", "destroyed") and \
+        if lease.get("state") in _CLOSED_LEASE_STATES and \
                 (lease.get("closed_cost_usd") is None or
                  lease.get("closed_wall_clock_hours") is None):
             unknowns.append("closed lease {} has no verified accrued cost or time"
@@ -547,7 +753,7 @@ def derive_spend(workers, scope, leases=None, now=None):
     for lease in leases:
         if lease.get("scope") != scope:
             continue
-        if lease.get("state") == "destroyed":
+        if lease.get("state") in ("destroyed", "vanished"):
             continue
         if lease.get("worker_id") in seen:
             continue

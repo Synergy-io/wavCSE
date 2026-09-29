@@ -1,5 +1,6 @@
 """Two orchestrator instances must never work the same scope at once."""
 
+import os
 import unittest
 import multiprocessing
 
@@ -68,8 +69,45 @@ class ScopeLockTests(ComputeTestCase):
         self.fake_control_plane()
         with state_module.scope_lock("TR-0007"):
             with self.assertRaises(CliBusyError):
-                with cli._scope_lock("TR-0007"):
+                with cli._mutation("TR-0007"):
                     self.fail("must not acquire")
+
+    def test_a_second_state_root_cannot_mutate_the_same_host(self):
+        """M01: one controller per host, checked outside any single state root.
+
+        The two processes here use *different* state roots — nothing inside either root
+        could see the other — and the mutation is still refused, naming the holder's
+        root. That is the single-controller deployment invariant, mechanically enforced
+        instead of assumed.
+        """
+
+        from improvements.compute import __main__ as cli
+        from improvements.compute.errors import BusyError as CliBusyError
+
+        self.make_repo()
+        self.write_envelope("TR-0007")
+        self.commit()
+        self.fake_control_plane()
+        with state_module.controller_guard():
+            original = os.environ["WAVCSE_RESEARCH_STATE"]
+            os.environ["WAVCSE_RESEARCH_STATE"] = os.path.join(self.home, "other-root")
+            try:
+                self.assertNotEqual(state_module.state_root(), original)
+                with self.assertRaises(CliBusyError) as caught:
+                    with cli._mutation("TR-0007"):
+                        self.fail("must not acquire")
+                self.assertIn("state root", str(caught.exception))
+                self.assertIn(original, str(caught.exception))
+            finally:
+                os.environ["WAVCSE_RESEARCH_STATE"] = original
+
+    def test_the_host_guard_is_released_when_its_holder_exits(self):
+        """A crash must not leave a permanent block: the kernel drops the lock."""
+
+        with state_module.controller_guard():
+            pass
+        with state_module.controller_guard():
+            pass
 
     def test_read_only_verbs_still_run_while_the_scope_is_locked(self):
         """A status check must never be blocked by a running cycle."""

@@ -22,12 +22,15 @@ import subprocess
 from decimal import Decimal
 
 from improvements.compute import envelope as envelope_module
-from improvements.compute import failures, jobspec, ledger, worker as worker_module
+from improvements.compute import evidence
+from improvements.compute import failures, jobspec, ledger, remote_commit
 from improvements.compute import state as state_module
+from improvements.compute import worker as worker_module
 from improvements.compute.errors import (
     ArtifactIntegrityError,
     AuthorizationError,
     CostError,
+    EvidenceError,
     ImplementationBugError,
     ReconcilableError,
     RepositoryConflictError,
@@ -180,6 +183,7 @@ def reconcile(scope, plan, stage, *, infra, record=None):
         entry["remote_status"] = record_view.get("remote_status")
         entry["state_reason"] = record_view.get("state_reason")
         entry["outputs"] = record_view.get("outputs")
+        entry["inputs"] = record_view.get("inputs")
         entry["finished_at"] = record_view.get("finished_at") or entry.get("finished_at")
     save_record(scope, record)
     return record, adopted
@@ -237,6 +241,11 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
     tree = jobspec.git_state()
     if require_clean and not dry_run:
         jobspec.require_committed_experiment(expected_commit=commit)
+    if not dry_run:
+        # The worker could only ever check out a commit its remote serves. This is the
+        # same proof `worker-ensure` made, re-made against the commit this submission
+        # actually names: HEAD can move between the two steps.
+        remote_commit.require_plan_commit(plan, commit)
     inputs = _inputs_for(plan)
     submitted = []
     planned = []
@@ -353,7 +362,9 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
     return {"planned": planned, "submitted": submitted, "warnings": warnings}
 
 
-def _worker_id_for(infra, scope):
+def available_worker_id(infra, scope):
+    """The newest scope worker this controller could submit to, or None."""
+
     workers = infra.worker_list()
     candidates = [
         worker for worker in workers
@@ -362,19 +373,41 @@ def _worker_id_for(infra, scope):
     ]
     candidates.sort(key=lambda worker: str(worker.get("created_at") or ""), reverse=True)
     if not candidates:
+        return None
+    return candidates[0].get("id")
+
+
+def _worker_id_for(infra, scope):
+    worker_id = available_worker_id(infra, scope)
+    if worker_id is None:
         raise UsageError(
             "no worker is available for {}; run the worker-ensure transition first".format(
                 scope
             )
         )
-    return candidates[0].get("id")
+    return worker_id
 
 
-def collect(scope, plan, stage, *, record, require_all=True):
-    """Verify outputs from the job records and mark entries collected."""
+def collect(scope, plan, stage, *, record, reader, require_all=True):
+    """Verify outputs from the job records and validate their evidence before collecting.
+
+    Two gates, in order, because bytes are not evidence:
+
+    1. the control plane's stored-object records must show every required output
+       persisted with a positive size and a digest;
+    2. the stored bytes must be read back and validated as *this* run's result
+       (:mod:`improvements.compute.evidence`) — manifest identity, staged-file digests,
+       the protocol's metric vocabulary and value domains.
+
+    Only an entry that passes both becomes COLLECTED. Anything else is FAILED with its
+    reason recorded, so a malformed or foreign result can never advance the research
+    state or make cleanup eligible. ``reader`` is the read-only control-plane handle used
+    for step 2; there is no path that collects on step 1 alone.
+    """
 
     collected = []
     unverified = []
+    invalid = []
     commit = jobspec.git_state()["head"]
     for arm, seed in plan_jobs(plan, stage):
         key = jobspec.job_key(scope, plan["study"], stage, arm, seed, commit)
@@ -406,17 +439,41 @@ def collect(scope, plan, stage, *, record, require_all=True):
             if missing:
                 entry["state"] = FAILED
                 entry["failure_class"] = failures.ARTIFACT_INTEGRITY
+                entry["retry_allowed"] = False
                 entry["note"] = "required outputs not verified: {}".format(
                     ", ".join(str(item.get("path")) for item in missing)
                 )
                 unverified.append(entry["job_key"])
                 continue
+            try:
+                entry["evidence"] = evidence.validate(
+                    plan, stage=stage, arm=arm, seed=seed, commit=commit,
+                    entry=entry, reader=reader,
+                    where="{} {} seed {}".format(scope, key, seed),
+                )
+            except EvidenceError as exc:
+                entry["state"] = FAILED
+                entry["failure_class"] = failures.EVIDENCE_INVALID
+                entry["retry_allowed"] = False
+                entry["note"] = str(exc)[:1000]
+                invalid.append(entry["job_key"])
+                continue
+            except ArtifactIntegrityError as exc:
+                # The object read back is not the object that was verified: an integrity
+                # failure, not a scientific one, and not an invalid result either.
+                entry["state"] = FAILED
+                entry["failure_class"] = failures.ARTIFACT_INTEGRITY
+                entry["retry_allowed"] = False
+                entry["note"] = "evidence read-back failed: {}".format(str(exc)[:900])
+                unverified.append(entry["job_key"])
+                continue
             entry["state"] = COLLECTED
             entry["outputs_verified"] = True
+            entry["evidence_verified"] = True
             entry["collected_at"] = state_module.isoformat(state_module.utc_now())
             collected.append(entry["job_key"])
     save_record(scope, record)
-    return {"collected": collected, "unverified": unverified}
+    return {"collected": collected, "unverified": unverified, "invalid": invalid}
 
 
 def assess(record, *, stage=None, logs=None):
@@ -446,7 +503,9 @@ def assess(record, *, stage=None, logs=None):
         classification = failures.assess_job_outcome(
             {"state": "FAILED", "exit_code": entry.get("exit_code"),
              "worker_absent": entry.get("worker_absent"),
-             "remote_status": entry.get("remote_status")},
+             "remote_status": entry.get("remote_status"),
+             "failure_class": entry.get("failure_class"),
+             "note": entry.get("note")},
             log_text=log_text,
             outputs_verified=bool(entry.get("outputs_verified")),
         )
@@ -464,6 +523,9 @@ def assess(record, *, stage=None, logs=None):
             entry["previous_job_ids"] = previous
             entry["state"] = PENDING
             entry["job_id"] = None
+            # A retry is resolved again at submission time. Keeping the previous worker
+            # id would aim the retry at a Pod that may be the very one that disappeared.
+            entry["worker_id"] = None
             state_module.append_event(
                 {"scope": record.get("scope"), "action": "job-retry-scheduled",
                  "job_key": entry["job_key"], "class": classification.klass,
@@ -534,7 +596,13 @@ def advance(scope, plan, stage, *, infra, record=None, view=None, dry_run=False)
                 "submit": preview, "in_flight": []}
     view = view or _viewport(scope, infra=infra)
     if not dry_run:
-        spend = ledger.derive_spend(infra.worker_list(), scope)
+        workers = infra.worker_list()
+        # Reconcile the ledger against provider truth *before* deciding anything about
+        # money: a worker that disappeared takes its billing facts with it, and without
+        # this the scope's total stays unbounded and every further action is refused.
+        ledger.observe_workers(workers, scope=scope)
+        ledger.reconcile_absent_leases(scope, workers)
+        spend = ledger.derive_spend(workers, scope)
         budget = view.envelope["budget"]
         violation = None
         if envelope_module.is_expired(view.envelope):
@@ -580,10 +648,16 @@ def advance(scope, plan, stage, *, infra, record=None, view=None, dry_run=False)
     if in_flight:
         step = "monitor"
     elif submittable and not dry_run:
-        submitted = submit_pending(
-            scope, plan, stage, infra=infra, view=view, record=record
-        )
-        step = "submitted"
+        if available_worker_id(infra, scope) is None:
+            # Nothing to submit to: the previous worker is gone. Report it rather than
+            # raising from inside the submission, so the cycle's next step is the
+            # worker-ensure transition it already knows how to take.
+            step = "needs-worker"
+        else:
+            submitted = submit_pending(
+                scope, plan, stage, infra=infra, view=view, record=record
+            )
+            step = "submitted"
     elif submittable:
         submitted = submit_pending(
             scope, plan, stage, infra=infra, view=view, record=record, dry_run=True

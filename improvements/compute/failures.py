@@ -21,6 +21,7 @@ from improvements.compute.errors import (
     ComputeError,
     ConfigurationError,
     CostError,
+    EvidenceError,
     ImplementationBugError,
     ReconcilableError,
     RepositoryConflictError,
@@ -36,6 +37,7 @@ RESOURCE_OOM = "RESOURCE_OOM"
 IMPLEMENTATION_BUG = "IMPLEMENTATION_BUG"
 SCIENTIFIC_FAILURE = "SCIENTIFIC_FAILURE"
 ARTIFACT_INTEGRITY = "ARTIFACT_INTEGRITY"
+EVIDENCE_INVALID = "EVIDENCE_INVALID"
 AUTHORIZATION = "AUTHORIZATION"
 COST = "COST"
 REPOSITORY_CONFLICT = "REPOSITORY_CONFLICT"
@@ -43,11 +45,12 @@ SECURITY = "SECURITY"
 
 CLASSES = (
     TRANSIENT_INFRA, CAPACITY, RESOURCE_OOM, IMPLEMENTATION_BUG,
-    SCIENTIFIC_FAILURE, ARTIFACT_INTEGRITY, AUTHORIZATION, COST,
-    REPOSITORY_CONFLICT, SECURITY,
+    SCIENTIFIC_FAILURE, ARTIFACT_INTEGRITY, EVIDENCE_INVALID, AUTHORIZATION,
+    COST, REPOSITORY_CONFLICT, SECURITY,
 )
 
-# Bounded attempts per class. A class absent here is never retried automatically.
+# Bounded attempts per class. A class absent here is never retried automatically:
+# an invalid result is a defect in the run, and paying for it again would be a guess.
 MAX_ATTEMPTS = {
     TRANSIENT_INFRA: 3,
     CAPACITY: 2,
@@ -75,6 +78,7 @@ _EXCEPTION_CLASSES = (
     (CostError, COST, False),
     (AuthorizationError, AUTHORIZATION, False),
     (ArtifactIntegrityError, ARTIFACT_INTEGRITY, True),
+    (EvidenceError, EVIDENCE_INVALID, False),
     (SecurityError, SECURITY, False),
     (RepositoryConflictError, REPOSITORY_CONFLICT, False),
     (ConfigurationError, REPOSITORY_CONFLICT, False),
@@ -163,6 +167,25 @@ def assess_job_outcome(record, log_text=None, outputs_verified=True):
 
     state = str(record.get("state") or "").upper()
     exit_code = record.get("exit_code")
+
+    # An entry that collection already failed keeps that verdict. It ran, its bytes were
+    # stored, and the *content* was not this run's evidence: re-deriving that as a generic
+    # execution failure would hide the reason and invite a pointless paid rerun.
+    recorded = record.get("failure_class")
+    if recorded == EVIDENCE_INVALID:
+        return Assessment(
+            EVIDENCE_INVALID, retryable=False, max_attempts=0, repairable=False,
+            scientific_change_allowed=False,
+            reason="the stored result verified by digest but not as this run's evidence: "
+                   "{}".format(record.get("note") or "invalid result content"),
+        )
+    if recorded == ARTIFACT_INTEGRITY and state == "FAILED":
+        return Assessment(
+            ARTIFACT_INTEGRITY, retryable=False, max_attempts=0, repairable=False,
+            scientific_change_allowed=False,
+            reason="the stored result's required outputs are not verified: {}".format(
+                record.get("note") or "unverified output"),
+        )
 
     if state == "SUCCEEDED" and outputs_verified:
         return Assessment(

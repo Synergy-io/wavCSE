@@ -126,10 +126,14 @@ def plan_actions(scope, *, workers, leases, jobs_by_worker, now=None,
     }
 
 
-def sweep(infra, scope, *, view=None, execute=False, jobs=None, now=None):
-    """Reconcile one scope's compute. Dry-run unless ``execute`` is true."""
+def sweep(infra, scope, *, view=None, execute=False, jobs=None, now=None, workers=None):
+    """Reconcile one scope's compute. Dry-run unless ``execute`` is true.
 
-    workers = infra.worker_list()
+    ``workers`` lets a caller that already read provider inventory (the reaper, which
+    must reconcile several scopes against one snapshot) reuse it instead of re-reading.
+    """
+
+    workers = infra.worker_list() if workers is None else workers
     leases = ledger.leases_for(scope)
     jobs = infra.job_list() if jobs is None else jobs
     jobs_by_worker = {}

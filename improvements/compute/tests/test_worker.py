@@ -17,6 +17,7 @@ class EnsureWorkerTests(ComputeTestCase):
         self.write_envelope("TR-0007")
         self.view = envelope_module.load("TR-0007")
         self.plan = jobspec.load_plan(self.write_plan(sample_plan()))
+        self.allow_remote_commit()
 
     def ready_record(self, **overrides):
         record = worker_record(**overrides)

@@ -19,6 +19,7 @@ from decimal import Decimal
 
 from improvements.compute import ledger, state as state_module
 from improvements.compute import envelope as envelope_module
+from improvements.compute import jobspec, remote_commit
 from improvements.compute.errors import (
     CapacityError,
     ConfigurationError,
@@ -156,9 +157,19 @@ def ensure_worker(plan, view, *, infra, purpose=None, projected_hours=None):
     # jobs after a lost submit acknowledgement. Check that contract first.
     infra.job_list()
     workers = infra.worker_list()
+    # A predecessor that vanished while nobody was watching must be given its bounded
+    # final cost here, or the scope stays unbounded and no replacement can be created.
+    ledger.observe_workers(workers, scope=scope)
+    ledger.reconcile_absent_leases(scope, workers)
     spend = ledger.derive_spend(workers, scope)
     if view.modified_in_tree or view.uncommitted:
         raise CostError("compute authorization must match a committed grant")
+    # A paid Pod — or a restart that resumes billing — is money spent on an impossible
+    # job unless the worker's remote can serve the exact commit. Prove that against the
+    # remote the worker clones, before any reuse decision touches the provider.
+    commit = jobspec.git_state()["head"]
+    remote_commit.require_plan_commit(plan, commit)
+    actions.append("proved commit {} is available on the worker's remote".format(commit[:12]))
     for lease in ledger.active_leases(scope):
         if lease.get("state") == "active" and lease.get("envelope_digest") != view.digest:
             raise CostError("active worker {} belongs to a different authorization digest"

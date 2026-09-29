@@ -17,6 +17,9 @@ never write runtime state.
 """
 
 import argparse
+import contextlib
+import os
+import shutil
 import sys
 
 from improvements.compute import cli_support, envelope as envelope_module, jobspec
@@ -110,6 +113,43 @@ def _parser():
     stop.add_argument("--scope", required=True)
     stop.add_argument("--destroy", action="store_true")
 
+    reap = subparsers.add_parser(
+        "reap",
+        parents=[flag],
+        help="crash-independent reconciliation of every known scope (dry-run by default)",
+    )
+    reap.add_argument("--execute", action="store_true",
+                      help="perform the reversible actions (stop); never destroys")
+    reap.add_argument("--scope", action="append", default=None,
+                      help="limit to one scope (repeatable); default is every known scope")
+
+    reap_install = subparsers.add_parser(
+        "reap-install",
+        parents=[flag],
+        help="render or install the controller timer that runs `reap` unattended",
+    )
+    reap_install.add_argument("--print", action="store_true",
+                              help="render the unit files to stdout (the default)")
+    reap_install.add_argument("--install", action="store_true",
+                              help="write the unit files into the unit directory")
+    reap_install.add_argument("--enable", action="store_true",
+                              help="also enable and start the timer (writes to systemd)")
+    reap_install.add_argument("--user", action="store_true",
+                              help="install user units instead of system units")
+    reap_install.add_argument("--dir", default=None,
+                              help="explicit unit directory (defaults to the systemd one)")
+    reap_install.add_argument("--interval-seconds", type=int, default=None)
+    reap_install.add_argument("--dry-run", action="store_true",
+                              help="report what --install would write without writing")
+
+    preflight = subparsers.add_parser(
+        "preflight", parents=[flag],
+        help="read-only: prove this checkout's exact commit is publishable to workers",
+    )
+    preflight.add_argument("--plan", required=True)
+    preflight.add_argument("--commit", default=None,
+                           help="exact commit to check (defaults to this checkout's HEAD)")
+
     return parser
 
 
@@ -119,14 +159,20 @@ def _infra():
     return infra_cli.InfraCli(resolve_module.resolve())
 
 
-def _scope_lock(scope):
-    """Exclusive guard for one scope's mutating verbs.
+@contextlib.contextmanager
+def _mutation(scope):
+    """The guards around a mutating verb: one host controller, then one scope.
 
-    Read-only verbs never take it, so a status check can always run; two
-    orchestrator instances contend and the loser refuses rather than acting.
+    Read-only verbs never take either, so a status check can always run. The
+    host-level guard is what makes "one controller per host" a checked invariant rather
+    than an assumption — it refuses a second mutating process even when it was handed a
+    different state root, because nothing inside a state root can see a second one. The
+    order (host, then scope) is the same everywhere, so the two locks cannot deadlock.
     """
 
-    return state_module.scope_lock(scope)
+    with state_module.controller_guard():
+        with state_module.scope_lock(scope):
+            yield
 
 
 def _emit(args, payload, exit_code=EXIT_OK, lines=None):
@@ -167,7 +213,7 @@ def _run(args):
     if args.verb == "sweep":
         infra = _infra()
         if args.execute:
-            with _scope_lock(args.scope):
+            with _mutation(args.scope):
                 result = sweep_module.sweep(infra, args.scope, execute=True)
         else:
             # A dry run is observational, so it never contends for the lock.
@@ -189,7 +235,7 @@ def _run(args):
     if args.verb == "worker-ensure":
         infra = _infra()
         view = envelope_module.load(args.scope)
-        with _scope_lock(args.scope):
+        with _mutation(args.scope):
             worker, actions = worker_module.ensure_worker(plan, view, infra=infra)
         return _emit(args, {
             "worker": {key: worker.get(key) for key in
@@ -206,32 +252,103 @@ def _run(args):
                 args.scope, plan, args.stage, infra=infra, record=record, dry_run=True,
             )
         else:
-            with _scope_lock(args.scope):
+            with _mutation(args.scope):
                 result = run_study.advance(
                     args.scope, plan, args.stage, infra=infra, record=record,
                 )
         return _emit(args, result)
 
     if args.verb == "collect":
+        infra = _infra()
         record = run_study.load_record(args.scope)
-        with _scope_lock(args.scope):
-            result = run_study.collect(args.scope, plan, args.stage, record=record)
+        with _mutation(args.scope):
+            result = run_study.collect(args.scope, plan, args.stage, record=record,
+                                       reader=infra)
         return _emit(args, result,
-                     EXIT_OK if not result["unverified"] else EXIT_REFUSED)
+                     EXIT_OK if not result["unverified"] and not result["invalid"]
+                     else EXIT_REFUSED)
 
     if args.verb == "finish":
         infra = _infra()
         view = envelope_module.load(args.scope)
         record = run_study.load_record(args.scope)
-        with _scope_lock(args.scope):
+        with _mutation(args.scope):
             result = run_study.finish(args.scope, plan, infra=infra, view=view,
                                       record=record)
         return _emit(args, result)
 
+    if args.verb == "preflight":
+        from improvements.compute import remote_commit
+
+        commit = args.commit or jobspec.git_state()["head"]
+        try:
+            availability = remote_commit.verify_available(
+                plan.get("repository"), commit
+            )
+        except ComputeError as exc:
+            return _emit(args, {"commit": commit, "available": False,
+                                "class": type(exc).__name__, "reason": str(exc)},
+                         exit_code=EXIT_REFUSED)
+        payload = availability.as_dict()
+        if not availability.available:
+            payload["class"] = "REPOSITORY_CONFLICT"
+            payload["reason"] = (
+                "the commit is not on the remote a disposable worker clones; publishing "
+                "it is a developer action (`git push`), and no substitute commit is "
+                "chosen automatically"
+            )
+        return _emit(args, payload,
+                     exit_code=EXIT_OK if availability.available else EXIT_REFUSED)
+
+    if args.verb == "reap":
+        from improvements.compute import reaper
+
+        infra = _infra()
+        report = reaper.reap(infra, execute=args.execute, scopes=args.scope)
+        return _emit(args, report, exit_code=reaper.exit_code(report),
+                     lines=reaper.summarize(report))
+
+    if args.verb == "reap-install":
+        from improvements.compute import reaper_units
+        from improvements.compute import resolve as resolve_module
+
+        uv = shutil.which("uv")
+        if not uv:
+            raise ConfigurationError(
+                "`uv` is not on PATH, so the reaper timer cannot be rendered with a "
+                "deterministic interpreter; run this from the controller bootstrap shell"
+            )
+        checkout = resolve_module.resolve().checkout
+        home = os.path.expanduser("~")
+        interval = args.interval_seconds or reaper_units.DEFAULT_INTERVAL_SECONDS
+        units = reaper_units.build_units(
+            repo_root=resolve_module.repo_root(),
+            command_argv=[uv, "run", "--locked", "python", "-m",
+                          "improvements.compute", "reap", "--execute"],
+            state_root=state_module.state_root(),
+            infra_checkout=checkout,
+            interval_seconds=interval,
+            run_as=None if args.user else os.environ.get("USER") or None,
+            extra_environment=(("HOME", home),),
+        )
+        if not args.install:
+            payload = {"dry_run": True, "unit_dir": None, "units": units,
+                       "interval_seconds": interval}
+            return _emit(args, payload)
+        target = args.dir or reaper_units.default_unit_dir(user=args.user)
+        result = reaper_units.install(units, target, dry_run=args.dry_run)
+        payload = {"units": units, "interval_seconds": interval, **result}
+        if args.enable:
+            if args.dry_run:
+                payload["enable"] = {"enabled": False, "reason": "--dry-run"}
+            else:
+                payload["enable"] = reaper_units.enable(user=args.user)
+        return _emit(args, payload)
+
     if args.verb == "stop":
         infra = _infra()
         actions = []
-        with _scope_lock(args.scope):
+        with _mutation(args.scope):
             leased_ids = {lease.get("worker_id") for lease in ledger.active_leases(args.scope)}
             open_jobs = [job for job in infra.job_list()
                          if (job.get("worker_id") in leased_ids or

@@ -40,7 +40,9 @@ _PLACEHOLDERS = ("task_type", "config", "device_index", "seed")
 _PLAN_KEYS = {"schema_version", "study", "repository", "task_type",
               "timeout_seconds", "device_index", "arms", "stages", "outputs",
               "inputs_file", "environment", "environment_secrets", "setup_argv",
-              "method", "worker"}
+              "method", "worker", "embedding_layout"}
+_LAYOUT_KEYS = {"root", "datasets"}
+_LAYOUT_DATASET_KEYS = {"dataset", "input"}
 _ARM_KEYS = {"arm", "method", "argv", "config", "labels"}
 _WORKER_KEYS = {"gpu_type", "cloud", "gpu_count", "image", "template",
                 "container_disk_gb", "volume_gb", "network_volume",
@@ -173,6 +175,46 @@ def validate_plan(plan):
         if output["kind"] == "checkpoint":
             _require(output.get("tag") in ("best", "opt", "epoch"), field + ".tag",
                      "a checkpoint output must name its tag")
+
+    layout = plan.get("embedding_layout")
+    if layout is not None:
+        _require(isinstance(layout, dict), "embedding_layout", "must be a mapping")
+        unknown = sorted(set(layout) - _LAYOUT_KEYS)
+        _require(not unknown, "embedding_layout",
+                 "has unknown key(s): {}".format(", ".join(unknown)))
+        missing = sorted(_LAYOUT_KEYS - set(layout))
+        _require(not missing, "embedding_layout",
+                 "is missing key(s): {}".format(", ".join(missing)))
+        root = layout["root"]
+        _require(isinstance(root, str) and _NAME_SAFE.match(root)
+                 and "/" not in root and root not in (".", ".."),
+                 "embedding_layout.root",
+                 "must be a single safe directory name inside the job workspace")
+        _require(isinstance(plan.get("inputs_file"), str) and plan["inputs_file"],
+                 "inputs_file",
+                 "is required when embedding_layout delegates the loader's root to a "
+                 "declared artifact")
+        datasets = layout["datasets"]
+        _require(isinstance(datasets, list) and datasets, "embedding_layout.datasets",
+                 "must be a non-empty list")
+        seen_datasets = set()
+        for index, entry in enumerate(datasets):
+            field = "embedding_layout.datasets[{}]".format(index)
+            _require(isinstance(entry, dict), field, "must be a mapping")
+            unknown = sorted(set(entry) - _LAYOUT_DATASET_KEYS)
+            _require(not unknown, field,
+                     "has unknown key(s): {}".format(", ".join(unknown)))
+            for key in sorted(_LAYOUT_DATASET_KEYS):
+                _require(isinstance(entry.get(key), str) and entry[key],
+                         field + "." + key, "must be a non-empty string")
+            _require(_NAME_SAFE.match(entry["dataset"]), field + ".dataset",
+                     "must be a simple dataset directory name")
+            _require(entry["dataset"] not in seen_datasets, field + ".dataset",
+                     "duplicates dataset {!r}".format(entry["dataset"]))
+            seen_datasets.add(entry["dataset"])
+            _require(not os.path.isabs(entry["input"]) and ".." not in entry["input"].split("/"),
+                     field + ".input",
+                     "must be an artifact key relative to the storage namespace")
 
     worker = plan.get("worker")
     _require(isinstance(worker, dict) and worker, "worker",

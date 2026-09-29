@@ -40,6 +40,7 @@ from loading_utils import get_loader_device
 from seed_utils import set_seed
 from improvements.device_utils import assert_training_device
 from improvements.eval_utils import evaluation_run_ids
+from improvements import embedding_root
 from improvements.run_identity import emit_run_identity
 from improvements.gradient_diagnostics import make_gradient_diagnostic_trainer
 
@@ -90,7 +91,9 @@ def main():
     cfg["device"]["index"] = device_index
 
     root_data_path = cfg["paths"]["root_data_path"]
-    root_emb_path = cfg["paths"]["root_emb_path"]
+    # A job that prepared a verified layout names it explicitly; otherwise this is the
+    # configured root, unchanged.
+    root_emb_path = embedding_root.resolve_root(cfg["paths"]["root_emb_path"])
     results_root = cfg["paths"]["results_root"]
     checkpoints_root = cfg["paths"]["checkpoints_root"]
 

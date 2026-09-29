@@ -290,6 +290,22 @@ class InfraCli(object):
             args.extend(["--prefix", prefix])
         return self.run(*args, json_output=True).payload or []
 
+    def storage_read(self, artifact, *, expected_sha256=None, max_bytes=None):
+        """Read one small evidence object back, optionally bound to a known digest.
+
+        Read-only, and the only way this backend can inspect the *content* of a stored
+        result: the digest it returns was computed by the control plane from the bytes it
+        read, so a caller comparing it with the digest it already recorded is comparing
+        two independent hashes of the same object.
+        """
+
+        args = ["storage", "read", str(artifact)]
+        if expected_sha256:
+            args.extend(["--expected-sha256", str(expected_sha256)])
+        if max_bytes:
+            args.extend(["--max-bytes", str(int(max_bytes))])
+        return self.run(*args, json_output=True).payload
+
     def cache_stats(self, worker_id):
         return self.run(
             "volume", "cache", "stats", "--worker", worker_id,

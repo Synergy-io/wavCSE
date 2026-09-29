@@ -94,12 +94,12 @@ class MutationLock(object):
     a stale lock from a killed process is diagnosable.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, *, path=None):
         safe = "".join(
             character if character.isalnum() or character in "-_." else "_"
             for character in str(name)
         )
-        self.path = os.path.join(state_root(), "locks", safe + ".lock")
+        self.path = path or os.path.join(state_root(), "locks", safe + ".lock")
         self._handle = None
 
     def __enter__(self):
@@ -266,3 +266,95 @@ def scope_lock(scope):
     """Exclusive lock covering every mutation for one scope."""
 
     return MutationLock("scope-" + str(scope))
+
+
+# The host-level guard is deliberately *not* under the state root. Its whole purpose is
+# to be visible to a process that was handed a different state root, which a lock inside
+# one root could never be.
+CONTROLLER_LOCK_ENV = "WAVCSE_ARC_CONTROLLER_LOCK"
+DEFAULT_CONTROLLER_LOCK = os.path.join(
+    "~", ".local", "state", "wavcse-arc", "controller.lock"
+)
+
+
+def controller_lock_path(environ=None):
+    environ = os.environ if environ is None else environ
+    override = str(environ.get(CONTROLLER_LOCK_ENV) or "").strip()
+    configured = override if override else DEFAULT_CONTROLLER_LOCK
+    return os.path.abspath(os.path.expanduser(configured))
+
+
+class ControllerGuard(object):
+    """One ARC controller process per host, whatever state root each was given.
+
+    ARC's safety argument is single-controller: the operator runs one controller
+    against one state root, and every lock inside that root assumes no other root is
+    being mutated at the same time. Nothing inside a state root can notice a second
+    root, so the invariant is checked outside it — one advisory lock at a fixed host
+    path, held for the duration of a mutating command, recording which state root the
+    holder is using.
+
+    The check is mechanical, not documentary: a second mutating process, with the same
+    root or a different one, is refused with the holder's root named, and a process
+    killed while holding it releases the lock in the kernel, so a crash never leaves a
+    permanent block. Read-only verbs are unaffected.
+    """
+
+    def __init__(self, environ=None):
+        self.path = controller_lock_path(environ)
+        self._lock = MutationLock("controller", path=self.path)
+
+    def __enter__(self):
+        try:
+            self._lock.__enter__()
+        except BusyError as exc:
+            holder = _read_holder(self.path)
+            raise BusyError(
+                "another ARC controller process is already mutating state on this host "
+                "({}). That process is using state root {} while this one was given {}. "
+                "Two controllers over the same scopes are how a paid resource gets "
+                "created twice, so this command refuses; run one controller, or wait for "
+                "the other to finish. Underlying lock error: {}".format(
+                    self.path, holder.get("state_root", "unknown"),
+                    state_root(), exc,
+                )
+            ) from exc
+        _write_holder(self.path, {
+            "state_root": state_root(),
+            "pid": os.getpid(),
+            "acquired_at": isoformat(utc_now()),
+        })
+        return self
+
+    def __exit__(self, *exc_info):
+        return self._lock.__exit__(*exc_info)
+
+
+def _read_holder(path):
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            text = handle.read().strip()
+    except OSError:
+        return {}
+    if not text:
+        return {}
+    try:
+        payload = json.loads(text)
+    except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _write_holder(path, payload):
+    directory = os.path.dirname(path)
+    _ensure_directory(directory)
+    with open(path, "r+", encoding="utf-8") as stream:
+        stream.seek(0)
+        stream.truncate()
+        stream.write(json.dumps(payload, sort_keys=True) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def controller_guard(environ=None):
+    return ControllerGuard(environ)
