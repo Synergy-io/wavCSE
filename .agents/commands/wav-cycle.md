@@ -16,12 +16,26 @@ Boundaries: mutates-research-state, may-provision-compute, may-commit
 
 ## ARC v1 integration gate
 
-Before a paid worker request, require a tested worker-visible mapping from every
-declared input to the loader's configured path, independent validation of the
-stored result manifest and required metrics, and a cleanup path that still
-enforces the cost envelope after the controller exits. If any is missing,
-report a HARD_STOP; a successful unit suite alone does not establish these
-runtime contracts.
+Before a paid worker request, three runtime contracts must hold, and each is now
+implemented with its own regression tests. Confirm them rather than assume them:
+
+- **the exact commit is available to workers** — `python -m improvements.compute
+  preflight --plan <PLAN>` answers against the remote a disposable worker clones, and
+  `worker-ensure` refuses before any billable request. Publication is a developer action:
+  when it is required, report it, never push and never substitute another commit.
+- **a verified input reaches the loader** — a plan that loads embeddings declares
+  `embedding_layout`, the job wrapper builds the loader's tree from the declared,
+  digest-verified artifacts and names it explicitly, and no other root is ever used. A
+  plan without it, or a job whose layout cannot be prepared, must not run.
+- **stored bytes are validated as this run's evidence** — `collect` reads the stored
+  manifest and metrics back and validates identity, completeness and structure before an
+  entry becomes COLLECTED. Bytes alone are never evidence.
+- **cleanup survives the controller** — `reap --execute` ends paid compute whose lease
+  deadline passed, with no session, runner or agent alive. Install it once per controller
+  with `reap-install --install` (and enable it deliberately, with `--enable`).
+
+If any of these is missing or fails, report a HARD_STOP; a successful unit suite alone
+does not establish a runtime contract.
 
 ## Objective
 
@@ -69,11 +83,13 @@ termination; neither is finishing one stage, nor a launched job.
 7. Establish artifact readiness from verified canonical bytes — digest identity,
    never a filename or a size — and declare the required inputs.
 8. Check the envelope before spending:
-   `python -m improvements.compute envelope-check --scope <SCOPE> --action create-worker`.
-   Within it, ensure the worker (`worker-ensure`), submit the stage
-   (`advance --stage screen|confirm`), monitor by bounded transitions, and
-   collect (`collect`) so required outputs are verified through the control
-   plane's read-back rather than a log line.
+   `python -m improvements.compute envelope-check --scope <SCOPE> --action create-worker`,
+   and confirm publication with `preflight --plan <PLAN>`; an unavailable commit is a
+   human gate, not a reason to push.
+   Within the envelope, ensure the worker (`worker-ensure`), submit the stage
+   (`advance --stage screen|confirm`), monitor by bounded transitions, and collect
+   (`collect`) so required outputs are verified through the control plane's read-back and
+   their content validated as this run's evidence rather than a log line.
 9. Analyse every completed run per task (KS, SI, ER, aggregate), including
    negative transfer, validation behaviour, seed variability, and the relation,
    gradient and transfer diagnostics; state which alternative explanation
@@ -85,7 +101,9 @@ termination; neither is finishing one stage, nor a launched job.
     exact commits and the MLflow run names, never worker or job identifiers.
 11. Stop or destroy scope compute that is no longer needed
     (`python -m improvements.compute finish`, then `sweep --scope <SCOPE>`), and
-    confirm the sweep is clean.
+    confirm the sweep is clean. Whatever this cycle leaves behind, the controller's
+    `reap` timer must be able to end on its own: check it is installed and its last pass
+    is clean.
 12. Derive the next action and continue at step 3 unless it is a termination.
 
 ## Loop bounds

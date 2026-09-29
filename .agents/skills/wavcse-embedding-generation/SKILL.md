@@ -180,6 +180,23 @@ so an unpacked verified tree on persistent storage is the natural warm form and 
 layer-subset experiments without further extraction. Do not duplicate materialization the consumer
 can read directly, and measure storage rather than trusting historical estimates.
 
+## Consumption on a worker
+
+A verified artifact that the run never reads proves nothing. The consumer contract is explicit,
+and a compute plan must satisfy it rather than rely on a worker happening to hold a tree:
+
+- the plan declares `embedding_layout`, naming for each dataset the archive artifact that carries
+  it (see the compute backend README, "Declared inputs reach the loader");
+- the job wrapper re-verifies each materialized archive against the plan's own digest, extracts it
+  into `<root>/<upstream_model_type>/<frame_pool_id>/<dataset>/`, records the mapping in the job
+  manifest, and names that root in `WAVCSE_ROOT_EMB_PATH`;
+- `improvements/embedding_root.py` honours that override only when the root carries the marker the
+  wrapper wrote, so a stale worker-local tree is refused rather than silently used, and a worker
+  with no prepared root never falls back to the configured one.
+
+The archive form is a plain TAR of the dataset directory, matching the canonical layout above, so
+extraction is the only transformation and no filename or membership rule is reinvented here.
+
 ## Failure policy
 
 Hard-stop the affected dataset on: source identity mismatch, incorrect membership, checkpoint

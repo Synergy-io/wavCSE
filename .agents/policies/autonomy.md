@@ -29,7 +29,12 @@ change to this file is a human decision.
   not filename or size).
 - Choose, provision, reprovision, bootstrap and benchmark compute **inside an
   authorization envelope**, and pass the envelope's hourly ceiling to the
-  control plane's own price guard.
+  control plane's own price guard — but only after proving the exact commit is
+  available on the remote a worker clones, and never by publishing it.
+- Prepare a job's loader-visible embedding root from its declared, digest-verified
+  inputs; never let a run read an unverified or leftover tree.
+- End compute that is past its lease deadline with the crash-independent reaper;
+  installing or enabling that timer is a deliberate, separate act.
 - Bounded retry of a transient infrastructure failure, with every attempt
   counted in durable state; reconcile an ambiguous outcome before any retry.
 - Submit exact-commit jobs, monitor them, reconcile interrupted ones, collect

@@ -123,7 +123,11 @@ the gate pass.
 - **Paid compute goes through the backend, inside an envelope.** `improvements/compute`
   (`python -m improvements.compute …`) is the only route to paid compute: it drives the
   infrastructure CLI over its JSON contract, derives spend from provider facts, keys
-  submissions by a deterministic job identity, and sweeps what it created. The human's
+  submissions by a deterministic job identity, and sweeps what it created. Worker
+  deadlines are enforced by `reap` on a controller timer, not by the orchestrator staying
+  alive; the exact commit must be provably available to workers before a worker is
+  created; and a stored result is validated as this run's evidence before it is
+  collected. The compute backend's README is the contract for all four. The human's
   written authority is `improvements/taskrelation/research/authorizations/<SCOPE>.yaml`;
   the backend consumes it and can never create, renew or widen it. What may be decided
   without the researcher is classified in `.agents/policies/autonomy.md`. Runtime facts
