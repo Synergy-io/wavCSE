@@ -391,6 +391,38 @@ class NCMTLTrainerTests(unittest.TestCase):
                         weights[first][mask], weights[second][mask]
                     ))
 
+    def test_adaptive_row_warmup_freezes_after_stability_patience(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trainer = self._build_trainer(
+                directory,
+                sharing_granularity="row",
+                row_warmup_mode="adaptive",
+                row_warmup_min_epochs=2,
+                row_warmup_max_epochs=5,
+                row_warmup_stability_threshold=0.0,
+                row_warmup_stability_patience=2,
+                log_candidate_row_distances=True,
+            )
+
+            for _ in range(3):
+                trainer._process_data_loader(
+                    trainer.train_dataloader, train_mode=True
+                )
+
+            self.assertFalse(trainer.row_task_sharing.initialized)
+            self.assertTrue(trainer.row_task_sharing.ready_to_freeze)
+            self.assertEqual(trainer.row_task_sharing.assignment_epoch, 3)
+            self.assertEqual(trainer.row_task_sharing.stable_transition_count, 2)
+
+            trainer._process_data_loader(trainer.train_dataloader, train_mode=True)
+            self.assertTrue(trainer.row_task_sharing.initialized)
+            self.assertTrue(os.path.exists(
+                trainer.row_task_sharing.warmup_stability_path
+            ))
+            self.assertTrue(os.path.exists(
+                trainer.row_task_sharing.warmup_summary_path
+            ))
+
 
 if __name__ == "__main__":
     unittest.main()

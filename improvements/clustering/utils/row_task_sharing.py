@@ -14,12 +14,45 @@ class RowTaskSharing:
 
     PAIRS = (("ks_si", 0, 1), ("ks_er", 0, 2), ("si_er", 1, 2))
 
-    def __init__(self, results_dir: str, task_names):
+    def __init__(
+        self,
+        results_dir: str,
+        task_names,
+        warmup_mode: str = "fixed",
+        warmup_min_epochs: int = 3,
+        warmup_max_epochs: int = 10,
+        warmup_stability_threshold: float = 0.90,
+        warmup_stability_patience: int = 2,
+    ):
         if list(task_names) != ["ks", "si", "er"]:
             raise ValueError("Row task sharing requires tasks ['ks', 'si', 'er']")
         self.task_names = list(task_names)
+        self.warmup_mode = str(warmup_mode).strip().lower()
+        if self.warmup_mode not in {"fixed", "adaptive"}:
+            raise ValueError("row_warmup_mode must be 'fixed' or 'adaptive'")
+        self.warmup_min_epochs = int(warmup_min_epochs)
+        self.warmup_max_epochs = int(warmup_max_epochs)
+        self.warmup_stability_threshold = float(warmup_stability_threshold)
+        self.warmup_stability_patience = int(warmup_stability_patience)
+        if self.warmup_min_epochs < 1:
+            raise ValueError("row_warmup_min_epochs must be at least 1")
+        if self.warmup_max_epochs < self.warmup_min_epochs:
+            raise ValueError(
+                "row_warmup_max_epochs must be >= row_warmup_min_epochs"
+            )
+        if not 0.0 <= self.warmup_stability_threshold <= 1.0:
+            raise ValueError(
+                "row_warmup_stability_threshold must satisfy 0 <= value <= 1"
+            )
+        if self.warmup_stability_patience < 1:
+            raise ValueError("row_warmup_stability_patience must be at least 1")
+
         self.assignments = None
         self.assignment_epoch = None
+        self.ready_to_freeze = False
+        self.freeze_reason = None
+        self._previous_proposed_assignments = None
+        self._stable_transition_count = 0
         self.assignment_csv_path = os.path.join(
             results_dir, "row_pair_assignments.csv"
         )
@@ -29,6 +62,12 @@ class RowTaskSharing:
         self.stability_path = os.path.join(
             results_dir, "row_pair_assignment_stability.csv"
         )
+        self.warmup_stability_path = os.path.join(
+            results_dir, "row_warmup_stability.csv"
+        )
+        self.warmup_summary_path = os.path.join(
+            results_dir, "row_warmup_summary.json"
+        )
         with open(self.stability_path, "w", newline="") as stability_file:
             csv.writer(stability_file).writerow(
                 [
@@ -37,10 +76,22 @@ class RowTaskSharing:
                     "observed_si_er",
                 ]
             )
+        with open(self.warmup_stability_path, "w", newline="") as warmup_file:
+            csv.writer(warmup_file).writerow(
+                [
+                    "epoch", "unchanged_rows", "stability_rate",
+                    "stable_transition_count", "proposed_ks_si",
+                    "proposed_ks_er", "proposed_si_er", "decision",
+                ]
+            )
 
     @property
     def initialized(self) -> bool:
         return self.assignments is not None
+
+    @property
+    def stable_transition_count(self) -> int:
+        return self._stable_transition_count
 
     def initialize(self, weights, epoch: int) -> None:
         distances = compute_candidate_row_distances(weights, self.task_names)
@@ -91,6 +142,78 @@ class RowTaskSharing:
         }
         with open(self.assignment_summary_path, "w") as summary_file:
             json.dump(summary, summary_file, indent=2)
+
+    def observe_adaptive_warmup(self, weights, epoch: int) -> bool:
+        """Observe independent candidates and decide whether warm-up can stop."""
+        if self.warmup_mode != "adaptive" or self.initialized:
+            return False
+
+        distances = compute_candidate_row_distances(weights, self.task_names)
+        stacked = torch.stack([distances[name] for name, _, _ in self.PAIRS])
+        proposed = torch.argmin(stacked, dim=0)
+        total = int(proposed.numel())
+        unchanged = None
+        stability_rate = None
+        if self._previous_proposed_assignments is not None:
+            unchanged = int(torch.sum(
+                proposed == self._previous_proposed_assignments
+            ).item())
+            stability_rate = unchanged / total
+
+        eligible = epoch >= self.warmup_min_epochs
+        if (
+            eligible
+            and stability_rate is not None
+            and stability_rate >= self.warmup_stability_threshold
+        ):
+            self._stable_transition_count += 1
+        elif eligible:
+            self._stable_transition_count = 0
+
+        decision = "continue"
+        if self._stable_transition_count >= self.warmup_stability_patience:
+            self.ready_to_freeze = True
+            self.assignment_epoch = int(epoch)
+            self.freeze_reason = "assignment stability reached"
+            decision = "freeze_stable"
+        elif epoch >= self.warmup_max_epochs:
+            self.ready_to_freeze = True
+            self.assignment_epoch = int(epoch)
+            self.freeze_reason = "maximum adaptive warm-up reached"
+            decision = "freeze_max_epoch"
+
+        counts = {
+            name: int(torch.sum(proposed == pair_id).item())
+            for pair_id, (name, _, _) in enumerate(self.PAIRS)
+        }
+        with open(self.warmup_stability_path, "a", newline="") as warmup_file:
+            csv.writer(warmup_file).writerow(
+                [
+                    epoch,
+                    "" if unchanged is None else unchanged,
+                    "" if stability_rate is None else stability_rate,
+                    self._stable_transition_count,
+                    counts["ks_si"], counts["ks_er"], counts["si_er"],
+                    decision,
+                ]
+            )
+
+        self._previous_proposed_assignments = proposed
+        if self.ready_to_freeze:
+            summary = {
+                "mode": "adaptive",
+                "minimum_epochs": self.warmup_min_epochs,
+                "maximum_epochs": self.warmup_max_epochs,
+                "stability_threshold": self.warmup_stability_threshold,
+                "stability_patience": self.warmup_stability_patience,
+                "actual_warmup_epochs": self.assignment_epoch,
+                "freeze_reason": self.freeze_reason,
+                "final_stability_rate": stability_rate,
+                "final_stable_transition_count": self._stable_transition_count,
+            }
+            with open(self.warmup_summary_path, "w") as summary_file:
+                json.dump(summary, summary_file, indent=2)
+        return self.ready_to_freeze
 
     def assignment_counts(self) -> dict[str, int]:
         if not self.initialized:

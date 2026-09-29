@@ -43,6 +43,11 @@ ncmtl:
 
   cluster_every_n_batches: 5
   warmup_epochs: 3
+  row_warmup_mode: adaptive
+  row_warmup_min_epochs: 3
+  row_warmup_max_epochs: 10
+  row_warmup_stability_threshold: 0.90
+  row_warmup_stability_patience: 2
 
   kmeans_random_state: 42
   kmeans_n_init: 10

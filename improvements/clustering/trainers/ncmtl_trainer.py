@@ -58,6 +58,21 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             ncmtl_cfg.get("cluster_every_n_batches", 1)
         )
         self.warmup_epochs = int(ncmtl_cfg.get("warmup_epochs", 0))
+        self.row_warmup_mode = str(
+            ncmtl_cfg.get("row_warmup_mode", "fixed")
+        ).strip().lower()
+        self.row_warmup_min_epochs = int(
+            ncmtl_cfg.get("row_warmup_min_epochs", 3)
+        )
+        self.row_warmup_max_epochs = int(
+            ncmtl_cfg.get("row_warmup_max_epochs", 10)
+        )
+        self.row_warmup_stability_threshold = float(
+            ncmtl_cfg.get("row_warmup_stability_threshold", 0.90)
+        )
+        self.row_warmup_stability_patience = int(
+            ncmtl_cfg.get("row_warmup_stability_patience", 2)
+        )
         self.kmeans_random_state = int(ncmtl_cfg.get("kmeans_random_state", 42))
         self.kmeans_n_init = int(ncmtl_cfg.get("kmeans_n_init", 1))
         self.kmeans_max_iter = int(ncmtl_cfg.get("kmeans_max_iter", 100))
@@ -104,7 +119,15 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             else None
         )
         self.row_task_sharing = (
-            RowTaskSharing(self.results_dir, self.task_array)
+            RowTaskSharing(
+                self.results_dir,
+                self.task_array,
+                warmup_mode=self.row_warmup_mode,
+                warmup_min_epochs=self.row_warmup_min_epochs,
+                warmup_max_epochs=self.row_warmup_max_epochs,
+                warmup_stability_threshold=self.row_warmup_stability_threshold,
+                warmup_stability_patience=self.row_warmup_stability_patience,
+            )
             if self.sharing_granularity == "row"
             else None
         )
@@ -113,7 +136,8 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             "ncmtl_start | candidate_dim=%d | identical_candidate_initialization=%s | "
             "clusters=%d | alpha=%g | interval=%d | warmup_epochs=%d | "
             "kmeans_n_init=%d | label_smoothing=%g | gradient_clip_norm=%s | "
-            "row_distance_diagnostics=%s | sharing_granularity=%s",
+            "row_distance_diagnostics=%s | sharing_granularity=%s | "
+            "row_warmup_mode=%s",
             self.model.candidate_dim,
             self.model.identical_candidate_initialization,
             self.num_clusters,
@@ -125,6 +149,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             self.gradient_clip_norm,
             self.log_candidate_row_distances,
             self.sharing_granularity,
+            self.row_warmup_mode,
         )
 
     def _process_data_loader(self, data_loader, train_mode: bool):
@@ -136,21 +161,34 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                 self._expected_training_batches = len(data_loader)
             except TypeError:
                 self._expected_training_batches = None
+            fixed_row_ready = (
+                self.row_warmup_mode == "fixed"
+                and self.current_epoch > self.warmup_epochs
+            )
+            adaptive_row_ready = (
+                self.row_warmup_mode == "adaptive"
+                and self.row_task_sharing.ready_to_freeze
+            )
             if (
                 self.sharing_granularity == "row"
-                and self.current_epoch > self.warmup_epochs
                 and not self.row_task_sharing.initialized
+                and (fixed_row_ready or adaptive_row_ready)
             ):
+                assignment_epoch = (
+                    self.warmup_epochs
+                    if self.row_warmup_mode == "fixed"
+                    else self.row_task_sharing.assignment_epoch
+                )
                 self.row_task_sharing.initialize(
                     self.model.get_candidate_weight_tensors(),
-                    epoch=self.warmup_epochs,
+                    epoch=assignment_epoch,
                 )
                 self.row_task_sharing.share(
                     self.model.get_candidate_weight_tensors()
                 )
                 logging.info(
                     "ncmtl_row_assignments_frozen | epoch=%d | counts=%s",
-                    self.warmup_epochs,
+                    assignment_epoch,
                     self.row_task_sharing.assignment_counts(),
                 )
         stats = super()._process_data_loader(data_loader, train_mode=train_mode)
@@ -161,6 +199,22 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                     self.current_epoch,
                     self._latest_row_distance_snapshot["values"],
                 )
+        if (
+            train_mode
+            and self.sharing_granularity == "row"
+            and self.row_warmup_mode == "adaptive"
+            and not self.row_task_sharing.initialized
+        ):
+            became_ready = self.row_task_sharing.observe_adaptive_warmup(
+                self.model.get_candidate_weight_tensors(), self.current_epoch
+            )
+            logging.info(
+                "ncmtl_row_warmup_observation | epoch=%d | stable_count=%d | "
+                "ready=%s",
+                self.current_epoch,
+                self.row_task_sharing.stable_transition_count,
+                became_ready,
+            )
         # The epoch cap means reclustering remains active through the configured
         # epoch, then the learned assignment is fixed for following epochs.
         if (
@@ -371,8 +425,10 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                 "task_type": self.task_type,
                 "sharing_granularity": "row",
                 "strategy": "closest_pair",
+                "row_warmup_mode": self.row_warmup_mode,
                 "frozen": self.row_task_sharing.initialized,
                 "frozen_epoch": self.row_task_sharing.assignment_epoch,
+                "freeze_reason": self.row_task_sharing.freeze_reason,
                 "row_pair_counts": self.row_task_sharing.assignment_counts(),
             }
             with open(self.cluster_summary_path, "w") as summary_file:
