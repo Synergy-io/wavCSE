@@ -1,0 +1,259 @@
+"""Stage orchestration: duplicate safety, resume after restart, and verification."""
+
+import unittest
+
+from improvements.compute import envelope as envelope_module
+from improvements.compute import failures, jobspec, ledger, run_study
+from improvements.compute.errors import (
+    ArtifactIntegrityError,
+    AuthorizationError,
+    RepositoryConflictError,
+    ReconcilableError,
+)
+from improvements.compute.tests.fakes import ComputeTestCase, FakeInfra, sample_plan, worker_record
+
+
+class StageTestCase(ComputeTestCase):
+    def setUp(self):
+        super(StageTestCase, self).setUp()
+        self.make_repo()
+        self.write_envelope("TR-0007")
+        self.plan = jobspec.load_plan(self.write_plan(sample_plan()))
+        self.commit()
+        self.view = envelope_module.load("TR-0007")
+        self.infra = FakeInfra(workers=[worker_record()])
+        self.commit_sha = jobspec.git_state()["head"]
+
+    def job_payload(self, name, *, state="RUNNING", worker_id="w-1", outputs=None):
+        return {
+            "job_id": "job-{}".format(name),
+            "name": name,
+            "state": state,
+            "worker_id": worker_id,
+            "outputs": outputs or [],
+            "spec": {
+                "source": {"commit": self.commit_sha},
+                "tracking": {"metadata": {
+                    "scope": "TR-0007", "stage": "screen", "arm": "mssl", "seed": "42",
+                }},
+            },
+        }
+
+    def spec_name(self):
+        return jobspec.job_name("TR-0007", "screen", "mssl", 42)
+
+
+class SubmitTests(StageTestCase):
+    def test_submission_records_the_job_and_its_worker(self):
+        self.infra.submit_payload = self.job_payload(self.spec_name())
+        record = run_study.load_record("TR-0007")
+        result = run_study.submit_pending(
+            "TR-0007", self.plan, "screen", infra=self.infra, view=self.view,
+            record=record,
+        )
+        self.assertEqual(len(result["submitted"]), 1)
+        self.assertEqual(self.infra.count("job_submit"), 1)
+        entry = list(record["entries"].values())[0]
+        self.assertEqual(entry["state"], run_study.SUBMITTED)
+        self.assertEqual(entry["attempts"], 1)
+
+    def test_spec_is_written_to_controller_local_state(self):
+        self.infra.submit_payload = self.job_payload(self.spec_name())
+        record = run_study.load_record("TR-0007")
+        run_study.submit_pending("TR-0007", self.plan, "screen", infra=self.infra,
+                                 view=self.view, record=record)
+        spec_files = []
+        for root, _dirs, files in __import__("os").walk(
+            __import__("improvements.compute.state", fromlist=["state"]).state_root()
+        ):
+            spec_files.extend(name for name in files if name.endswith(".json"))
+        self.assertTrue(any("TR-0007__screen__mssl__s42" in name for name in spec_files))
+
+    def test_lost_acknowledgement_is_adopted_not_resubmitted(self):
+        # The provider accepted the job; the controller saw no record.
+        self.infra.submit_payload = None
+        self.infra.submit_returncode = 1
+        self.infra.jobs = [self.job_payload(self.spec_name())]
+        record = run_study.load_record("TR-0007")
+        result = run_study.submit_pending("TR-0007", self.plan, "screen",
+                                          infra=self.infra, view=self.view,
+                                          record=record)
+        self.assertEqual(self.infra.count("job_submit"), 1)
+        self.assertEqual(result["submitted"], ["job-TR-0007__screen__mssl__s42"])
+
+    def test_unreconcilable_submission_never_repeats_the_request(self):
+        self.infra.submit_payload = None
+        self.infra.submit_returncode = 1
+        record = run_study.load_record("TR-0007")
+        with self.assertRaises(ReconcilableError):
+            run_study.submit_pending("TR-0007", self.plan, "screen",
+                                     infra=self.infra, view=self.view, record=record)
+        self.assertEqual(self.infra.count("job_submit"), 1)
+
+    def test_an_existing_job_is_never_submitted_twice(self):
+        self.infra.submit_payload = self.job_payload(self.spec_name())
+        record = run_study.load_record("TR-0007")
+        run_study.submit_pending("TR-0007", self.plan, "screen", infra=self.infra,
+                                 view=self.view, record=record)
+        run_study.submit_pending("TR-0007", self.plan, "screen", infra=self.infra,
+                                 view=self.view, record=record)
+        self.assertEqual(self.infra.count("job_submit"), 1)
+
+    def test_restart_does_not_resubmit(self):
+        self.infra.submit_payload = self.job_payload(self.spec_name())
+        record = run_study.load_record("TR-0007")
+        run_study.submit_pending("TR-0007", self.plan, "screen", infra=self.infra,
+                                 view=self.view, record=record)
+        # A restart is a fresh read of the run ledger.
+        reloaded = run_study.load_record("TR-0007")
+        run_study.submit_pending("TR-0007", self.plan, "screen", infra=self.infra,
+                                 view=self.view, record=reloaded)
+        self.assertEqual(self.infra.count("job_submit"), 1)
+
+    def test_no_authorization_means_no_submission(self):
+        import os
+        import shutil
+
+        shutil.rmtree(os.path.join(os.environ["WAVCSE_REPO_ROOT"],
+                                   "improvements", "taskrelation", "research",
+                                   "authorizations"), ignore_errors=True)
+        self.commit("drop the envelope")
+        with self.assertRaises(AuthorizationError):
+            envelope_module.load("TR-0007")
+        self.assertEqual(self.infra.count("job_submit"), 0)
+
+    def test_dirty_tree_cannot_submit_a_recorded_job(self):
+        with open(__import__("os").path.join(
+                __import__("os").environ["WAVCSE_REPO_ROOT"], "tracked.txt"),
+                "a", encoding="utf-8") as handle:
+            handle.write("uncommitted\n")
+        record = run_study.load_record("TR-0007")
+        with self.assertRaises(RepositoryConflictError):
+            run_study.submit_pending("TR-0007", self.plan, "screen",
+                                     infra=self.infra, view=self.view, record=record)
+        self.assertEqual(self.infra.count("job_submit"), 0)
+
+    def test_dry_run_previews_without_submitting(self):
+        record = run_study.load_record("TR-0007")
+        result = run_study.submit_pending(
+            "TR-0007", self.plan, "screen", infra=self.infra, view=self.view,
+            record=record, dry_run=True,
+        )
+        self.assertEqual(len(result["planned"]), 1)
+        self.assertEqual(self.infra.count("job_submit"), 0)
+
+
+class AdvanceTests(StageTestCase):
+    def test_nothing_is_submitted_while_a_job_is_in_flight(self):
+        self.infra.submit_payload = self.job_payload(self.spec_name())
+        record = run_study.load_record("TR-0007")
+        first = run_study.advance("TR-0007", self.plan, "screen", infra=self.infra,
+                                  record=record)
+        self.assertEqual(first["step"], "submitted")
+        second = run_study.advance("TR-0007", self.plan, "screen", infra=self.infra,
+                                   record=record)
+        self.assertEqual(second["step"], "monitor")
+        self.assertEqual(self.infra.count("job_submit"), 1)
+
+    def test_a_failed_job_is_not_retried_when_it_is_an_implementation_bug(self):
+        name = self.spec_name()
+        self.infra.submit_payload = self.job_payload(name)
+        record = run_study.load_record("TR-0007")
+        run_study.submit_pending("TR-0007", self.plan, "screen", infra=self.infra,
+                                 view=self.view, record=record)
+        # The provider reports a code-level failure.
+        failed = self.job_payload(name, state="FAILED")
+        failed["exit_code"] = 1
+        self.infra.jobs = [failed]
+        run_study.reconcile("TR-0007", self.plan, "screen", infra=self.infra,
+                            record=record)
+        outcomes = run_study.assess(record, stage="screen")
+        entry = list(record["entries"].values())[0]
+        self.assertEqual(outcomes[0]["class"], failures.IMPLEMENTATION_BUG)
+        self.assertFalse(outcomes[0]["retry"])
+        self.assertEqual(entry["state"], run_study.FAILED)
+
+    def test_transient_failure_is_retried_until_the_budget_runs_out(self):
+        name = self.spec_name()
+        self.infra.submit_payload = self.job_payload(name)
+        record = run_study.load_record("TR-0007")
+        run_study.submit_pending("TR-0007", self.plan, "screen", infra=self.infra,
+                                 view=self.view, record=record)
+        oom = self.job_payload(name, state="FAILED")
+        oom["exit_code"] = 137
+        self.infra.jobs = [oom]
+        self.infra.logs["job-" + name] = "CUDA out of memory"
+        run_study.reconcile("TR-0007", self.plan, "screen", infra=self.infra,
+                            record=record)
+        outcomes = run_study.assess(record, stage="screen")
+        self.assertEqual(outcomes[0]["class"], failures.RESOURCE_OOM)
+        self.assertTrue(outcomes[0]["retry"])
+        entry = list(record["entries"].values())[0]
+        self.assertEqual(entry["state"], run_study.PENDING)
+        self.assertEqual(entry["attempts"], 1)
+        self.assertEqual(entry["previous_job_ids"], ["job-" + name])
+
+
+class CollectAndFinishTests(StageTestCase):
+    def verified_entry(self, outputs):
+        name = self.spec_name()
+        self.infra.submit_payload = self.job_payload(name, outputs=outputs)
+        record = run_study.load_record("TR-0007")
+        run_study.submit_pending("TR-0007", self.plan, "screen", infra=self.infra,
+                                 view=self.view, record=record)
+        self.infra.jobs = [self.job_payload(name, state="SUCCEEDED", outputs=outputs)]
+        run_study.reconcile("TR-0007", self.plan, "screen", infra=self.infra,
+                            record=record)
+        entry = list(record["entries"].values())[0]
+        entry["state"] = run_study.SUCCEEDED
+        run_study.save_record("TR-0007", record)
+        return record
+
+    def test_verified_outputs_are_collected(self):
+        outputs = [
+            {"path": "outputs/mssl_s42/MANIFEST.json", "required": True,
+             "persisted": True, "verified_size_bytes": 10},
+            {"path": "outputs/mssl_s42/checkpoint_best.pth", "required": True,
+             "persisted": True, "verified_size_bytes": 20},
+        ]
+        record = self.verified_entry(outputs)
+        result = run_study.collect("TR-0007", self.plan, "screen", record=record)
+        self.assertEqual(len(result["collected"]), 1)
+        self.assertEqual(result["unverified"], [])
+
+    def test_unverified_output_fails_the_entry_and_spares_the_worker(self):
+        outputs = [
+            {"path": "outputs/mssl_s42/MANIFEST.json", "required": True,
+             "persisted": True, "verified_size_bytes": 10},
+            {"path": "outputs/mssl_s42/checkpoint_best.pth", "required": True,
+             "persisted": False},
+        ]
+        record = self.verified_entry(outputs)
+        result = run_study.collect("TR-0007", self.plan, "screen", record=record)
+        self.assertEqual(result["collected"], [])
+        self.assertEqual(len(result["unverified"]), 1)
+        entry = list(record["entries"].values())[0]
+        self.assertEqual(entry["failure_class"], failures.ARTIFACT_INTEGRITY)
+        self.assertEqual(self.infra.destroy_calls, [])
+
+    def test_finish_destroys_only_after_everything_is_collected(self):
+        outputs = [{"path": "outputs/mssl_s42/MANIFEST.json", "required": True,
+                    "persisted": True, "verified_size_bytes": 10}]
+        record = self.verified_entry(outputs)
+        pending = run_study.finish("TR-0007", self.plan, infra=self.infra,
+                                   view=self.view, record=record)
+        self.assertFalse(pending["finished"])
+        self.assertEqual(self.infra.destroy_calls, [])
+
+        ledger.redeem_create("TR-0007", worker_id="w-1", purpose="test",
+                            envelope_digest=self.view.digest,
+                            deadline="2999-01-01T00:00:00+00:00")
+        run_study.collect("TR-0007", self.plan, "screen", record=record)
+        done = run_study.finish("TR-0007", self.plan, infra=self.infra,
+                                view=self.view, record=record)
+        self.assertTrue(done["finished"])
+        self.assertEqual(self.infra.destroy_calls, ["w-1"])
+
+
+if __name__ == "__main__":
+    unittest.main()
