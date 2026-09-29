@@ -129,7 +129,7 @@
     }
   ],
   "worker": {
-    "gpu_type": "NVIDIA RTX PRO 4000 Blackwell",
+    "gpu_type": "NVIDIA RTX 4000 Ada Generation",
     "cloud": "SECURE",
     "gpu_count": 1,
     "image": "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
@@ -175,5 +175,10 @@
         "input": "embeddings/v1/iemocap-wavlm-large-mean.tar"
       }
     ]
-  }
+  },
+  "setup_argv": [
+    "sh",
+    "-lc",
+    "mkdir -p /root/voice_dataset/speechcommand/SpeechCommands /root/voice_dataset/voxceleb && ln -sfn /workspace/cache/raw/iemocap /root/voice_dataset/iemocap && ln -sfn /workspace/cache/raw/speechcommand /root/voice_dataset/speechcommand/SpeechCommands/speech_commands_v0.01 && ln -sfn /workspace/cache/raw/voxceleb/iden_split.txt /root/voice_dataset/voxceleb/iden_split.txt && ln -sfn /workspace/cache/raw/voxceleb/wav /root/voice_dataset/voxceleb/wav && uv sync --locked"
+  ]
 }
