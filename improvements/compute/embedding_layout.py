@@ -156,21 +156,30 @@ def verify_materialized(path, requirement, *, where):
     return size
 
 
-def extract_dataset(archive, pooling_root, *, dataset):
-    """Extract one dataset archive beneath its pooling directory.
+def extract_dataset(archive, pooling_root, *, dataset, foreign=(), clear=True, seen=None):
+    """Extract one dataset archive into the loader's directory for that dataset.
 
-    The archive is a plain TAR of the dataset directory (``tar -C <pooling_root>
-    <dataset>``), so it is extracted *at* the pooling directory; only regular files and
-    directories whose first path segment is the dataset itself are accepted. An archive
-    that would write outside its own directory, carry a link, or contribute a differently
-    named tree is refused rather than partially extracted.
+    Canonical archives are plain TARs of the dataset's *contents*: a member is named by
+    the writer-relative path the loader resolves (``Session1/sentences/wav/…``,
+    ``speech_commands_v0.01/bed/…``), so the archive is extracted at
+    ``<pooling_root>/<dataset>``. An archive that instead carries the dataset directory
+    itself as every member's first path segment (``tar -C <pooling_root> <dataset>``)
+    describes the same tree and is extracted one level up. A mixed archive is refused,
+    because which tree it means cannot be settled from the archive, and a member whose
+    first segment names another dataset the protocol loads is refused in either form.
+
+    Only regular files and directories are accepted — never an absolute path, a
+    traversal, a link or a device. A sharded set extracts each shard into the same tree:
+    ``clear`` removes a tree left by an earlier attempt (the first shard only), and a
+    shared ``seen`` refuses two shards that would contribute the same member, because
+    which bytes won would then depend on extraction order.
     """
 
     destination = os.path.join(pooling_root, dataset)
-    if os.path.exists(destination):
+    if clear and os.path.exists(destination):
         # A tree left by an earlier attempt is never merged with a verified one.
         shutil.rmtree(destination)
-    os.makedirs(pooling_root, exist_ok=True)
+    os.makedirs(destination, exist_ok=True)
     extracted = 0
     try:
         with tarfile.open(archive, "r:*") as bundle:
@@ -178,6 +187,7 @@ def extract_dataset(archive, pooling_root, *, dataset):
             if not members:
                 raise EmbeddingLayoutError(
                     "the archive for {!r} is empty".format(dataset))
+            normalized = []
             for member in members:
                 name = member.name.replace("\\", "/").lstrip("./")
                 if not name:
@@ -187,18 +197,42 @@ def extract_dataset(archive, pooling_root, *, dataset):
                     raise EmbeddingLayoutError(
                         "the archive for {!r} contains an unsafe member {!r}".format(
                             dataset, member.name))
-                if parts[0] != dataset:
-                    raise EmbeddingLayoutError(
-                        "the archive for {!r} contains {!r}, which belongs to another "
-                        "dataset; the layout would not be the one that was verified"
-                        .format(dataset, member.name))
                 if member.issym() or member.islnk() or member.isdev():
                     raise EmbeddingLayoutError(
                         "the archive for {!r} contains a non-regular member {!r}".format(
                             dataset, member.name))
+                normalized.append((member, name, parts))
+            if not any(member.isfile() for member, _name, _parts in normalized):
+                raise EmbeddingLayoutError(
+                    "the archive for {!r} contains no files, so it cannot be the "
+                    "verified tree".format(dataset))
+
+            carries_dataset = [parts[0] == dataset for _member, _name, parts in normalized]
+            if all(carries_dataset):
+                base = pooling_root
+            elif not any(carries_dataset):
+                base = destination
+            else:
+                raise EmbeddingLayoutError(
+                    "the archive for {!r} mixes members of the dataset directory with "
+                    "members inside it, so the tree it describes cannot be settled"
+                    .format(dataset))
+            for member, name, parts in normalized:
+                if parts[0] in foreign:
+                    raise EmbeddingLayoutError(
+                        "the archive for {!r} contains {!r}, which belongs to another "
+                        "dataset; the layout would not be the one that was verified"
+                        .format(dataset, member.name))
                 if member.isfile():
+                    if seen is not None:
+                        if name in seen:
+                            raise EmbeddingLayoutError(
+                                "two declared archives for {!r} both contain {!r}; the "
+                                "extracted tree would depend on extraction order"
+                                .format(dataset, member.name))
+                        seen.add(name)
                     extracted += 1
-            bundle.extractall(path=pooling_root)
+            bundle.extractall(path=base)
     except tarfile.TarError as exc:
         raise EmbeddingLayoutError(
             "the archive for {!r} could not be read: {}".format(dataset, exc)) from exc
@@ -234,14 +268,22 @@ def prepare(plan, *, stage, arm, seed, checkout_root, job_directory, commit, job
     required = required_datasets(plan)
     declared = {}
     for entry in layout.get("datasets") or ():
-        if not isinstance(entry, dict) or not entry.get("dataset") or not entry.get("input"):
+        if not isinstance(entry, dict) or not entry.get("dataset"):
             raise ConfigurationError(
                 "every embedding_layout dataset needs a dataset name and an input artifact"
             )
         if entry["dataset"] in declared:
             raise ConfigurationError(
                 "embedding_layout names dataset {!r} twice".format(entry["dataset"]))
-        declared[entry["dataset"]] = entry["input"]
+        if "inputs" in entry:
+            shards = entry["inputs"]
+        else:
+            shards = [entry.get("input")]
+        if not shards or any(not isinstance(shard, str) or not shard for shard in shards):
+            raise ConfigurationError(
+                "every embedding_layout dataset needs to say which artifact carries it"
+            )
+        declared[entry["dataset"]] = list(shards)
     missing = [name for name in required if name not in declared]
     if missing:
         raise ConfigurationError(
@@ -271,27 +313,38 @@ def prepare(plan, *, stage, arm, seed, checkout_root, job_directory, commit, job
     pooling_root = os.path.join(root, model_type, pool_id)
     prepared = []
     for dataset in required:
-        artifact = declared[dataset]
-        requirement = by_artifact.get(artifact)
-        if requirement is None:
-            raise EmbeddingLayoutError(
-                "embedding_layout names input {!r} for dataset {!r}, but the plan's "
-                "inputs_file does not declare it".format(artifact, dataset))
-        source = os.path.join(job_directory, "inputs", requirement["destination"])
-        size = verify_materialized(source, requirement, where="embedding layout")
-        files, destination = extract_dataset(source, pooling_root, dataset=dataset)
+        shards = declared[dataset]
+        seen = set()
+        entries = []
+        for index, artifact in enumerate(shards):
+            requirement = by_artifact.get(artifact)
+            if requirement is None:
+                raise EmbeddingLayoutError(
+                    "embedding_layout names input {!r} for dataset {!r}, but the plan's "
+                    "inputs_file does not declare it".format(artifact, dataset))
+            source = os.path.join(job_directory, "inputs", requirement["destination"])
+            size = verify_materialized(source, requirement, where="embedding layout")
+            files, destination = extract_dataset(
+                source, pooling_root, dataset=dataset,
+                foreign=[name for name in required if name != dataset],
+                clear=(index == 0), seen=seen,
+            )
+            entries.append({
+                "artifact": artifact,
+                "destination": requirement["destination"],
+                "sha256": requirement["sha256"],
+                "size_bytes": size,
+                "files": files,
+            })
+            if log:
+                log("embedding layout | {} <- {} ({} file(s), sha256 {}…)".format(
+                    dataset, artifact, files, requirement["sha256"][:12]))
         prepared.append({
             "dataset": dataset,
-            "artifact": artifact,
-            "destination": requirement["destination"],
-            "sha256": requirement["sha256"],
-            "size_bytes": size,
-            "files": files,
+            "artifacts": entries,
+            "files": sum(entry["files"] for entry in entries),
             "extracted_to": destination,
         })
-        if log:
-            log("embedding layout | {} <- {} ({} file(s), sha256 {}…)".format(
-                dataset, artifact, files, requirement["sha256"][:12]))
 
     if not pool_id or not model_type:
         raise ImplementationBugError("the loader path components are empty")
@@ -318,8 +371,13 @@ def describe(marker):
         "upstream_model_type": marker["upstream_model_type"],
         "frame_pool_id": marker["frame_pool_id"],
         "datasets": [
-            {"dataset": entry["dataset"], "artifact": entry["artifact"],
-             "sha256": entry["sha256"], "files": entry["files"]}
+            {"dataset": entry["dataset"],
+             "artifacts": [
+                 {"artifact": item["artifact"], "sha256": item["sha256"],
+                  "files": item["files"]}
+                 for item in entry["artifacts"]
+             ],
+             "files": entry["files"]}
             for entry in marker["datasets"]
         ],
     }

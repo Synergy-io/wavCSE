@@ -393,5 +393,104 @@ class EvidenceGateTests(EvidenceTestCase):
         self.assertEqual(self.entry(record)["state"], run_study.COLLECTED)
 
 
+class EmbeddingLayoutEvidenceTests(EvidenceTestCase):
+    """The run's loader-root record is checked against the plan's declared inputs.
+
+    The wrapper writes which artifacts it turned into the loader's tree. Those bytes are
+    the ones every embedding this run reads came from, so the record has to be proven
+    against the plan rather than believed: a manifest reporting a different artifact, a
+    different digest or an undeclared dataset describes some other run's inputs.
+    """
+
+    ARTIFACT = "embeddings/v1/speechcommand/training-000.tar"
+    DIGEST = hashlib.sha256(b"verified shard bytes").hexdigest()
+
+    def setUp(self):
+        super(EmbeddingLayoutEvidenceTests, self).setUp()
+        import os
+
+        repo = os.environ["WAVCSE_REPO_ROOT"]
+        self.relative = "studies/TR-0007/compute/inputs.json"
+        self.write_inputs([{
+            "artifact": self.ARTIFACT,
+            "destination": "embeddings/training-000.tar",
+            "sha256": self.DIGEST,
+            "size_bytes": 20,
+            "required": True,
+        }], repo=repo, relative=self.relative)
+        self.layout = {
+            "root": "embedding",
+            "upstream_model_type": "wavlm_large",
+            "frame_pool_id": "mean",
+            "datasets": [{
+                "dataset": "speechcommand",
+                "artifacts": [{"artifact": self.ARTIFACT, "sha256": self.DIGEST,
+                               "files": 20000}],
+            }],
+        }
+        self.plan = jobspec.load_plan(self.write_plan(sample_plan(
+            inputs_file=self.relative,
+            embedding_layout={
+                "root": "embedding",
+                "datasets": [{"dataset": "speechcommand", "input": self.ARTIFACT}],
+            },
+        )))
+        # The plan and its inputs file are committed, because a recorded job is only
+        # generated from a commit-clean tree and the inputs file must be provable.
+        self.commit()
+        self.commit_sha = jobspec.git_state()["head"]
+
+    def test_a_layout_built_from_the_declared_inputs_is_recorded(self):
+        objects, outputs, _ = self.staged(
+            overrides={"embedding_layout": self.layout})
+        record, result = self.complete_and_collect(objects, outputs)
+
+        self.assertEqual(len(result["collected"]), 1)
+        summary = self.entry(record)["evidence"]
+        self.assertEqual(summary["embedding_layout"]["datasets"], {"speechcommand": 1})
+
+    def test_an_undeclared_artifact_is_rejected(self):
+        layout = json.loads(json.dumps(self.layout))
+        layout["datasets"][0]["artifacts"][0]["artifact"] = "embeddings/v1/other.tar"
+        objects, outputs, _ = self.staged(overrides={"embedding_layout": layout})
+        record, result = self.complete_and_collect(objects, outputs)
+
+        self.assert_rejected(record, result, expect="does not declare")
+
+    def test_another_digest_is_rejected(self):
+        layout = json.loads(json.dumps(self.layout))
+        layout["datasets"][0]["artifacts"][0]["sha256"] = "b" * 64
+        objects, outputs, _ = self.staged(overrides={"embedding_layout": layout})
+        record, result = self.complete_and_collect(objects, outputs)
+
+        self.assert_rejected(record, result, expect="but the plan declares")
+
+    def test_an_undeclared_dataset_is_rejected(self):
+        layout = json.loads(json.dumps(self.layout))
+        layout["datasets"].append({"dataset": "iemocap", "artifacts": [
+            {"artifact": self.ARTIFACT, "sha256": self.DIGEST, "files": 1}]})
+        objects, outputs, _ = self.staged(overrides={"embedding_layout": layout})
+        record, result = self.complete_and_collect(objects, outputs)
+
+        self.assert_rejected(record, result, expect="never loads")
+
+    def test_a_manifest_without_the_layout_is_rejected(self):
+        objects, outputs, _ = self.staged()
+        record, result = self.complete_and_collect(objects, outputs)
+
+        self.assert_rejected(record, result,
+                             expect="does not report the embedding layout")
+
+    def test_a_layout_the_plan_never_declared_is_rejected(self):
+        self.plan = jobspec.load_plan(self.write_plan(sample_plan()))
+        self.commit()
+        self.commit_sha = jobspec.git_state()["head"]
+        objects, outputs, _ = self.staged(
+            overrides={"embedding_layout": self.layout})
+        record, result = self.complete_and_collect(objects, outputs)
+
+        self.assert_rejected(record, result, expect="the plan declares none")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -42,7 +42,7 @@ _PLAN_KEYS = {"schema_version", "study", "repository", "task_type",
               "inputs_file", "environment", "environment_secrets", "setup_argv",
               "method", "worker", "embedding_layout"}
 _LAYOUT_KEYS = {"root", "datasets"}
-_LAYOUT_DATASET_KEYS = {"dataset", "input"}
+_LAYOUT_DATASET_KEYS = {"dataset", "input", "inputs"}
 _ARM_KEYS = {"arm", "method", "argv", "config", "labels"}
 _WORKER_KEYS = {"gpu_type", "cloud", "gpu_count", "image", "template",
                 "container_disk_gb", "volume_gb", "network_volume",
@@ -204,17 +204,36 @@ def validate_plan(plan):
             unknown = sorted(set(entry) - _LAYOUT_DATASET_KEYS)
             _require(not unknown, field,
                      "has unknown key(s): {}".format(", ".join(unknown)))
-            for key in sorted(_LAYOUT_DATASET_KEYS):
-                _require(isinstance(entry.get(key), str) and entry[key],
-                         field + "." + key, "must be a non-empty string")
+            _require(isinstance(entry.get("dataset"), str) and entry["dataset"],
+                     field + ".dataset", "must be a non-empty string")
             _require(_NAME_SAFE.match(entry["dataset"]), field + ".dataset",
                      "must be a simple dataset directory name")
             _require(entry["dataset"] not in seen_datasets, field + ".dataset",
                      "duplicates dataset {!r}".format(entry["dataset"]))
             seen_datasets.add(entry["dataset"])
-            _require(not os.path.isabs(entry["input"]) and ".." not in entry["input"].split("/"),
-                     field + ".input",
-                     "must be an artifact key relative to the storage namespace")
+            # One archive when the dataset fits one object, several when the artifact
+            # pipeline had to shard it: a single stored object cannot exceed the
+            # provider's single-PUT ceiling.
+            declared = [key for key in ("input", "inputs") if key in entry]
+            _require(len(declared) == 1, field,
+                     "must declare exactly one of 'input' (one archive) or 'inputs' "
+                     "(a sharded set), not both and not neither")
+            if "input" in entry:
+                shards = [entry["input"]]
+                where = field + ".input"
+            else:
+                shards = entry["inputs"]
+                where = field + ".inputs"
+                _require(isinstance(shards, list) and shards, where,
+                         "must be a non-empty list of artifact keys")
+            for shard_index, shard in enumerate(shards):
+                at = where if "input" in entry else "{}[{}]".format(where, shard_index)
+                _require(isinstance(shard, str) and shard, at,
+                         "must be a non-empty string")
+                _require(not os.path.isabs(shard) and ".." not in shard.split("/"), at,
+                         "must be an artifact key relative to the storage namespace")
+            _require(len(set(shards)) == len(shards), where,
+                     "names the same artifact twice")
 
     worker = plan.get("worker")
     _require(isinstance(worker, dict) and worker, "worker",

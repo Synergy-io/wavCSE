@@ -205,9 +205,10 @@ class FreshWorkerMappingTests(LayoutTestCase):
         self.assertEqual(sorted(entry["dataset"] for entry in marker["datasets"]),
                          sorted(DATASETS))
         for entry in marker["datasets"]:
-            requirement = next(item for item in self.requirements
-                               if item["artifact"] == entry["artifact"])
-            self.assertEqual(entry["sha256"], requirement["sha256"])
+            for shard in entry["artifacts"]:
+                requirement = next(item for item in self.requirements
+                                   if item["artifact"] == shard["artifact"])
+                self.assertEqual(shard["sha256"], requirement["sha256"])
 
     def test_the_stale_worker_tree_is_never_reachable_from_the_prepared_root(self):
         self.prepare()
@@ -366,6 +367,218 @@ class LayoutRefusalTests(LayoutTestCase):
     def test_the_plan_schema_rejects_a_layout_with_no_inputs_file(self):
         with self.assertRaises(Exception):
             self.plan(embedding_layout={"root": "embedding", "datasets": []})
+
+
+class ShardedDatasetTests(LayoutTestCase):
+    """A dataset too large for one stored object arrives as several verified shards.
+
+    The artifact pipeline shards above the provider's single-PUT ceiling, so the declared
+    layout must be able to name several archives for one dataset — and still prove every
+    byte it extracts against the digest the plan declared.
+    """
+
+    def shard_key(self, index):
+        return "embeddings/v1/speechcommand/training-{:03d}.tar".format(index)
+
+    def shard_bytes(self, dataset, members):
+        """One shard: a plain TAR of the dataset directory, with chosen member bytes."""
+
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w") as bundle:
+            for name, payload in members:
+                data = payload.encode("utf-8")
+                info = tarfile.TarInfo("{}/{}_wavlm_large_mean.pt".format(dataset, name))
+                info.size = len(data)
+                bundle.addfile(info, io.BytesIO(data))
+        return buffer.getvalue()
+
+    def declare(self, speechcommand_shards):
+        artifacts = {
+            "embeddings/v1/voxceleb.tar": self.dataset_bytes("voxceleb"),
+            "embeddings/v1/iemocap.tar": self.dataset_bytes("iemocap"),
+        }
+        for index, payload in enumerate(speechcommand_shards):
+            artifacts[self.shard_key(index)] = payload
+        self.write_inputs_file(artifacts=artifacts)
+        self.materialize()
+        return {
+            "root": "embedding",
+            "datasets": [
+                {"dataset": "speechcommand",
+                 "inputs": [self.shard_key(index)
+                            for index in range(len(speechcommand_shards))]},
+                {"dataset": "voxceleb", "input": "embeddings/v1/voxceleb.tar"},
+                {"dataset": "iemocap", "input": "embeddings/v1/iemocap.tar"},
+            ],
+        }
+
+    def test_the_extracted_tree_is_the_union_of_the_verified_shards(self):
+        layout = self.declare([
+            self.shard_bytes("speechcommand", [("a.wav", "first")]),
+            self.shard_bytes("speechcommand", [("b.wav", "second")]),
+            self.shard_bytes("speechcommand", [("c.wav", "third")]),
+        ])
+
+        marker = self.prepare(self.plan(embedding_layout=layout))
+
+        self.assertEqual(
+            self.tree_files(self.prepared_tree("speechcommand")),
+            ["a.wav_wavlm_large_mean.pt", "b.wav_wavlm_large_mean.pt",
+             "c.wav_wavlm_large_mean.pt"],
+        )
+        entry = next(item for item in marker["datasets"]
+                     if item["dataset"] == "speechcommand")
+        self.assertEqual([item["artifact"] for item in entry["artifacts"]],
+                         [self.shard_key(index) for index in range(3)])
+        self.assertEqual(entry["files"], 3)
+        # The single-archive datasets are untouched by the sharded one.
+        self.assertEqual(
+            [(item["dataset"], len(item["artifacts"])) for item in marker["datasets"]],
+            [("iemocap", 1), ("speechcommand", 3), ("voxceleb", 1)],
+        )
+        # The loader-visible root still resolves through the marker it was written with.
+        self.assertEqual(
+            embedding_root.resolve_root(
+                "~/embedding", environ={embedding_root.ENV_ROOT: marker["loader_root"]}),
+            marker["loader_root"],
+        )
+
+    def test_a_shard_whose_bytes_are_not_the_declared_ones_refuses(self):
+        layout = self.declare([
+            self.shard_bytes("speechcommand", [("a.wav", "first")]),
+            self.shard_bytes("speechcommand", [("b.wav", "second")]),
+        ])
+        self.materialize(contents={self.shard_key(1): b"not the verified bytes"})
+
+        with self.assertRaises(embedding_layout.EmbeddingLayoutError) as caught:
+            self.prepare(self.plan(embedding_layout=layout))
+
+        self.assertIn("not the declared", str(caught.exception))
+
+    def test_two_shards_contributing_the_same_member_refuse(self):
+        """Which bytes win must not depend on extraction order."""
+
+        layout = self.declare([
+            self.shard_bytes("speechcommand", [("a.wav", "first")]),
+            self.shard_bytes("speechcommand", [("a.wav", "second")]),
+        ])
+
+        with self.assertRaises(embedding_layout.EmbeddingLayoutError) as caught:
+            self.prepare(self.plan(embedding_layout=layout))
+
+        self.assertIn("extraction order", str(caught.exception))
+
+    def test_the_plan_schema_rejects_a_malformed_sharded_layout(self):
+        good = {"dataset": "speechcommand", "inputs": [self.shard_key(0)]}
+
+        with self.assertRaises(Exception) as caught:
+            self.plan(embedding_layout={"root": "embedding", "datasets": [
+                dict(good, input=self.shard_key(0))]})
+        self.assertIn("exactly one of", str(caught.exception))
+
+        with self.assertRaises(Exception) as caught:
+            self.plan(embedding_layout={"root": "embedding", "datasets": [
+                {"dataset": "speechcommand", "inputs": []}]})
+        self.assertIn("non-empty list", str(caught.exception))
+
+        with self.assertRaises(Exception) as caught:
+            self.plan(embedding_layout={"root": "embedding", "datasets": [
+                {"dataset": "speechcommand",
+                 "inputs": [self.shard_key(0), self.shard_key(0)]}]})
+        self.assertIn("same artifact twice", str(caught.exception))
+
+
+class CanonicalArchiveShapeTests(LayoutTestCase):
+    """The pipeline publishes a dataset's contents, not the dataset directory.
+
+    Writers save at ``<dataset>/<wav-relative>.pt``, so an archive taken of the dataset
+    directory carries those writer-relative paths as its members. The prepared tree must
+    put them exactly where the frozen loader resolves them:
+    ``<root>/<model_type>/<frame_pool_id>/<dataset>/<wav-relative>.pt``.
+    """
+
+    def contents_bytes(self, members):
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w") as bundle:
+            for name, payload in members:
+                data = payload.encode("utf-8")
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                bundle.addfile(info, io.BytesIO(data))
+        return buffer.getvalue()
+
+    def datasets(self, speechcommand_shards, *, voxceleb=None, iemocap=None):
+        artifacts = {
+            "embeddings/v1/voxceleb.tar": voxceleb or self.contents_bytes([
+                ("id10001/1zcIwhmdeo4/00001_wavlm_large_mean.pt", "voxceleb")]),
+            "embeddings/v1/iemocap.tar": iemocap or self.contents_bytes([
+                ("Session1/sentences/wav/Ses01F_impro01/"
+                 "Ses01F_impro01_F000_wavlm_large_mean.pt", "iemocap")]),
+        }
+        for index, payload in enumerate(speechcommand_shards):
+            artifacts["embeddings/v1/speechcommand/shard-{:03d}.tar".format(index)] = payload
+        self.write_inputs_file(artifacts=artifacts)
+        self.materialize()
+        return {
+            "root": "embedding",
+            "datasets": [
+                {"dataset": "speechcommand",
+                 "inputs": ["embeddings/v1/speechcommand/shard-{:03d}.tar".format(index)
+                            for index in range(len(speechcommand_shards))]},
+                {"dataset": "voxceleb", "input": "embeddings/v1/voxceleb.tar"},
+                {"dataset": "iemocap", "input": "embeddings/v1/iemocap.tar"},
+            ],
+        }
+
+    def test_contents_are_extracted_under_the_dataset_directory(self):
+        layout = self.datasets([
+            self.contents_bytes([
+                ("speech_commands_v0.01/bed/00176480_nohash_0_wavlm_large_mean.pt", "a")]),
+            self.contents_bytes([
+                ("speech_commands_v0.01/zero/0c40e715_nohash_0_wavlm_large_mean.pt", "b")]),
+        ])
+
+        self.prepare(self.plan(embedding_layout=layout))
+
+        self.assertEqual(
+            self.tree_files(self.prepared_tree("speechcommand")),
+            ["speech_commands_v0.01/bed/00176480_nohash_0_wavlm_large_mean.pt",
+             "speech_commands_v0.01/zero/0c40e715_nohash_0_wavlm_large_mean.pt"])
+        self.assertEqual(
+            self.tree_files(self.prepared_tree("voxceleb")),
+            ["id10001/1zcIwhmdeo4/00001_wavlm_large_mean.pt"])
+        self.assertEqual(
+            self.tree_files(self.prepared_tree("iemocap")),
+            ["Session1/sentences/wav/Ses01F_impro01/"
+             "Ses01F_impro01_F000_wavlm_large_mean.pt"])
+
+    def test_an_archive_mixing_both_shapes_refuses(self):
+        layout = self.datasets([
+            self.contents_bytes([
+                ("speech_commands_v0.01/bed/00176480_nohash_0_wavlm_large_mean.pt", "a"),
+                ("speechcommand/speech_commands_v0.01/zero/0_wavlm_large_mean.pt", "b")]),
+        ])
+
+        with self.assertRaises(embedding_layout.EmbeddingLayoutError) as caught:
+            self.prepare(self.plan(embedding_layout=layout))
+
+        self.assertIn("mixes", str(caught.exception))
+
+    def test_a_contents_archive_naming_another_dataset_refuses(self):
+        """iemocap's dataset directory inside voxceleb's archive is refused."""
+
+        layout = self.datasets(
+            [self.contents_bytes([
+                ("speech_commands_v0.01/bed/00176480_nohash_0_wavlm_large_mean.pt", "a")])],
+            voxceleb=self.contents_bytes([
+                ("iemocap/Session1/sentences/wav/Ses01F_impro01/"
+                 "Ses01F_impro01_F000_wavlm_large_mean.pt", "wrongly packed")]),
+        )
+
+        with self.assertRaises(embedding_layout.EmbeddingLayoutError) as caught:
+            self.prepare(self.plan(embedding_layout=layout))
+
+        self.assertIn("another dataset", str(caught.exception))
 
 
 class JobWrapperEndToEndTests(LayoutTestCase):

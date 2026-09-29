@@ -233,6 +233,82 @@ def validate_manifest(text, *, plan, stage, arm, seed, commit, job_id, declared,
     return document
 
 
+def validate_embedding_layout(manifest, *, plan, where):
+    """The run's loader root must have been built from the plan's declared inputs.
+
+    The wrapper records which artifacts it turned into the loader's tree. That record is
+    only evidence if it agrees with the plan: a manifest naming another artifact, another
+    digest, or a dataset the protocol never loads cannot be collected, because the run
+    that produced it did not read the inputs this study declared.
+    """
+
+    declared = {}
+    for entry in (plan.get("embedding_layout") or {}).get("datasets") or ():
+        shards = entry.get("inputs") if "inputs" in entry else [entry.get("input")]
+        declared[entry["dataset"]] = sorted(shards)
+
+    reported = manifest.get("embedding_layout")
+    if not declared:
+        if reported is not None:
+            _fail(where, "the manifest reports an embedding layout, but the plan "
+                         "declares none")
+        return None
+    if not isinstance(reported, dict):
+        _fail(where, "the manifest does not report the embedding layout the run used")
+    for key in ("root", "upstream_model_type", "frame_pool_id"):
+        _require_text(reported.get(key), where + ".embedding_layout." + key)
+
+    from improvements.compute import run_study
+
+    digest_of = {item["artifact"]: str(item["sha256"])
+                 for item in run_study.inputs_for(plan)}
+
+    datasets = reported.get("datasets")
+    if not isinstance(datasets, list) or not datasets:
+        _fail(where, "the manifest's embedding layout names no dataset")
+    seen = {}
+    for index, entry in enumerate(datasets):
+        at = "{}.embedding_layout.datasets[{}]".format(where, index)
+        _require_mapping(entry, at)
+        name = _require_text(entry.get("dataset"), at + ".dataset")
+        if name in seen:
+            _fail(where, "the manifest's embedding layout names {!r} twice".format(name))
+        artifacts = entry.get("artifacts")
+        if not isinstance(artifacts, list) or not artifacts:
+            _fail(at, "names no verified archive")
+        names = []
+        for shard_index, shard in enumerate(artifacts):
+            _require_mapping(shard, "{}[{}]".format(at + ".artifacts", shard_index))
+            artifact = _require_text(shard.get("artifact"), at + ".artifacts")
+            digest = str(shard.get("sha256") or "")
+            if not _SHA256.match(digest):
+                _fail(at, "reports {!r} without a usable digest".format(artifact))
+            expected = digest_of.get(artifact)
+            if expected is None:
+                _fail(at, "reports {!r}, which the plan's inputs file does not declare"
+                      .format(artifact))
+            if expected != digest:
+                _fail(at, "reports {!r} at digest {}, but the plan declares {}"
+                      .format(artifact, digest, expected))
+            names.append(artifact)
+        seen[name] = sorted(names)
+
+    missing = sorted(set(declared) - set(seen))
+    if missing:
+        _fail(where, "the manifest's embedding layout does not report dataset(s) {}"
+              .format(", ".join(missing)))
+    extra = sorted(set(seen) - set(declared))
+    if extra:
+        _fail(where, "the manifest's embedding layout reports dataset(s) the plan never "
+                     "loads: {}".format(", ".join(extra)))
+    for name, artifacts in sorted(declared.items()):
+        if seen[name] != artifacts:
+            _fail(where, "the manifest's embedding layout reports {} for dataset {!r}, "
+                         "but the plan declares {}".format(
+                             seen[name], name, artifacts))
+    return {"datasets": {name: len(artifacts) for name, artifacts in sorted(seen.items())}}
+
+
 def validate_metrics(text, *, plan, where):
     """Validate the evaluator's metrics vocabulary, task names and value domains."""
 
@@ -400,6 +476,9 @@ def validate(plan, *, stage, arm, seed, commit, entry, reader, where):
         "checkpoint_run_id": manifest["checkpoint_run_id"],
         "files": len(manifest["files"]),
         "inputs_materialized": validate_declared_inputs(entry, where=where),
+        # Which verified artifacts the loader-visible root was built from, checked
+        # against the plan's own declared inputs rather than trusted from the wrapper.
+        "embedding_layout": validate_embedding_layout(manifest, plan=plan, where=where),
         "metrics": {},
         "gradient_diagnostics": None,
     }

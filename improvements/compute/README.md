@@ -169,15 +169,22 @@ byte-identical when regenerated.
 ### Declared inputs reach the loader
 
 `embedding_layout` names, for each dataset the protocol loads, the declared artifact that
-carries it:
+carries it — `input` for a dataset that fits one stored object, `inputs` for a set the
+artifact pipeline had to shard, because a single stored object cannot exceed the
+provider's single-PUT ceiling:
 
 ```json
 "embedding_layout": {
   "root": "embedding",
   "datasets": [
-    {"dataset": "speechcommand", "input": "embeddings/wavlm_large/mean/speechcommand.tar"},
-    {"dataset": "voxceleb",      "input": "embeddings/wavlm_large/mean/voxceleb.tar"},
-    {"dataset": "iemocap",       "input": "embeddings/wavlm_large/mean/iemocap.tar"}
+    {"dataset": "speechcommand",
+     "inputs": ["embeddings/v1/speechcommand-wavlm-large-mean/training-000.tar",
+                "embeddings/v1/speechcommand-wavlm-large-mean/training-001.tar",
+                "embeddings/v1/speechcommand-wavlm-large-mean/training-002.tar",
+                "embeddings/v1/speechcommand-wavlm-large-mean/validation-000.tar",
+                "embeddings/v1/speechcommand-wavlm-large-mean/testing-000.tar"]},
+    {"dataset": "voxceleb",      "input": "embeddings/v1/voxceleb-wavlm-large-mean/train-000.tar"},
+    {"dataset": "iemocap",       "input": "embeddings/v1/iemocap-wavlm-large-mean.tar"}
   ]
 }
 ```
@@ -193,11 +200,19 @@ the job's exact commit, then does the following before training starts:
    fewer nor extra;
 3. re-hashes every materialized input against the plan's declared digest and refuses a
    mismatch, an absent file, or a size disagreement;
-4. extracts each plain TAR at `<root>/<model_type>/<frame_pool_id>/`, accepting only
-   regular members whose first path segment is the dataset itself — never a traversal, a
-   link, or another dataset's tree — and never merging a tree left by an earlier attempt;
-5. writes `.arc_embedding_layout.json` under the root, naming the artifacts, digests,
-   extracted directories and job identity;
+4. extracts each plain TAR under `<root>/<model_type>/<frame_pool_id>/`, accepting only
+   regular members — never a traversal, a link, or a device. The canonical archives are
+   TARs of the dataset's *contents*, named by the writer-relative path the loader
+   resolves (`Session1/sentences/wav/…`, `speech_commands_v0.01/bed/…`), so they are
+   extracted at `<root>/<model_type>/<frame_pool_id>/<dataset>/`; an archive that instead
+   carries the dataset directory itself as every member's first path segment describes
+   the same tree and is extracted one level up. A member naming another dataset the
+   protocol loads, or an archive mixing the two shapes, is refused. A tree left by an
+   earlier attempt is never merged, and two declared shards that would contribute the
+   same member are refused, because which bytes won would then depend on extraction
+   order rather than on the verified input;
+5. writes `.arc_embedding_layout.json` under the root, naming every artifact and digest
+   the root was built from, the extracted directories and the job identity;
 6. exports `WAVCSE_ROOT_EMB_PATH=<job>/embedding`, which `improvements/embedding_root.py`
    honours **only** when the marker validates. There is no fallback: an unverifiable
    override is refused rather than quietly replaced by `~/embedding`, and with no override

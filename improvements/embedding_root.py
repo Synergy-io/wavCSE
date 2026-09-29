@@ -80,13 +80,36 @@ def read_layout(root):
             raise EmbeddingRootError(
                 "the prepared-layout marker at {} has a malformed dataset entry".format(path)
             )
-        for field in ("dataset", "artifact", "sha256", "extracted_to"):
+        for field in ("dataset", "extracted_to"):
             if not entry.get(field):
                 raise EmbeddingRootError(
                     "the prepared-layout marker at {} leaves {!r} unset for {!r}".format(
                         path, field, entry.get("dataset")
                     )
                 )
+        # A dataset is carried by one archive or by several shards; either way every
+        # archive it was built from must be named with the digest it was verified at.
+        shards = entry.get("artifacts")
+        if shards is None and entry.get("artifact"):
+            shards = [{"artifact": entry.get("artifact"), "sha256": entry.get("sha256")}]
+        if not isinstance(shards, list) or not shards:
+            raise EmbeddingRootError(
+                "the prepared-layout marker at {} names no archive for dataset {!r}"
+                .format(path, entry.get("dataset"))
+            )
+        for shard in shards:
+            if not isinstance(shard, dict):
+                raise EmbeddingRootError(
+                    "the prepared-layout marker at {} has a malformed archive entry "
+                    "for dataset {!r}".format(path, entry.get("dataset"))
+                )
+            for field in ("artifact", "sha256"):
+                if not shard.get(field):
+                    raise EmbeddingRootError(
+                        "the prepared-layout marker at {} leaves {!r} unset for an "
+                        "archive of dataset {!r}".format(
+                            path, field, entry.get("dataset"))
+                    )
         if not os.path.isdir(str(entry["extracted_to"])):
             raise EmbeddingRootError(
                 "the prepared-layout marker claims {!r} for dataset {!r}, but that "

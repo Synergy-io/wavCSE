@@ -202,7 +202,7 @@ def _spec_for(plan, stage, arm, seed, scope, commit, inputs=()):
     )
 
 
-def _inputs_for(plan, repo_root=None):
+def inputs_for(plan, repo_root=None):
     inputs_file = plan.get("inputs_file")
     if not inputs_file:
         return []
@@ -246,7 +246,7 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
         # same proof `worker-ensure` made, re-made against the commit this submission
         # actually names: HEAD can move between the two steps.
         remote_commit.require_plan_commit(plan, commit)
-    inputs = _inputs_for(plan)
+    inputs = inputs_for(plan)
     submitted = []
     planned = []
     warnings = []
