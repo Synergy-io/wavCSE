@@ -10,13 +10,13 @@ complement, and the exact `3 × 3` identity `Ω_ij = (Σ_ikΣ_jk − Σ_ijΣ_kk)
 **Sources.** Primary: Zhang & Yang, “A Survey on Multi-Task Learning”, arXiv:1707.08114**v3**
 (2021), §2.4 (Eqs. 20–25) and §2.8 (Eqs. 32–33). Gonçalves, Von Zuben & Banerjee,
 *JMLR* 17(33):1–30, 2016, §§3.1–3.3, 3.6, 4.1. Repository:
-[`VARIANT_BENCHMARK_PROTOCOL.md`](../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md)
-(frozen conditions), [`FINDINGS.md`](../../improvements/taskrelation/research/FINDINGS.md)
-F1–F10, [`MTRL_DIAGNOSTIC_SYNTHESIS.md`](../../improvements/taskrelation/research/task_relations/MTRL_DIAGNOSTIC_SYNTHESIS.md),
-[`studies/LT-0002/analysis.md`](../../improvements/taskrelation/research/studies/LT-0002/analysis.md),
-[`studies/DG-0001/result.json`](../../improvements/taskrelation/research/studies/DG-0001/result.json),
+[`VARIANT_BENCHMARK_PROTOCOL.md`](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md)
+(frozen conditions), [`FINDINGS.md`](../../../../improvements/taskrelation/research/FINDINGS.md)
+F1–F10, [`MTRL_DIAGNOSTIC_SYNTHESIS.md`](../../../../improvements/taskrelation/research/task_relations/MTRL_DIAGNOSTIC_SYNTHESIS.md),
+[`studies/LT-0002/analysis.md`](../../../../improvements/taskrelation/research/studies/LT-0002/analysis.md),
+[`studies/DG-0001/result.json`](../../../../improvements/taskrelation/research/studies/DG-0001/result.json),
 the AMTL card
-[`lee-2016-asymmetric-mtl.md`](../../improvements/taskrelation/research/literature/lee-2016-asymmetric-mtl.md).
+[`lee-2016-asymmetric-mtl.md`](../../../../improvements/taskrelation/research/literature/lee-2016-asymmetric-mtl.md).
 
 **Epistemic key.** `OBSERVED` = primary source or repository artefact; `INFERRED` =
 derived here, algebra shown; `HYPOTHESIZED` = predicted, falsifiable, unmeasured.
@@ -132,8 +132,8 @@ Two points the project must not lose:
    survey's symmetrised reading above is `OBSERVED` at survey level, while the primary
    paper keeps a directed non-negative `B` (`B ⪰ 0`, `B_tt = 0`, rows ℓ₁-scaled by the
    task's own loss) and its Theorem 1 is a directed statement — see the AMTL card
-   [`lee-2016-asymmetric-mtl.md`](../../improvements/taskrelation/research/literature/lee-2016-asymmetric-mtl.md)
-   and [`studies/LT-0002/analysis.md`](../../improvements/taskrelation/research/studies/LT-0002/analysis.md) §3.
+   [`lee-2016-asymmetric-mtl.md`](../../../../improvements/taskrelation/research/literature/lee-2016-asymmetric-mtl.md)
+   and [`studies/LT-0002/analysis.md`](../../../../improvements/taskrelation/research/studies/LT-0002/analysis.md) §3.
    The `m = 3` consequence used here (6 directed entries, 3 asymmetry differences) holds
    under either reading; the treatment of the directed family is developed further in the
    sibling doc `ASYMMETRIC_RELATIONS.md`.
@@ -247,9 +247,9 @@ interpretable only with its conditions (FRAMEWORK.md §1).
   reduction quoted in §2.3.
 * `ASYMMETRIC_RELATIONS.md` (sibling doc, in preparation) — the directed-family treatment
   that §2.3 motivates.
-* Repository: [`VARIANT_BENCHMARK_PROTOCOL.md`](../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md)
+* Repository: [`VARIANT_BENCHMARK_PROTOCOL.md`](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md)
   (frozen `m = 3`, ≥ 5 seeds, LOSO, SI-dominated aggregate),
-  [`FINDINGS.md`](../../improvements/taskrelation/research/FINDINGS.md) F1–F10,
-  [`studies/TR-0007/PLAN.md`](../../improvements/taskrelation/research/studies/TR-0007/PLAN.md),
-  [`studies/DG-0001/result.json`](../../improvements/taskrelation/research/studies/DG-0001/result.json),
-  [`DECISIONS.md`](../../improvements/taskrelation/research/DECISIONS.md) DEC-0013/0014/0016.
+  [`FINDINGS.md`](../../../../improvements/taskrelation/research/FINDINGS.md) F1–F10,
+  [`studies/TR-0007/PLAN.md`](../../../../improvements/taskrelation/research/studies/TR-0007/PLAN.md),
+  [`studies/DG-0001/result.json`](../../../../improvements/taskrelation/research/studies/DG-0001/result.json),
+  [`DECISIONS.md`](../../../../improvements/taskrelation/research/DECISIONS.md) DEC-0013/0014/0016.

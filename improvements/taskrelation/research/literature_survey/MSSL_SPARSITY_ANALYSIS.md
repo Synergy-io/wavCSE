@@ -4,7 +4,7 @@
 p-MSSL arm (Gonçalves, Von Zuben & Banerjee 2016) against classical symmetric MTRL,
 with the 3-task (`m = 3`) case worked out exactly. It is a source for a future
 `TR-0007`-family write-up and for the shared benchmark
-[`VARIANT_BENCHMARK_PROTOCOL.md`](../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md);
+[`VARIANT_BENCHMARK_PROTOCOL.md`](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md);
 it does not decide a winner and does not authorise a study.
 
 **Sources.**
@@ -16,14 +16,14 @@ arXiv:1707.08114**v3** (2021) — §2.4 (Task Relation Learning Approach) and §
 (Another Taxonomy for Regularized MTL Methods), Eqs. (20)–(25), (32), (33).
 
 *Repository records:* cards
-[`goncalves-2016-mssl.md`](../../improvements/taskrelation/research/literature/goncalves-2016-mssl.md)
-and [`zhang-yang-2021-mtl-survey.md`](../../improvements/taskrelation/research/literature/zhang-yang-2021-mtl-survey.md);
-arm [`04-mssl/README.md`](../../improvements/taskrelation/04-mssl/README.md);
-pre-registration [`studies/TR-0007/PLAN.md`](../../improvements/taskrelation/research/studies/TR-0007/PLAN.md);
-findings [`FINDINGS.md`](../../improvements/taskrelation/research/FINDINGS.md) F4–F10;
-decisions [`DECISIONS.md`](../../improvements/taskrelation/research/DECISIONS.md)
+[`goncalves-2016-mssl.md`](../../../../improvements/taskrelation/research/literature/goncalves-2016-mssl.md)
+and [`zhang-yang-2021-mtl-survey.md`](../../../../improvements/taskrelation/research/literature/zhang-yang-2021-mtl-survey.md);
+arm [`04-mssl/README.md`](../../../../improvements/taskrelation/04-mssl/README.md);
+pre-registration [`studies/TR-0007/PLAN.md`](../../../../improvements/taskrelation/research/studies/TR-0007/PLAN.md);
+findings [`FINDINGS.md`](../../../../improvements/taskrelation/research/FINDINGS.md) F4–F10;
+decisions [`DECISIONS.md`](../../../../improvements/taskrelation/research/DECISIONS.md)
 DEC-0013/0014/0015/0016; the MTRL diagnostic
-[`MTRL_DIAGNOSTIC_SYNTHESIS.md`](../../improvements/taskrelation/research/task_relations/MTRL_DIAGNOSTIC_SYNTHESIS.md).
+[`MTRL_DIAGNOSTIC_SYNTHESIS.md`](../../../../improvements/taskrelation/research/task_relations/MTRL_DIAGNOSTIC_SYNTHESIS.md).
 
 **Epistemic key.** `OBSERVED` = read from a primary source or a repository artefact;
 `INFERRED` = derived here, algebra shown; `HYPOTHESIZED` = predicted, falsifiable, not
@@ -414,10 +414,10 @@ primary source's citation, not independently verified against those papers.
   (`#conditional-vs-direct-dependence`) that §2 of this file instantiates.
 * [`SURVEY_MAP.md`](./SURVEY_MAP.md) — survey §2.4 / §2.8 map and the MTRL-vs-MSSL
   lineage.
-* Repository: [`VARIANT_BENCHMARK_PROTOCOL.md`](../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md)
-  (fixed conditions and mandatory controls), [`studies/TR-0007/PLAN.md`](../../improvements/taskrelation/research/studies/TR-0007/PLAN.md)
-  (pre-registration, λ₂ decision), [`04-mssl/README.md`](../../improvements/taskrelation/04-mssl/README.md)
+* Repository: [`VARIANT_BENCHMARK_PROTOCOL.md`](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md)
+  (fixed conditions and mandatory controls), [`studies/TR-0007/PLAN.md`](../../../../improvements/taskrelation/research/studies/TR-0007/PLAN.md)
+  (pre-registration, λ₂ decision), [`04-mssl/README.md`](../../../../improvements/taskrelation/04-mssl/README.md)
   (implemented equations and declared deviations),
-  [`FINDINGS.md`](../../improvements/taskrelation/research/FINDINGS.md) F4–F10,
-  [`DECISIONS.md`](../../improvements/taskrelation/research/DECISIONS.md)
+  [`FINDINGS.md`](../../../../improvements/taskrelation/research/FINDINGS.md) F4–F10,
+  [`DECISIONS.md`](../../../../improvements/taskrelation/research/DECISIONS.md)
   DEC-0013/0014/0015/0016.

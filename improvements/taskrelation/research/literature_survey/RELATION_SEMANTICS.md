@@ -33,7 +33,7 @@ verbatim rather than closed by assertion.
 
 ## 1. The worked example: one `3 × 3` matrix, two different "relations"
 
-The protocol fixes exactly three tasks (`ks_si_er`; [protocol §1](../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md))
+The protocol fixes exactly three tasks (`ks_si_er`; [protocol §1](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md))
 with head widths 12 / 1251 / 4 and `smp` 0.5 over all 25 layers. Write the task-parameter
 covariance the relation objects are built from as
 
@@ -321,13 +321,13 @@ of its opposite (a zero covariance with a nonzero conditional edge). Both remain
 * [`OPEN_QUESTIONS.md`](./OPEN_QUESTIONS.md) — question 1 (independent samples), 3 (shared
   trunk), 4 (unique causal meaning of a directed coefficient), 8 (signed precision vs
   negative transfer).
-* Repository: [`VARIANT_BENCHMARK_PROTOCOL.md`](../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md),
-  [`FINDINGS.md`](../../improvements/taskrelation/research/FINDINGS.md) F5–F10,
-  [`FRAMEWORK.md`](../../improvements/taskrelation/research/FRAMEWORK.md) §1–§3,
-  [`studies/TR-0007/PLAN.md`](../../improvements/taskrelation/research/studies/TR-0007/PLAN.md),
-  [`studies/DG-0001/analysis.md`](../../improvements/taskrelation/research/studies/DG-0001/analysis.md),
+* Repository: [`VARIANT_BENCHMARK_PROTOCOL.md`](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md),
+  [`FINDINGS.md`](../../../../improvements/taskrelation/research/FINDINGS.md) F5–F10,
+  [`FRAMEWORK.md`](../../../../improvements/taskrelation/research/FRAMEWORK.md) §1–§3,
+  [`studies/TR-0007/PLAN.md`](../../../../improvements/taskrelation/research/studies/TR-0007/PLAN.md),
+  [`studies/DG-0001/analysis.md`](../../../../improvements/taskrelation/research/studies/DG-0001/analysis.md),
   `task_relations/MTRL_DIAGNOSTIC_SYNTHESIS.md`,
-  [`DECISIONS.md`](../../improvements/taskrelation/research/DECISIONS.md) DEC-0013/0014/0015/0016.
+  [`DECISIONS.md`](../../../../improvements/taskrelation/research/DECISIONS.md) DEC-0013/0014/0015/0016.
 
 ## 7. Non-claims
 

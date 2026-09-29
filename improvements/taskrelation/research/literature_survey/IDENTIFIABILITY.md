@@ -110,8 +110,8 @@ The frozen conditions that make these limits concrete: three tasks (`ks_si_er`; 
 12 / 1251 / 4), `wavlm_large` frozen, mean frame pooling, layer pooling `smp` 0.5 over **all
 25** layers, shared `1024→512→2000` trunk, 30 epochs, batch 2048, AdamW lr 0.0025, ≈2,820
 steps, epoch checkpoint, screen seed 42
-([`VARIANT_BENCHMARK_PROTOCOL.md`](../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md) §1;
-[`studies/TR-0007/PLAN.md`](../../improvements/taskrelation/research/studies/TR-0007/PLAN.md)).
+([`VARIANT_BENCHMARK_PROTOCOL.md`](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md) §1;
+[`studies/TR-0007/PLAN.md`](../../../../improvements/taskrelation/research/studies/TR-0007/PLAN.md)).
 `OBSERVED`.
 
 ### L1 — 3 edges versus 6: capacity is not identifiability
@@ -265,7 +265,7 @@ task-family laws are **not identified** from the current three fixed tasks.
 
 ## 4. Classification of relation claims at `m = 3`
 
-Vocabulary (mapped to the project's evidence levels, [`FRAMEWORK.md`](../../improvements/taskrelation/research/FRAMEWORK.md) §3):
+Vocabulary (mapped to the project's evidence levels, [`FRAMEWORK.md`](../../../../improvements/taskrelation/research/FRAMEWORK.md) §3):
 
 * **DESCRIPTIVE** — a statement about *the fitted object under named conditions*. Valid as
   description; **selects no mechanism** and licenses no generalization (framework Level B/C).
@@ -356,14 +356,14 @@ appear in a wavCSE write-up in their current form.
 * [`CANDIDATES.md`](./CANDIDATES.md), [`SUCCESSOR_STUDIES.md`](./SUCCESSOR_STUDIES.md) — the
   candidate-level consequences of L4/L6 (the MTHOL full-rank gate; the "do not run an
   opportunistic λ sweep" rule).
-* Repository: [`VARIANT_BENCHMARK_PROTOCOL.md`](../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md) §§1–4, §10,
-  [`FINDINGS.md`](../../improvements/taskrelation/research/FINDINGS.md) F1–F8,
-  [`FRAMEWORK.md`](../../improvements/taskrelation/research/FRAMEWORK.md) §1–§4,
-  [`studies/TR-0007/PLAN.md`](../../improvements/taskrelation/research/studies/TR-0007/PLAN.md),
-  [`studies/DG-0001/analysis.md`](../../improvements/taskrelation/research/studies/DG-0001/analysis.md),
+* Repository: [`VARIANT_BENCHMARK_PROTOCOL.md`](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md) §§1–4, §10,
+  [`FINDINGS.md`](../../../../improvements/taskrelation/research/FINDINGS.md) F1–F8,
+  [`FRAMEWORK.md`](../../../../improvements/taskrelation/research/FRAMEWORK.md) §1–§4,
+  [`studies/TR-0007/PLAN.md`](../../../../improvements/taskrelation/research/studies/TR-0007/PLAN.md),
+  [`studies/DG-0001/analysis.md`](../../../../improvements/taskrelation/research/studies/DG-0001/analysis.md),
   `task_relations/MTRL_DIAGNOSTIC_SYNTHESIS.md`,
   `improvements/taskrelation/research/tests/test_mssl_omega_solver.py`,
-  [`DECISIONS.md`](../../improvements/taskrelation/research/DECISIONS.md) DEC-0013/0014/0015/0016.
+  [`DECISIONS.md`](../../../../improvements/taskrelation/research/DECISIONS.md) DEC-0013/0014/0015/0016.
 
 ---
 

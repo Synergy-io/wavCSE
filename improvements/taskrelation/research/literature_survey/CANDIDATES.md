@@ -1,10 +1,10 @@
 # Candidate matrix — shortlist, not a winner
 
-Status as of this worktree's base `664c572102f91b253358dcf8699e43a3c9c8e916`: this is a **literature/theory** review. `CANDIDATE-*` are unregistered proposal labels, not Study IDs or permission to train. Primary links and equation-level claims are in [PRIMARY_LITERATURE.md](PRIMARY_LITERATURE.md), [ASYMMETRIC_RELATIONS.md](ASYMMETRIC_RELATIONS.md), and [SURVEY_MAP.md](SURVEY_MAP.md). Protocol: [VARIANT_BENCHMARK_PROTOCOL.md](../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md). Here SID = repo's `si`.
+Status as of this worktree's base `664c572102f91b253358dcf8699e43a3c9c8e916`: this is a **literature/theory** review. `CANDIDATE-*` are unregistered proposal labels, not Study IDs or permission to train. Primary links and equation-level claims are in [PRIMARY_LITERATURE.md](PRIMARY_LITERATURE.md), [ASYMMETRIC_RELATIONS.md](ASYMMETRIC_RELATIONS.md), and [SURVEY_MAP.md](SURVEY_MAP.md). Protocol: [VARIANT_BENCHMARK_PROTOCOL.md](../../../../improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md). Here SID = repo's `si`.
 
 Legend: `DIRECT` means the publication's mathematical object exists *unchanged* in our architecture; `ADAPTED` means some mathematical object or loss is replaced; `OUT` means category/protocol incompatible. **Do not confuse matching an adapter across controls with faithful replication of a primary method.** Fixed all-25-layer frozen WavLM embedding input is compatible with a head-parameter regularizer; *layer-specific* coupling is not identical to merely using all 25 layers.
 
-**Source confidence:** AMTL, MTRL, SPATS, p-MSSL, GAMTL and MTHOL were checked against primary PDFs. The AutoTR author PDF could not be fully retrieved in this pass; its structure follows the prior [LT-0002 primary-source card](../../improvements/taskrelation/research/literature/zhou-2023-autotr.md) and author code as documented in [ASYMMETRIC_RELATIONS.md](ASYMMETRIC_RELATIONS.md) §10. **PRIMARY_SOURCE_NOT_VERIFIED in this pass**; not recommended as a new arm.
+**Source confidence:** AMTL, MTRL, SPATS, p-MSSL, GAMTL and MTHOL were checked against primary PDFs. The AutoTR author PDF could not be fully retrieved in this pass; its structure follows the prior [LT-0002 primary-source card](../../../../improvements/taskrelation/research/literature/zhou-2023-autotr.md) and author code as documented in [ASYMMETRIC_RELATIONS.md](ASYMMETRIC_RELATIONS.md) §10. **PRIMARY_SOURCE_NOT_VERIFIED in this pass**; not recommended as a new arm.
 
 ## Method and relation semantics
 

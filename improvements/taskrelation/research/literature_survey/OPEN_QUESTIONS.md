@@ -1,6 +1,6 @@
 # Open questions and decision gates
 
-Questions are unanswered; no inferred method is treated as a result. Evidence pointers: [PRIMARY_LITERATURE.md](PRIMARY_LITERATURE.md), [MSSL_SPARSITY_ANALYSIS.md](MSSL_SPARSITY_ANALYSIS.md), [ASYMMETRIC_RELATIONS.md](ASYMMETRIC_RELATIONS.md), [THREE_TASK_ANALYSIS.md](THREE_TASK_ANALYSIS.md), [FINDINGS F4–F10](../../improvements/taskrelation/research/FINDINGS.md), [DECISIONS DEC-0013–0016](../../improvements/taskrelation/research/DECISIONS.md).
+Questions are unanswered; no inferred method is treated as a result. Evidence pointers: [PRIMARY_LITERATURE.md](PRIMARY_LITERATURE.md), [MSSL_SPARSITY_ANALYSIS.md](MSSL_SPARSITY_ANALYSIS.md), [ASYMMETRIC_RELATIONS.md](ASYMMETRIC_RELATIONS.md), [THREE_TASK_ANALYSIS.md](THREE_TASK_ANALYSIS.md), [FINDINGS F4–F10](../../../../improvements/taskrelation/research/FINDINGS.md), [DECISIONS DEC-0013–0016](../../../../improvements/taskrelation/research/DECISIONS.md).
 
 ## Theoretical / source questions
 
@@ -22,7 +22,7 @@ Questions are unanswered; no inferred method is treated as a result. Evidence po
 5. **Are ER-edge fluctuations estimator noise or genuine sample/speaker dependence?** Re-evaluate Ω under matched-composition controls if authorized; DG-0005 changes both sampled share and ER learning progress. Need conditional variance across independent draws and held-out-speaker axes, not just one training trajectory.
 6. **Do high-order mediated terms add signal independently of the first Gram eigenvector?** Test out-of-seed stability and prospective validation/LOSO prediction; if the Gram is rank-near-one, powers amplify existing geometry without identifying a new relation.
 7. **Does an observed relation change *predict* subsequent validation transfer?** Ω trajectories (25L LOSO KS--SID +.035→+.286; ER edges spread) are descriptive. A held-out-seed/fold prospective prediction under a fixed sampling/checkpoint protocol is needed before dynamic adaptation is a scientific mechanism candidate.
-8. **What is the latest actual status of DG-0007 / TR-0007 / TR-0008?** This independent worktree starts at base `664c572...`; concurrent agents own those records in different worktrees. Current evidence is only this checkout's [STUDIES.jsonl](../../improvements/taskrelation/research/STUDIES.jsonl) and [DECISIONS](../../improvements/taskrelation/research/DECISIONS.md). Reconcile *after integration*, do not silently treat a parallel agent's intention as completed data.
+8. **What is the latest actual status of DG-0007 / TR-0007 / TR-0008?** This independent worktree starts at base `664c572...`; concurrent agents own those records in different worktrees. Current evidence is only this checkout's [STUDIES.jsonl](../../../../improvements/taskrelation/research/STUDIES.jsonl) and [DECISIONS](../../../../improvements/taskrelation/research/DECISIONS.md). Reconcile *after integration*, do not silently treat a parallel agent's intention as completed data.
 
 ## Human scientific choices, only if a future study is proposed
 
