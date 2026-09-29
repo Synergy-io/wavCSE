@@ -237,3 +237,44 @@ and their provenance limitation (unknown commit line, seed 0, a different implem
 its own `covariance_normalization` knob, no `lambda_2_selection` tag) is stated wherever they
 are cited. This screen's runs are identifiable by their exact git SHA, `study_id`, `stage`,
 `seed`, `lambda_2`, `lambda_2_selection`, layer policy and protocol version.
+
+---
+
+# 2026-09-29 — Screen executed; outcome `REJECTED`; compute stopped
+
+**Result (protocol checkpoint `epoch`, seed 42, all 25 layers):**
+
+| arm | commit | acc_all | ks | si | er |
+|---|---|---|---|---|---|
+| p-MSSL (candidate) | `d13e82e` | 0.9662 | 0.9867 | 0.9615 | 0.7848 |
+| classical MTRL (control) | `664c572` | 0.9752 | 0.9855 | 0.9794 | 0.7848 |
+| matched wavCSE baseline (control) | `664c572` | 0.9748 | 0.9861 | 0.9782 | 0.7848 |
+
+Deltas (candidate − control, pp): vs MTRL all **−0.90**, ks +0.12, si **−1.79**, er 0.00;
+vs baseline all **−0.86**, ks +0.06, si **−1.67**, er 0.00. The pre-registered rule required
+beating both controls with no task regressing beyond 0.20pp, so the screen is **`REJECTED`** —
+criteria unchanged after seeing the numbers. Full analysis: `analysis.md`; machine-readable:
+`result.json`; negative evidence: FL-0005.
+
+**Mechanism (screening-tier diagnosis).** The Ω step is live but mis-scaled for this
+representation at the researcher-fixed λ₂ = 0.01: once the coupling engages, the task summaries
+align to cos ≈ 0.981, `S` becomes near-singular, Ω jumps to a near-uniform precision of trace
+1.13e5, and its gradient (~1e5) then swamps the task gradients (~1e-2), so training plateaus
+from epoch ≈10. This is the caveat pre-registered in `PLAN.md`, not a solver defect: the Ω step
+passes its closed-form and optimality-certificate tests, and the per-epoch snapshots report the
+ADMM's own residual limit (gap −0.054 at that conditioning) rather than hiding it.
+
+**Execution.** One worker (`NVIDIA RTX A4500`, $0.25/h, EU-RO-1, the pre-existing network
+volume, reused for all three arms): 2.96 paid wall-clock hours, **$0.7404**, inside the screen
+envelope. Three jobs failed before producing science and were re-run under the bounded retry
+policy: two job-preparation failures from the worker's 60 GB container disk filling during
+checkout/transfer, and one duplicate candidate execution that could not persist its
+`MANIFEST.json` because ARC's output keys are per `(study, arm, seed)` (recorded, retained as
+corroboration, excluded from the classification; identical metrics to the collected run). The
+candidate's collected evidence is at `d13e82e`, the controls' at `664c572`; the diff between
+those commits is control-plane only, recorded per arm in `screen_commits.json`.
+
+**Not done, and not authorized:** confirmation seeds, any λ grid, TR-0008, DG-0007, further
+compute. The worker is stopped (billing off); destruction is refused by the ledger guard that
+requires every recorded run to have verified outputs, which the three pre-science
+infrastructure failures cannot satisfy — a human can destroy the pod explicitly if desired.

@@ -472,9 +472,12 @@ Avoid methods whose main contribution becomes generic representation learning.
 
 ## TR-0007 — MSSL sparse-precision relation estimator (published arm, family B)
 
-**Status:** PRE-REGISTERED (2026-09-29) — `DEC-0015` (human) chose Option A, the faithful
-published formulation. Awaiting two human inputs before submission: the λ₂ rule (below) and
-`authorizations/TR-0007.yaml`. Registry: `STUDIES.jsonl`; plan: `studies/TR-0007/PLAN.md`.
+**Status:** `REJECTED` (screen closed 2026-09-29). The registered three-arm seed-42 screen ran
+under `DEC-0015`/`DEC-0016`; p-MSSL did not beat either control (0.9662 vs 0.9752 classical MTRL
+and 0.9748 matched baseline at the protocol checkpoint; SI −1.79pp/−1.67pp) and the mechanism's
+Ω was shown to be coupling-dominated at the researcher-fixed `lambda_2 = 0.01`. Negative
+evidence: FL-0005. Analysis: `studies/TR-0007/analysis.md`; result: `result.json`. No further
+stage is authorized (confirmation, λ grids and new compute need a new human grant).
 
 ### Hypothesis
 

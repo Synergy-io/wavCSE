@@ -1,0 +1,142 @@
+{
+  "study_id": "TR-0007",
+  "stage": "screen",
+  "seed": 42,
+  "checkpoint": "epoch",
+  "expected_commit": null,
+  "expected_commits_per_arm": {
+    "p-mssl": "d13e82e79a953d71883e97ec5ff3c45dc11150a3",
+    "classical-mtrl": "664c572102f91b253358dcf8699e43a3c9c8e916",
+    "wavcse-baseline": "664c572102f91b253358dcf8699e43a3c9c8e916",
+    "note": "The candidate arm's collected evidence is the run at d13e82e; the controls ran at 664c572, whose diff from d13e82e is control-plane only (job-preparation failure classification in improvements/compute/failures.py plus its test). ARC's output keys are per (study, arm, seed), so a same-arm re-run cannot persist a new manifest; the candidate's duplicate execution at 664c572 is retained as corroboration and excluded from the classification."
+  },
+  "regression_limit_pp": 0.2,
+  "classification": "REJECTED",
+  "rationale": "aggregate accuracy does not exceed: classical-mtrl, wavcse-baseline; per-task regression beyond 0.20pp: classical-mtrl si -1.7937pp; wavcse-baseline si -1.6725pp",
+  "caveats": [
+    "Screen evidence only: one seed, one split; cannot establish an improvement (F1).",
+    "ER is the ordinary, speaker-leaky split: screening context only, not an ER result (F3).",
+    "lambda_2 = 0.01 is a researcher-fixed screening value (DEC-0016), not a paper default, so a REJECTED outcome is scoped to this fixed lambda_2.",
+    "No confirmation was run and none is authorized by this screen.",
+    "Where the arms ran at different commits, the diff between those commits is control-plane only (job-prep failure classification); no scientific configuration or training code differs."
+  ],
+  "arms": {
+    "p-mssl": [
+      {
+        "run_id": "a82144d2d0004b55a8f986c10a78e3f2",
+        "run_name": "TR-0007__screen__p-mssl__ks_si_er__smp25__s42",
+        "experiment": "29",
+        "status": "FINISHED",
+        "duration_seconds": 1261.736,
+        "git_commit": "d13e82e79a953d71883e97ec5ff3c45dc11150a3",
+        "commit_matches_expected": null,
+        "seed": "42",
+        "method": "p-mssl",
+        "representation": "smp25",
+        "layers": "all",
+        "layer_count": "25",
+        "lambda_2": "0.01",
+        "lambda_2_selection": "researcher-fixed",
+        "worker_gpu": "NVIDIA RTX A4500",
+        "metrics": {
+          "epoch": {
+            "acc_all": 0.9662382505275273,
+            "ks": 0.9866861741038772,
+            "si": 0.9614592170645982,
+            "er": 0.7848101265822784
+          },
+          "best": {
+            "acc_all": 0.9661743078201931,
+            "ks": 0.9866861741038772,
+            "si": 0.9612168222033692,
+            "er": 0.786618444846293
+          },
+          "opt": {
+            "acc_all": 0.9658545942835219,
+            "ks": 0.9863935625457205,
+            "si": 0.9608532299115259,
+            "er": 0.786618444846293
+          }
+        }
+      }
+    ],
+    "classical-mtrl": [
+      {
+        "run_id": "1e40694559d348db9bc0f72687371fc0",
+        "run_name": "TR-0007__screen__classical-mtrl__ks_si_er__smp25__s42",
+        "experiment": "6",
+        "status": "FINISHED",
+        "duration_seconds": 1086.817,
+        "git_commit": "664c572102f91b253358dcf8699e43a3c9c8e916",
+        "commit_matches_expected": null,
+        "seed": "42",
+        "method": "classical-mtrl",
+        "representation": "smp25",
+        "layers": "all",
+        "layer_count": "25",
+        "lambda_2": null,
+        "lambda_2_selection": null,
+        "worker_gpu": "NVIDIA RTX A4500",
+        "metrics": {
+          "epoch": {
+            "acc_all": 0.9751902295543193,
+            "ks": 0.985515727871251,
+            "si": 0.9793964367955399,
+            "er": 0.7848101265822784
+          },
+          "best": {
+            "acc_all": 0.9744868597736428,
+            "ks": 0.9831748354059985,
+            "si": 0.9795176342261545,
+            "er": 0.7920433996383364
+          },
+          "opt": {
+            "acc_all": 0.9743589743589743,
+            "ks": 0.9846378931967813,
+            "si": 0.9786692522118531,
+            "er": 0.783001808318264
+          }
+        }
+      }
+    ],
+    "wavcse-baseline": [
+      {
+        "run_id": "641b25abd4dc432e8db546bd8ff720f9",
+        "run_name": "TR-0007__screen__wavcse-baseline__ks_si_er__smp25__s42",
+        "experiment": "1",
+        "status": "FINISHED",
+        "duration_seconds": 1054.341,
+        "git_commit": "664c572102f91b253358dcf8699e43a3c9c8e916",
+        "commit_matches_expected": null,
+        "seed": "42",
+        "method": "wavcse-baseline",
+        "representation": "smp25",
+        "layers": "all",
+        "layer_count": "25",
+        "lambda_2": null,
+        "lambda_2_selection": null,
+        "worker_gpu": "NVIDIA RTX A4500",
+        "metrics": {
+          "epoch": {
+            "acc_all": 0.974806573310314,
+            "ks": 0.986100950987564,
+            "si": 0.9781844624893953,
+            "er": 0.7848101265822784
+          },
+          "best": {
+            "acc_all": 0.9746147451883113,
+            "ks": 0.9843452816386248,
+            "si": 0.9787904496424675,
+            "er": 0.7920433996383364
+          },
+          "opt": {
+            "acc_all": 0.9741032035296374,
+            "ks": 0.9865398683247988,
+            "si": 0.9762453035995637,
+            "er": 0.7884267631103075
+          }
+        }
+      }
+    ]
+  }
+}

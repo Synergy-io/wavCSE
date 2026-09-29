@@ -566,29 +566,20 @@ only), and DEC-0014 activates Option 3 for the directed-relation question:
 * `LT-0002` — **complete** (2026-09-22); 15 papers verified across the two selected
   families, verdicts and eligibility gates in `studies/LT-0002/analysis.md`.
   Family B has a clean published pass (MSSL); family A has none.
-* `TR-0007` (MSSL, published arm) — **pre-registered 2026-09-29; `DEC-0015` (human) chose
-  Option A, the faithful published formulation.** The arm is now wired:
-  `04-mssl/README.md`, `04-mssl/mssl_config.yml`, the `mssl` dispatch in
-  `run_improvements.py` and `studies/TR-0007/PLAN.md` exist, and the Ω step implements
-  Eq. (4b)/Eq. (8) with `λ₀ = 1`, the `1/d` applied inside the solver for an explicit `d`,
-  off-diagonal ℓ₁ per the cited graphical lasso, and its own primal–dual optimality
-  certificate. The gate's equation was a mis-transcription (Eq. 4b's barrier with Eq. 8's
-  data term); the primary source governs, the literature card is corrected and the historical
-  gate text is preserved in `studies/TR-0007/NOTE.md`. The three formerly red solver tests
-  are fixed — the analytic gradient was transposed, the bit-exact-zero assertions tested the
-  wrong variable, and the ADMM silently failed to converge at the summary's 1e-4 scale (it
-  returned `Ω ≈ 63·I` where the optimum is `Ω ≈ 7e4·I`); the module is back inside
-  `make check`. Two inputs remain the researcher's: the **λ₂ rule** (`PLAN.md` pre-registers
-  validation selection from the paper's own grid `{0.01, 0.1}`, five-run screen, against a
-  fixed value at three runs) and the **compute envelope** (not created). Plan and exact-commit
-  preflight are prepared; nothing was submitted.
-  * Record conflict: DagsHub already holds `TR-0007__screen__*` runs (seed 0, commits
-    `10aaaea3…`/`3df542d…`, experiment `taskrelation-variant-benchmark`) from a code line
-    absent from this repository's history — `p-mssl` 0.9607 vs `classical-mtrl` 0.9744 and
-    `wavcse-baseline` 0.9737 (`test_epoch_acc_all`), all tagged `rejected`, plus a
-    `scale-corrected` `p-mssl-correlation` run at 0.9644. Retained as evidence and listed in
-    `studies/TR-0007/NOTE.md`; the human decides whether the corrected implementation still
-    warrants its own screen.
+* `TR-0007` (MSSL, published arm) — **CLOSED at `REJECTED` (screen, 2026-09-29)**. The
+  faithful published p-MSSL arm was pre-registered (`DEC-0015`, Option A), fixed at the
+  researcher-fixed `lambda_2 = 0.01` (`DEC-0016`), executed as the registered three-arm seed-42
+  screen on one worker, and classified by its pre-registered rule: `test_epoch_acc_all` 0.9662
+  vs classical MTRL 0.9752 and the matched wavCSE baseline 0.9748 (−0.90pp / −0.86pp; SI −1.79pp
+  / −1.67pp; KS +0.12/+0.06; ER 0.00 in all three arms on the speaker-leaky split), so it beats
+  neither control and regresses SI beyond the 0.20pp bar. Screening-tier diagnosis recorded in
+  `studies/TR-0007/analysis.md` and FL-0005: the coupling term aligns the task summaries
+  (cos ≈ 0.981), `S` becomes near-singular, Ω jumps to a near-uniform precision of trace 1.13e5
+  whose gradient (~1e5) swamps the task gradients (~1e-2), so training plateaus from epoch ≈10 —
+  the scale caveat `PLAN.md` pre-registered, not a solver defect (the Ω step passes its
+  closed-form and optimality-certificate tests). Compute: one worker, 2.96 paid hours, $0.7404,
+  stopped; no confirmation, no λ grid, nothing further authorized. Evidence:
+  `studies/TR-0007/{analysis.md,result.json,screen_result.json,screen_commits.json}`.
 * `TR-0008` (directed relation, project-original) — activated by DEC-0014 §5, **not
   registered**. Its exact relation rule is design work the policy classes as introducing a
   project-original mechanism; it needs either an explicit authorization to design it
@@ -719,22 +710,43 @@ Unresolved questions:
 
 Next recommended action:
 
-**TR-0007: answer the λ₂ rule, then authorize the screen.** Stage 1 (`LT-0002`) and the
-faithfulness gate (`DEC-0015`, Option A) are closed. Controller-side work is complete: the arm
-is wired, all 25 layers are enforced executably
-(`research/tests/test_tr0007_protocol.py`), the published Eq. (8) convention is pinned by
-tests that are back inside `make check`, MLflow/DagsHub credentials were verified with a
-zero-cost read-only authentication check against the real endpoint, and the deterministic
-screen plan plus the exact-commit preflight are prepared. Two human inputs remain: **(1)** the
-λ₂ rule — the source paper publishes no default and selects λ₂ on data, so `PLAN.md`
-pre-registers validation selection from the paper's grid restricted to `{0.01, 0.1}`
-(five-run screen, budget-matched to the control's two-value λ selection) with a
-researcher-fixed value as the three-run alternative; and **(2)**
-`authorizations/TR-0007.yaml`, which does not exist. After those, the screen is
-submittable as registered (seed 42, three arms, one run per arm under
-`VARIANT_BENCHMARK_PROTOCOL.md`, screen then confirm, LOSO for any ER claim). `TR-0008`
-(directed relation, project-original) still needs its own authorization to be designed, and
-the deferred `DG-xxxx` diagnostics stay on the backlog.
+**TR-0007 is closed at `REJECTED`; the next mechanism step is a human decision.** The
+registered screen ran to completion and its classification came from the pre-registered rule
+(FL-0005). Nothing is authorized to follow it: confirmation seeds, a λ grid, `TR-0008`,
+`DG-0007` and any further compute each need a new human grant. Three questions the screen
+leaves, for the researcher rather than for an autonomous cycle: (i) whether a scale-calibrated
+`lambda_2` (validation-selected, or expressed relative to `d`) makes the published precision
+informative instead of dominant — the mechanism-level version of the caveat `PLAN.md`
+pre-registered; (ii) whether the coupling term needs a magnitude control independent of Ω's
+scale; and (iii) whether the shared mean-head summary adapter, the arm's one declared
+deviation, is what limits the comparison. Any revisit needs its own pre-registration with that
+scale question as the stated independent variable; the sparse-precision family itself is not
+closed by a single-seed screen.
+
+Latest iteration (2026-09-29, compute: 2.96 paid hours, $0.7404): **TR-0007 screen executed
+and closed at `REJECTED`.** The human fixed `lambda_2 = 0.01` as a researcher-fixed screening
+value and granted a narrow screen envelope (0.80 USD/GPU-hour, 5.00 USD, 6 h, one worker, the
+existing volume, no new persistent resources, destroy on completion), explicitly leaving
+confirmation, λ grids, `TR-0008` and `DG-0007` unauthorized. The registered three-arm seed-42
+screen ran on one `NVIDIA RTX A4500` (the cheapest compatible offer in the volume's datacenter
+at execution time, $0.25/h, reused for all three arms): p-MSSL 0.9662 vs classical MTRL 0.9752
+and matched wavCSE baseline 0.9748 at the protocol checkpoint, with SI −1.79pp/−1.67pp, KS
++0.12/+0.06 and ER 0.00 in all arms; the pre-registered rule gives `REJECTED`. The mechanism
+diagnosis is measured, not inferred: from the first epoch with the coupling active the summary
+rows align (cos ≈ 0.981), `S` becomes near-singular, Ω jumps to a near-uniform precision of
+trace 1.13e5 and its gradient swamps the task gradients, so training plateaus from epoch ≈10;
+the Ω snapshots also report the ADMM's own residual limit (relative duality gap −0.054 at that
+conditioning). Three jobs failed before producing science and were re-run under the bounded
+retry policy (two worker-container-disk ENOSPC failures during job preparation, and one
+duplicate candidate execution whose manifest could not be persisted because ARC's output keys
+are per `(study, arm, seed)`); one control-plane defect they exposed — a job-preparation failure
+being classified as a non-retryable implementation bug — was fixed with a regression test and
+published. The candidate's collected evidence is at `d13e82e` and the controls' at `664c572`,
+where the diff is control-plane only; `screen_commits.json` records that per arm. The four
+historical `TR-0007__screen__*` runs from outside this repository's history were left untouched.
+Compute was stopped at the end (billing off); destruction is refused by the ledger guard that
+requires every recorded run to have verified outputs, which the pre-science failures cannot
+satisfy.
 
 Latest iteration (2026-09-29, no compute result): **DG-0007 screen re-attempted; two
 worker-environment defects block it.** With the MLflow credentials supplied, `34d2ad7`

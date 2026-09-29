@@ -203,3 +203,41 @@ parameter-summary inadequacy are all still untested.
 re-ablate sampling composition expecting a mechanism justification. A future
 mechanism must be motivated from relation structure or from an explicitly
 regime-conditioned claim.
+
+---
+
+## FL-0005 — Faithful p-MSSL does not beat the controls at the researcher-fixed lambda_2 (screening)
+
+**Status:** `SCREENING` negative result (2026-09-29, single seed). Not an established finding: a
+screen cannot carry a claim (F1), and this one is scoped to one fixed lambda_2.
+
+**Observation:** Under the shared variant protocol at seed 42, the faithful published p-MSSL arm
+(Gonçalves et al. 2016, Eq. (4b)/(8), lambda_0 = 1, lambda_2 = 0.01 researcher-fixed per
+DEC-0016, all 25 layers, `smp` 0.5, 30 epochs, batch 2048, AdamW lr 0.0025) reaches
+`test_epoch_acc_all` 0.9662 against classical MTRL 0.9752 and the matched wavCSE baseline
+0.9748 — below both, with SI down 1.79pp / 1.67pp, KS up ~0.1pp and ER unchanged (all three arms
+0.7848 on the speaker-leaky ordinary split). Pre-registered rule → `REJECTED`.
+
+**Why, measured (screening-tier diagnosis):** the Ω step is live but mis-scaled for this
+representation. From the first epoch in which the coupling term is active, the three task
+summaries align (implied cosines +0.981 each pair) and Ω jumps to a near-uniform precision of
+trace 1.13e5, where its coupling gradient (~1e5) swamps the task gradients (~1e-2) and
+validation plateaus from epoch ~10. `omega_history.json` also shows the ADMM's own limit at
+that conditioning (relative duality gap −0.054, its 2000-iteration cap, reported per snapshot).
+The solver itself is verified (closed-form tests + the problem's optimality certificate), and no
+protocol field moved.
+
+**Rejected reading:** "p-MSSL does not help for KS/SI/ER". The screen used one seed, one split,
+and one researcher-fixed lambda_2 whose scale the source paper explicitly selects on data. It
+cannot separate the method from that choice.
+
+**What this does not explain:** whether a scale-calibrated lambda_2 (validation-selected, or
+expressed relative to `d`) would make the precision informative; whether the coupling term needs
+a magnitude control independent of Ω's scale; whether the shared mean-head summary adapter (the
+declared deviation) is the limiting factor. All are protocol-level questions for a human
+decision, not post-hoc tuning targets.
+
+**Consequence:** no confirmation run, no lambda grid, and no re-run is authorized by this
+screen; TR-0007 stays closed at `REJECTED` until a human decision opens a further stage. The
+sparse-precision family is not closed by this result, but any revisit needs its own
+pre-registration with the scale question stated up front.

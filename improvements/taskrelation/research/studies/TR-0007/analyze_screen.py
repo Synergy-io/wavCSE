@@ -44,12 +44,28 @@ CHECKPOINT = "epoch"
 STUDY_DIR = Path(__file__).resolve().parent
 REPO_ROOT = STUDY_DIR.parents[4]
 COMMIT_FILE = STUDY_DIR / "screen_commit.txt"
+SCREEN_COMMITS_FILE = STUDY_DIR / "screen_commits.json"
 
 
 def _expected_commit():
     if COMMIT_FILE.exists():
         return COMMIT_FILE.read_text().strip()
     return None
+
+
+def _screen_commits():
+    """Per-arm expected commits.
+
+    The screen normally runs all three arms at one commit. It ran at two when an
+    ENOSPC during job preparation had to be fixed in the control plane (no
+    scientific code changed): the candidate arm's collected run predates that
+    fix, and ARC's per-(study, arm, seed) output keys make a same-arm re-run
+    unable to persist its manifest. The file records that, so the analysis binds
+    each arm to the commit its evidence came from instead of to one SHA.
+    """
+    if SCREEN_COMMITS_FILE.exists():
+        return json.loads(SCREEN_COMMITS_FILE.read_text())
+    return {}
 
 
 def _forced_commit():
@@ -74,8 +90,15 @@ def _runs(client):
             if method not in METHODS:
                 continue
             commit = run.data.tags.get("git_commit")
-            expected = _forced_commit() or _expected_commit()
-            if expected and commit != expected:
+            forced = _forced_commit()
+            if forced and commit != forced:
+                continue
+            expected = _screen_commits().get(method) or _expected_commit()
+            if forced is None and expected and commit != expected:
+                continue
+            # A duplicate execution that completed but whose outputs were never
+            # collected is never screen evidence, however good its metrics look.
+            if run.data.tags.get("status") == "duplicate_not_collected":
                 continue
             found.setdefault(method, []).append(run)
     return found
@@ -203,6 +226,7 @@ def main():
         "seed": SEED,
         "checkpoint": CHECKPOINT,
         "expected_commit": _forced_commit() or _expected_commit(),
+        "expected_commits_per_arm": _screen_commits(),
         "regression_limit_pp": REGRESSION_LIMIT_PP,
         "classification": decision,
         "rationale": rationale,
@@ -212,6 +236,9 @@ def main():
             "lambda_2 = 0.01 is a researcher-fixed screening value (DEC-0016), not a paper default, "
             "so a REJECTED outcome is scoped to this fixed lambda_2.",
             "No confirmation was run and none is authorized by this screen.",
+            "Where the arms ran at different commits, the diff between those commits is "
+            "control-plane only (job-prep failure classification); no scientific "
+            "configuration or training code differs.",
         ],
         "arms": arms,
     }

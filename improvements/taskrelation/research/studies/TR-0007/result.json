@@ -1,0 +1,133 @@
+{
+  "study_id": "TR-0007",
+  "stage": "screen",
+  "seed": 42,
+  "decision": "REJECTED",
+  "decision_basis": "aggregate accuracy does not exceed: classical-mtrl, wavcse-baseline; per-task regression beyond 0.20pp: classical-mtrl si -1.7937pp; wavcse-baseline si -1.6725pp",
+  "decision_rule": "PLAN.md: PROMISING iff test_epoch_acc_all > both controls and every per-task accuracy within 0.20pp of both; REJECTED otherwise",
+  "arms": {
+    "p-mssl": {
+      "run_id": "a82144d2d0004b55a8f986c10a78e3f2",
+      "run_name": "TR-0007__screen__p-mssl__ks_si_er__smp25__s42",
+      "commit": "d13e82e79a953d71883e97ec5ff3c45dc11150a3",
+      "status": "FINISHED",
+      "metric_checkpoint": "epoch",
+      "acc_all": 0.9662382505275273,
+      "ks": 0.9866861741038772,
+      "si": 0.9614592170645982,
+      "er": 0.7848101265822784,
+      "lambda_2": "0.01",
+      "lambda_2_selection": "researcher-fixed",
+      "worker_gpu": "NVIDIA RTX A4500",
+      "layer_count": "25"
+    },
+    "classical-mtrl": {
+      "run_id": "1e40694559d348db9bc0f72687371fc0",
+      "run_name": "TR-0007__screen__classical-mtrl__ks_si_er__smp25__s42",
+      "commit": "664c572102f91b253358dcf8699e43a3c9c8e916",
+      "status": "FINISHED",
+      "metric_checkpoint": "epoch",
+      "acc_all": 0.9751902295543193,
+      "ks": 0.985515727871251,
+      "si": 0.9793964367955399,
+      "er": 0.7848101265822784,
+      "lambda_2": null,
+      "lambda_2_selection": null,
+      "worker_gpu": "NVIDIA RTX A4500",
+      "layer_count": "25"
+    },
+    "wavcse-baseline": {
+      "run_id": "641b25abd4dc432e8db546bd8ff720f9",
+      "run_name": "TR-0007__screen__wavcse-baseline__ks_si_er__smp25__s42",
+      "commit": "664c572102f91b253358dcf8699e43a3c9c8e916",
+      "status": "FINISHED",
+      "metric_checkpoint": "epoch",
+      "acc_all": 0.974806573310314,
+      "ks": 0.986100950987564,
+      "si": 0.9781844624893953,
+      "er": 0.7848101265822784,
+      "lambda_2": null,
+      "lambda_2_selection": null,
+      "worker_gpu": "NVIDIA RTX A4500",
+      "layer_count": "25"
+    }
+  },
+  "deltas_vs_controls_pp": {
+    "classical-mtrl": {
+      "acc_all": -0.8952,
+      "ks": 0.117,
+      "si": -1.7937,
+      "er": 0.0
+    },
+    "wavcse-baseline": {
+      "acc_all": -0.8568,
+      "ks": 0.0585,
+      "si": -1.6725,
+      "er": 0.0
+    }
+  },
+  "protocol": {
+    "pooling": "smp:0.5",
+    "layers": "all (25)",
+    "epochs": 30,
+    "batch_size": 2048,
+    "optimizer": "AdamW",
+    "learning_rate": 0.0025,
+    "checkpoint": "epoch",
+    "lambda_0": 1.0,
+    "lambda_1": 0.0,
+    "lambda_2": 0.01,
+    "lambda_2_selection": "researcher-fixed (DEC-0016)",
+    "normalize_w": true,
+    "mssl_warmup_epochs": 3
+  },
+  "commits": {
+    "p-mssl": "d13e82e79a953d71883e97ec5ff3c45dc11150a3",
+    "classical-mtrl": "664c572102f91b253358dcf8699e43a3c9c8e916",
+    "wavcse-baseline": "664c572102f91b253358dcf8699e43a3c9c8e916",
+    "note": "candidate at d13e82e; controls at 664c572; the diff is control-plane only (job-prep failure classification). See screen_commits.json."
+  },
+  "mechanism_diagnosis": {
+    "summary": "Omega is live but mis-scaled at lambda_2 = 0.01: the coupling aligns the task summaries to cos ~ 0.981, S becomes near-singular, Omega jumps to trace 1.13e5 and its gradient (~1e5) swamps the task gradients (~1e-2), so training plateaus from epoch ~10.",
+    "omega_epoch3_trace": 6308,
+    "omega_epoch4plus_trace": 113438,
+    "implied_cosines_epoch3": [
+      0.261,
+      0.035,
+      0.009
+    ],
+    "implied_cosines_epoch4plus": [
+      0.981,
+      0.981,
+      0.981
+    ],
+    "relative_duality_gap_final": -0.0535,
+    "duality_gap_note": "the ADMM hit its 2000-iteration cap at that conditioning; reported per snapshot, not hidden; it does not change the verdict",
+    "solver_defect": false
+  },
+  "compute": {
+    "worker": "8jy5oamk8dydd9",
+    "gpu": "NVIDIA RTX A4500 (20 GB, $0.25/h, SECURE, EU-RO-1)",
+    "paid_wall_clock_hours": 2.9624,
+    "cost_usd": 0.7404,
+    "workers_created": 1,
+    "replacements": 0,
+    "jobs_submitted": 6,
+    "jobs_failed_before_science": 3,
+    "duplicate_executions": 1,
+    "envelope": {
+      "max_gpu_hourly_usd": 0.8,
+      "max_total_gpu_usd": 5.0,
+      "max_wall_clock_hours": 6
+    },
+    "worker_final_state": "STOPPED (billing off); destruction refused by the ledger guard that requires every recorded run to have verified outputs, which the three pre-science infrastructure failures cannot satisfy"
+  },
+  "caveats": [
+    "Screen evidence only: one seed, one split; cannot establish an improvement (F1).",
+    "ER is the ordinary, speaker-leaky split: screening context only, not an ER result (F3).",
+    "lambda_2 = 0.01 is a researcher-fixed screening value (DEC-0016), not a paper default, so a REJECTED outcome is scoped to this fixed lambda_2.",
+    "No confirmation was run and none is authorized by this screen.",
+    "Where the arms ran at different commits, the diff between those commits is control-plane only (job-prep failure classification); no scientific configuration or training code differs."
+  ],
+  "analyzed_at": "2026-09-29T22:06:01+00:00"
+}
