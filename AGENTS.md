@@ -97,9 +97,16 @@ A skill mentioning one of these does not relax it.
 
 ```bash
 uv sync                 # environment comes from uv.lock; commit uv.lock when pyproject.toml changes
-uv run python -m unittest discover -s improvements/taskrelation/research/tests -t improvements/taskrelation/research/tests
+make check              # agent assets + compute backend + research tests (no GPU, no network)
 uv run python -m improvements.run_improvements --help    # entry-point import smoke
 ```
+
+`make check` excludes exactly one module, `research/tests/test_mssl_omega_solver.py`,
+which fails at HEAD (2 failures, 1 error) on the unregistered `04-mssl` draft; fixing
+it means deciding MSSL's intended mathematics, so it is a scientific call, not a
+mechanical repair. `make research-check-all` runs it, and `make research-check` prints
+the exclusion rather than hiding it. Never weaken or delete a failing test to make
+the gate pass.
 
 - Run the improvements entry point **as a module** from the repository root
   (`python -m improvements.run_improvements --model <name> --task_type ks_si_er`); run as a file, its
@@ -113,6 +120,15 @@ uv run python -m improvements.run_improvements --help    # entry-point import sm
 
 ## Engineering conventions
 
+- **Paid compute goes through the backend, inside an envelope.** `improvements/compute`
+  (`python -m improvements.compute …`) is the only route to paid compute: it drives the
+  infrastructure CLI over its JSON contract, derives spend from provider facts, keys
+  submissions by a deterministic job identity, and sweeps what it created. The human's
+  written authority is `improvements/taskrelation/research/authorizations/<SCOPE>.yaml`;
+  the backend consumes it and can never create, renew or widen it. What may be decided
+  without the researcher is classified in `.agents/policies/autonomy.md`. Runtime facts
+  (worker and job identifiers, prices, leases, spend) live under the controller's state
+  directory, never in Git.
 - **Numbered architecture folders.** A real architecture attempt is self-contained in
   `improvements/<category>/0N-<name>/` (`<name>_model.py`, optional `<name>_trainer.py`, `<name>_config.yml`,
   `README.md`), not the older flat `models/`/`trainers/`/`configs/` layout. The leading digit and

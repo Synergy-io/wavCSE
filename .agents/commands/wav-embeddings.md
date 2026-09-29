@@ -15,6 +15,11 @@ Boundaries: may-provision-compute, mutates-research-state
 
 ## Must not
 
+- **Never provision paid compute without an authorization envelope.** Extraction
+  is a paid lane: it runs under
+  `improvements/taskrelation/research/authorizations/<SCOPE>.yaml` and goes
+  through `improvements/compute`, exactly like a training stage. If the scope
+  has no envelope, stop and report it — never improvise a worker.
 - Never regenerate a set that already exists canonically and matches the
   required scientific configuration; reuse verified compatible artifacts.
 - Never change the scientific configuration for operational convenience:

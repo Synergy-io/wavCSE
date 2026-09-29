@@ -20,8 +20,9 @@ Boundaries: mutates-research-state, may-provision-compute
 2. The plan's eligibility gates are met: a verified published source with a
    faithfulness check, a matched control, a stated evaluation protocol, and the
    fixed conditions of the variant benchmark contract.
-3. The plan's compute allocation is authorized and no other Study of this
-   programme already holds the required compute.
+3. The plan's compute allocation is authorized by a committed envelope under
+   `improvements/taskrelation/research/authorizations/`, and no other Study of
+   this programme already holds the required compute.
 
 If the plan is missing, unapproved, or a gate fails: stop and report the exact
 unmet gate. Never substitute a different experiment, choose a study yourself,
@@ -36,9 +37,12 @@ commit.
 2. Confirm the fixed conditions are respected: upstream representation, task
    set, splits, pooling, layer set, epochs, optimizer, sampling and checkpoint
    policy identical to the control arms. Never adjust them.
-3. Provision compute only within the plan's authorization, at most two training
-   jobs at a time, using durable detached execution with Study-identified
-   session names and logs kept with the Study.
+3. Acquire compute through the backend, never by hand:
+   `python -m improvements.compute worker-ensure --scope <STUDY_ID> --plan <plan>`
+   provisions or reuses a worker strictly inside the committed envelope, and
+   `advance` submits the stage's exact-commit jobs. At most the envelope's
+   concurrent workers, never a hand-written `infra` invocation, and never a
+   scientific parameter changed to fit the hardware.
 4. Run exactly what the plan specifies: screening (one explicit seed) or
    confirmation (matched seeds 0-4), together with the plan's matched control
    arms. Any ER performance claim additionally requires speaker-independent
@@ -64,7 +68,9 @@ commit.
    `improvements/taskrelation/research/FINDINGS.md` when a durable finding is
    justified. Keep `improvements/taskrelation/research/STATE.md` a concise
    restart document.
-10. Stop paid compute no longer needed, then report the outcome and next action.
+10. Stop paid compute no longer needed
+    (`python -m improvements.compute finish --scope <STUDY_ID> --plan <plan>`),
+    then report the outcome and next action.
 
 ## Never
 

@@ -36,9 +36,13 @@ Boundaries: read-only, no-commit, no-paid-compute
 2. Inspect only the most recent Study folders under
    `improvements/taskrelation/research/studies/` and the architecture READMEs
    needed to interpret them. Do not re-derive settled history.
-3. Reconcile runtime reality through the project's runtime tooling (the `infra`
-   CLI): what is running, what is queued, what artifacts exist. Do not assume
-   from records alone.
+3. Reconcile runtime reality with
+   `python -m improvements.compute status --scope <SCOPE> --json` — it is
+   strictly read-only and reports the envelope, spend, leases and jobs in
+   flight. When it names an active scope you may additionally run
+   `sweep --scope <SCOPE>` **without** `--execute`, which is a dry-run plan:
+   report it, never act on it. This command provisions nothing, submits nothing,
+   destroys nothing, writes no runtime state, and consumes no spend.
 4. Report in this order: executive summary; current position, phase and
    champion; established findings with a confidence label each (strong /
    moderate / screening only); the most recent Studies and what changed because

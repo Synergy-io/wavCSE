@@ -59,11 +59,53 @@ The wavcse-infra checkout:
 - `wavcse-artifact-pipeline` — artifact validation, publication and caching.
 
 Load the relevant companion before consequential work in its domain; follow it
-rather than paraphrasing it from here.
+rather than paraphrasing it from here. How to reach them from here without
+changing directory is in *Infrastructure delegation* below.
+
+## Infrastructure delegation
 
 Infrastructure actions happen through the `infra` CLI in the wavcse-infra
 checkout. Never reimplement provisioning, transfer, caching or publication in
 ad-hoc shell, even when that looks faster to type.
+
+Do not hand-write `infra` invocations either. The compute backend
+(`improvements/compute`, `python -m improvements.compute …`) is the only route
+to paid compute: it holds the authorization envelope, derives spend from
+provider facts, keyed submissions and the sweep. Its README documents the verbs;
+`.agents/policies/autonomy.md` documents what may be decided without the
+researcher.
+
+**Infra competence.** The control plane's own skills are canonical and must not
+be copied here. Resolve the checkout with
+`python -m improvements.compute resolve --json`, then read the specialist skill
+you need from `<checkout>/.agents/skills/`:
+
+- `wavcse-infra-operator` — controller, workers, jobs, storage, lifecycle;
+- `gpu-research-operator` — GPU choice, price ceilings, throughput, stopping;
+- `wavcse-artifact-pipeline` — artifact identity, manifests, cache, read-back.
+
+When a failure needs infrastructure judgement rather than a CLI call, delegate
+to a subagent rooted in that checkout with those skills available, and bring
+back the conclusion — the researcher should never have to change directory.
+
+## Cycle is not complete until
+
+The goal's work is executed, artifacts are published or explicitly staged as
+unverified, evidence is analysed, persistent state matches reality, and paid
+compute for finished work is stopped. A launched job is not a completed cycle.
+
+A cycle advances until one of exactly three things stops it, defined by
+`.agents/policies/autonomy.md` and the sequence in
+`.agents/commands/wav-cycle.md`:
+
+1. a decision the policy classifies as HUMAN_DECISION — then write the gate and
+   stop, with a conservative default stated;
+2. a HARD_STOP — then report the blocking fact and what was tried;
+3. the authorized scope is exhausted — the Study is closed and no READY action
+   has a protocol-determined path.
+
+Reaching the research/infra boundary is not a stop. Neither is finishing one
+stage, nor provisioning a worker, nor submitting a job.
 
 ## Guardrails
 
