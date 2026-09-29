@@ -119,13 +119,28 @@ def install(units, target_dir, *, dry_run=False):
         written.append(path)
         if dry_run:
             continue
-        os.makedirs(target_dir, exist_ok=True)
         staging = path + ".staging"
-        with open(staging, "w", encoding="utf-8") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(staging, path)
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+            with open(staging, "w", encoding="utf-8") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(staging, path)
+        except OSError as exc:
+            # The unit directory is a privilege boundary, not a crash: `--user` exists
+            # precisely for a controller that cannot write the system directory. A
+            # refused install leaves no staging file and no half-written unit behind.
+            try:
+                os.unlink(staging)
+            except OSError:
+                pass
+            raise ConfigurationError(
+                "the unit {} could not be written into {}: {}. Install with "
+                "sufficient privileges for that directory, or install user units with "
+                "`--user` (`loginctl enable-linger` is then required for the timer to "
+                "run with no session)".format(name, target_dir, exc)
+            ) from exc
     return {"target_dir": target_dir, "written": written, "unchanged": unchanged,
             "changed": bool(written), "dry_run": bool(dry_run)}
 

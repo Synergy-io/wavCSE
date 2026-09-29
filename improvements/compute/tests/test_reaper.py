@@ -369,6 +369,29 @@ class ReaperUnitTests(ComputeTestCase):
         self.assertTrue(result["changed"])
         self.assertFalse(os.path.exists(target))
 
+    @unittest.skipIf(os.geteuid() == 0, "root ignores directory permissions")
+    def test_an_unwritable_unit_directory_is_refused_and_leaves_nothing_behind(self):
+        """A privilege boundary is reported as a refusal, not as a traceback.
+
+        The system unit directory needs privileges a plain operator does not have, and
+        `--user` is the supported answer. Either way the refusal must name the directory
+        and must not leave a staging file or a half-written unit behind.
+        """
+
+        from improvements.compute.errors import ConfigurationError
+
+        target = os.path.join(self.home, "units")
+        os.makedirs(target)
+        os.chmod(target, 0o500)
+        self.addCleanup(os.chmod, target, 0o700)
+
+        with self.assertRaises(ConfigurationError) as caught:
+            self.units_module.install(self.units, target)
+
+        self.assertIn(target, str(caught.exception))
+        self.assertIn("--user", str(caught.exception))
+        self.assertEqual(sorted(os.listdir(target)), [])
+
     def test_installing_never_invokes_systemctl(self):
         """Describing the timer must not be able to start it."""
 
