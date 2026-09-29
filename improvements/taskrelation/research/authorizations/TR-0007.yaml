@@ -1,0 +1,33 @@
+# TR-0007 — compute authorization (SCREEN ONLY)
+#
+# Granted by the researcher in the session of 2026-09-29 (recorded as DEC-0016).
+# It authorizes the three-arm seed-42 screen under the frozen protocol, and nothing
+# else: no confirmation seeds, no lambda grid, no additional architecture experiments,
+# no TR-0008, no DG-0007, no additional persistent resources. An agent must not widen it;
+# a change to any field is a new human grant.
+schema_version: 1
+scope: TR-0007
+granted_by: Kevin Sanjula (human grant, DEC-0016)
+granted_at: "2026-09-29T19:07:17+00:00"
+expires_at: "2026-10-06T19:07:17+00:00"
+
+budget:
+  max_gpu_hourly_usd: 0.80      # ceiling handed to the control plane's price guard
+  max_total_gpu_usd: 5.00       # cumulative for this scope, from provider facts
+  max_wall_clock_hours: 6       # cumulative paid wall clock
+
+concurrency:
+  max_simultaneous_workers: 1
+  replacement_workers_allowed: true
+
+resources:
+  existing_network_volume_allowed: true
+  network_volume_selector:      # reuses an existing volume; never creates one
+    min_size_gb: 200
+    datacenter: EU-RO-1
+  new_persistent_resources: false
+  container_disk_gb_max: 60
+
+stop_policy:
+  destroy_on_completion: true
+  retain_for_reuse_hours: 0
