@@ -167,7 +167,10 @@ scale**, which is a sharper statement than the draft's "inert" alternative.
 
 * One worker, `al5b4m763ci2bu`, `NVIDIA L4`, `$0.49/h`, EU-RO-1, the existing 200 GB network volume;
   all four arms sequentially on it; container disk 100 GB (± the envelope's 120 GB ceiling).
-* **Destroyed** at the end (`finish` → `destroy`), so billing stopped when the science did.
+  **Destroyed** at the end (`finish` → `destroy`), so billing stopped when the science did. The
+  volume that the cache and the raw-corpus farm lived on was **deprovisioned the same day** on the
+  researcher's instruction; nothing canonical was lost, and the rebuild recipe — raw tree, counts,
+  disk rules, GPU filter, cost shape — is kept in `../../WORKER_ENVIRONMENT.md`.
 * Runs (DagsHub MLflow, experiment per arm as the naming convention requires):
   `mssl-l2-0p01` `03e9b2d26bdf4691b455bb324a11a82c`, `mssl-l2-0p1` `237f38800a05409da185bcd0454652a7`,
   `classical-mtrl` `ff9f3b138d2c4452acc5dcefcc72f2ac`, `wavcse-baseline` `09f78efc2d2940d4a0e028804702f7a7`.

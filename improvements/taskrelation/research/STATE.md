@@ -599,6 +599,16 @@ only), and DEC-0014 activates Option 3 for the directed-relation question:
   recorded diagnosis. Evidence: `studies/TR-0013/{analysis.md,result.json,NOTE.md,mechanism/}`;
   negative evidence FL-0006. Nothing follows it: confirmation, LOSO and any further λ need a new
   human grant.
+* **Worker environment and the cache volume (read before the next paid run).** The shared 200 GB
+  network volume `wavcse-vol-cache-85bcc73be71f` (`9y5t57z98h`, EU-RO-1) was **destroyed
+  2026-09-30** on the researcher's instruction once TR-0013 closed — nothing canonical was lost (S3
+  holds every embedding artifact; the infra volume record keeps the deprovisioning history), but the
+  pre-provisioned **raw-corpus farm** went with it. The rebuild recipe, the exact raw tree the
+  loader needs (`speechcommand/SpeechCommands/speech_commands_v0.01`, `voxceleb/{wav,iden_split.txt}`,
+  `iemocap/IEMOCAP/Session*`; verified counts 64 727 / 153 516 / 10 039), the container-disk rules
+  that cost TR-0013 six attempts, the GPU-compatibility filter (`sm_90` ceiling) and the measured
+  cost shape of a four-arm screen are kept as knowledge in
+  `WORKER_ENVIRONMENT.md` — the file to read before provisioning anything.
 * `TR-0012` (scale-commensurate coupling) — still a **proposal only**, `not registered`, nothing
   authorized: it declares a deviation from a published objective, which is a `HUMAN_DECISION`-class
   faithfulness question. TR-0013's result is the evidence that makes it the remaining question (the
@@ -637,11 +647,17 @@ only), and DEC-0014 activates Option 3 for the directed-relation question:
   question is **resolved** (`DEC-0017`, human, 2026-09-29): historical MTRL is **retained** as
   the §2 in-category control and reproducibility anchor, and normalization-corrected MTRL
   remains a distinct successor experimental arm — so `DG-0007` is now blocked on
-  **authorization coverage alone**.
-* the exact commit is **local-only**: `origin` publishes
-  `feature/mssl-task-relation-study` at `05fa10c`, so any worker request is refused until
-  the developer pushes the commit `preflight` resolves. Publication is a developer action,
-  never performed by a cycle.
+  **authorization coverage alone**. Record note (2026-09-30): its plan and envelope select a
+  `>= 200 GB` STANDARD volume in EU-RO-1, and that shared volume was deprovisioned the same day
+  (`WORKER_ENVIRONMENT.md`); its first paid action would therefore also need the resource question
+  re-answered (rebuild the cache or declare the raw-tree prerequisite again), or the plan's own
+  resource declaration. `DG-0007`'s evidence from 2026-09-29 is unaffected: its collected run's
+  outputs are in canonical storage.
+* Publication state (refreshed 2026-09-30): `origin` publishes
+  `feature/mssl-task-relation-study` at `134ae918d9bb4be4672f0b4ae752e4ebb10e4f89`, which includes
+  TR-0013's executed commit `f2d746a86f7cd191b6e1608c9ff1a8629dded25b`. Publication is a developer
+  action — the controller's own key pushed TR-0013's registration, worker-choice and records
+  commits as fast-forwards; a cycle still never publishes on its own.
 * `TR-xxxx` variant Studies — one shared matched protocol, screen then confirm.
 * Deferred (not cancelled): the `DG-xxxx` diagnostics below.
 
