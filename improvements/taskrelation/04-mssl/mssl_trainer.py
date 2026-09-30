@@ -184,8 +184,18 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
         num_tasks = self.model.num_tasks
         omega_double = omega.double()
         off_diagonal = omega_double - torch.diag(torch.diagonal(omega_double))
-        upper = torch.triu(off_diagonal, diagonal=1)
-        zero_offdiagonals = int((upper == 0.0).sum().item())
+        # Exact support of the relation object. The edges are the strict-upper
+        # index pairs; the count has to be taken over those pairs explicitly,
+        # because `torch.triu` returns the *whole* matrix with its lower part
+        # zeroed, so counting zeros in its output also counts the zeroed region
+        # (a 3-task snapshot with two absent edges then reported eight zeros and
+        # a negative edge count -- fixed 2026-09-30; the raw Omega was recorded
+        # correctly throughout, so the earlier records are recoverable from it).
+        edge_pairs = [(i, j) for i in range(num_tasks) for j in range(i + 1, num_tasks)]
+        zero_offdiagonals = sum(
+            1 for i, j in edge_pairs if float(off_diagonal[i, j]) == 0.0
+        )
+        support_edges = len(edge_pairs) - zero_offdiagonals
 
         entry = {
             "epoch": epoch,
@@ -203,7 +213,7 @@ class MultiTasksModelTrainerMSSL(MultiTasksModelTrainer):
                 off_diagonal.abs().sum() / max(num_tasks * (num_tasks - 1), 1), 4
             ),
             "zero_offdiagonals": zero_offdiagonals,
-            "support_edges": int(num_tasks * (num_tasks - 1) / 2) - zero_offdiagonals,
+            "support_edges": support_edges,
             "coupling_value": self._coupling_value(omega),
         }
         entry.update(self._summary_geometry())

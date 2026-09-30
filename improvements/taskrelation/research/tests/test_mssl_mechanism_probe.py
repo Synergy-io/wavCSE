@@ -225,6 +225,26 @@ class MechanismRecordTests(unittest.TestCase):
                     normalised, raw / (raw + model.omega_epsilon), places=4
                 )
 
+    def test_support_counts_only_the_strict_upper_edges(self):
+        # Regression: `torch.triu` returns the whole matrix with its lower part
+        # zeroed, so counting zeros in its output counted that zeroed region too
+        # and reported e.g. 8 zeros / -5 edges for the 3-task snapshot below.
+        # The raw Omega was always recorded correctly; this pins the derived
+        # counts to the strict-upper edge pairs.
+        model = _build_model(self.model_module, lambda_2=0.01)
+        trainer = _bare_trainer(self.trainer_module, model)
+        snapshot = torch.tensor([[10.0, -9.0, 0.0],
+                                 [-9.0, 10.0, 0.0],
+                                 [0.0, 0.0, 20.0]])
+        model.omega.copy_(snapshot)
+        trainer._record_omega(7)
+        entry = trainer.omega_history[-1]
+        self.assertEqual(entry["zero_offdiagonals"], 2)
+        self.assertEqual(entry["support_edges"], 1)
+        self.assertEqual(entry["support_edges"] + entry["zero_offdiagonals"], 3)
+        self.assertEqual(entry["partial_correlations"][0][2], 0.0)
+        self.assertGreater(entry["partial_correlations"][0][1], 0.0)
+
     def test_coupling_scale_artifact_is_written_with_its_provenance(self):
         model = _build_model(self.model_module, lambda_2=0.1)
         trainer = _bare_trainer(self.trainer_module, model)
