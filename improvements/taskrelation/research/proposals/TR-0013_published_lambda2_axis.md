@@ -1,6 +1,14 @@
 # TR-0013 — pre-registration DRAFT: the published `λ₂` axis, before any deviation
 
-**Status:** `DRAFT — NOT REGISTERED`. Allocated identifier `TR-0013` for drafting only: no
+**Status:** `EXECUTED — REGISTERED as TR-0013, screened 2026-09-30, closed REJECTED.` This document is
+kept as the design record it was; the study itself is `../studies/TR-0013/` (pre-registration
+`PLAN.md`, result and mechanism `analysis.md`, `result.json`, `NOTE.md`) and the negative evidence is
+`FAILURES.md` FL-0006. What the screen found, in one line: both published values reach the same
+aggregate (0.965727), both are ~0.90pp below the in-category control with SI down ~1.8pp, the
+validation selection is indiscriminate (0.0702pp), and the `λ₂` axis changes the relation object
+(support 3 → 1) without changing the collapse, the plateau or the outcome.
+
+**Status before execution (historical):** `DRAFT — NOT REGISTERED`. Allocated identifier `TR-0013` for drafting only: no
 `STUDIES.jsonl` entry, no `studies/TR-0013/` folder, no authorization envelope, no config, no run.
 Registration needs a compute envelope for the screen (the arm's own documentation already
 pre-registers the question, and the arm stays faithful, so no faithfulness decision is required for

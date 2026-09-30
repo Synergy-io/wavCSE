@@ -241,3 +241,47 @@ decision, not post-hoc tuning targets.
 screen; TR-0007 stays closed at `REJECTED` until a human decision opens a further stage. The
 sparse-precision family is not closed by this result, but any revisit needs its own
 pre-registration with the scale question stated up front.
+
+## FL-0006 — The published `lambda_2` axis does not rescue the faithful p-MSSL arm (screening)
+
+**Status:** `SCREENING` negative result (2026-09-30, single seed, single split, Study `TR-0013`).
+Not an established finding: a screen cannot carry a claim (F1), and the result is scoped to the
+paper's two smallest published penalty values.
+
+**Observation:** under the shared variant protocol at seed 42, with `lambda_2` resolved the way the
+source paper's own procedure resolves it — validation-selected over its two smallest published grid
+values `{0.01, 0.1}` — the faithful p-MSSL arm reaches `test_epoch_acc_all` **0.965727 at *both*
+values**, against classical MTRL 0.974679 and the matched wavCSE baseline 0.975190. The selected
+representative (`0.01`, chosen by the pre-registered tie rule) is `−0.8952pp` below the in-category
+control and `−0.9464pp` below the baseline, with SI down `−1.7816pp` / `−1.8543pp`; KS is up
+~`+0.05pp` and ER up `+0.36…+0.54pp` on the speaker-leaky ordinary split (context only, F3).
+Pre-registered rule → `REJECTED`.
+
+**Why the axis cannot rescue it, measured.** The selection signal itself is blind: `val_acc_all` at
+the protocol checkpoint is `0.963311` vs `0.964013` — `0.0702pp`, inside the `0.20pp` tie band the
+pre-registration declared. `lambda_2` does change the relation object materially (support 3 with
+partials all `+0.4911` and trace `1.13e5` at `0.01`, versus support 1 with the two ER edges exactly
+zero, partials `+0.8997`/0/0, trace `1.28e5` and a converged Ω step at `0.1`), and it changes the
+gradient regime by orders of magnitude (coupling/task gradient ratio ≈`0.015` at the end for `0.01`,
+up to `8.3e9` for `0.1`), yet both values collapse the representation (cosines `0.9999`), both
+plateau (flat from epoch 11/12 for 20/19 epochs), and both end at the same aggregate accuracy. The
+coupling's *value* stays `O(2–4e3)` against a batch-mean task loss `≈0.5` at both values.
+
+**Refinement of the earlier diagnosis (this is a correction, not a new mechanism).** TR-0007/FL-0005
+recorded the coupling gradient as `~1e5` "against task gradients `~1e-2`". Measured like-for-like —
+both gradients over the same parameter set the optimizer updates, by autograd — the relation
+gradient is *smaller* than the task gradient from epoch 6 on at `lambda_2 = 0.01` (ratio `0.015` at
+the end, exceeding 10 only at epochs 4–5). The earlier figure compared an analytic W-space gradient
+(`2λ₀ΩW`, `O(d)` by construction) with a task-gradient number of different provenance and parameter
+scope. Value-scale domination is real; permanent gradient-scale domination at `lambda_2 = 0.01` is
+not reproduced.
+
+**Rejected reading:** "p-MSSL cannot help for KS/SI/ER", and "the arm failed only because `lambda_2`
+was researcher-fixed". The first is beyond a one-seed screen; the second is now measured false at
+this representation.
+
+**Consequence:** TR-0007's `lambda_2` caveat is closed as a faithful explanation. What remains open is
+the *imposition* question — the coupling's magnitude — which is a declared deviation on a published
+arm and therefore a `HUMAN_DECISION` class (proposal `TR-0012`), not another `λ`. A defect found
+while recording this result (a wrong `support_edges` field) is fixed with a regression test and
+disclosed in `studies/TR-0013/analysis.md` §5; the raw Ω was always recorded correctly.

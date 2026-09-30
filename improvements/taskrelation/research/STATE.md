@@ -585,14 +585,28 @@ only), and DEC-0014 activates Option 3 for the directed-relation question:
   invariant along the published `λ₀`/`λ₂` axes, and the summary-geometry collapse is its
   consequence — the *uncoupled* matched baseline ends the same protocol with nearly orthogonal
   summaries (cosines +0.211/+0.031/+0.023) while both coupled arms end rank-1.
-* `TR-0012` / `TR-0013` (successor **proposals**, **not registered**, nothing authorized) —
-  `proposals/TR-0012_scale_commensurate_coupling.md` (declare a scale-commensurate coupling: a
-  `HUMAN_DECISION`-class faithfulness/deviation question, so it is blocked on the researcher) and
-  `proposals/TR-0013_published_lambda2_axis.md` (the arm's own pre-registered validation-selected
-  `λ₂` over `{0.01, 0.1}`; faithful, cheapest, blocked on a compute envelope). Both are drafts; the
-  synthesis behind them is `literature_survey/POST_TR0007_SYNTHESIS.md`, and the integrated
-  literature survey (18 documents, from `research/taskrelation-literature`) sits beside it under
-  `literature_survey/`.
+* `TR-0013` (published `λ₂` axis of the faithful p-MSSL arm) — **CLOSED at `REJECTED`
+  (screen, 2026-09-30)**, at commit `f2d746a8`, one worker (`NVIDIA L4`, $0.49/h, destroyed),
+  $1.6074 / 3.28 paid hours. `λ₂` validation-selected over the paper's two smallest published grid
+  values `{0.01, 0.1}`: both values reach `test_epoch_acc_all` 0.965727 against classical MTRL
+  0.974679 and the matched baseline 0.975190 (SI −1.78/−1.85pp), and the **validation signal is
+  indiscriminate** (0.0702pp apart, inside the pre-registered 0.20pp tie band), so the paper's own
+  cross-validation could not have rescued the arm. The axis does change the relation object
+  (support 3 dense/equicorrelated at `0.01` vs support 1 with both ER edges exactly zero at `0.1`)
+  without changing the collapse (cosines 0.9999), the plateau, or the outcome; and a like-for-like
+  gradient measurement shows the coupling's gradient is *smaller* than the task gradient at
+  `λ₂ = 0.01` (ratio 0.015 at the end), not permanently 1e5× larger — a correction to TR-0007's
+  recorded diagnosis. Evidence: `studies/TR-0013/{analysis.md,result.json,NOTE.md,mechanism/}`;
+  negative evidence FL-0006. Nothing follows it: confirmation, LOSO and any further λ need a new
+  human grant.
+* `TR-0012` (scale-commensurate coupling) — still a **proposal only**, `not registered`, nothing
+  authorized: it declares a deviation from a published objective, which is a `HUMAN_DECISION`-class
+  faithfulness question. TR-0013's result is the evidence that makes it the remaining question (the
+  coupling's *imposition* magnitude), rather than more `λ`. Draft:
+  `proposals/TR-0012_scale_commensurate_coupling.md`; synthesis behind both:
+  `literature_survey/POST_TR0007_SYNTHESIS.md`, with the integrated literature survey (18
+  documents, from `research/taskrelation-literature`) beside it under `literature_survey/`.
+  `proposals/TR-0013_published_lambda2_axis.md` is now executed rather than a draft.
 * `TR-0008` (directed relation, project-original) — activated by DEC-0014 §5, **not
   registered**. Its exact relation rule is design work the policy classes as introducing a
   project-original mechanism; it needs either an explicit authorization to design it
@@ -686,16 +700,20 @@ one.
 
 Most recent completed execution stage:
 
-DG-0005 matched A0/A1 confirmation, seeds `0,1,2,3,4`, ten runs at commit
+`TR-0013` screen (2026-09-30), four arms at commit
+`f2d746a86f7cd191b6e1608c9ff1a8629dded25b`, decision **REJECTED** — the faithful p-MSSL arm at a
+validation-selected `λ₂ ∈ {0.01, 0.1}` still beats neither classical MTRL nor the matched baseline
+(both values 0.965727; SI −1.78/−1.85pp), and the validation selection itself is indiscriminate
+(0.0702pp). Before it: DG-0005 matched A0/A1 confirmation, seeds `0,1,2,3,4`, ten runs at commit
 `8032a937050d8bbd3114b172cb813a8fc7370b37`, decision **CONFIRMED**.
 
 Current active Study:
 
-`NONE` RUNNING. `TR-0007` is registered (`BLOCKED`, pre-registration) and carries the
-faithfulness gate described under *Current Pending Work*; `TR-0008` is named and activated
-by DEC-0014 but not registered. `DG-0007` is registered (`BLOCKED`, pre-registration) with
-no compute authorized for its scope. Every other `TR-xxxx` still requires its own explicit
-human authorization under DEC-0009/DEC-0010.
+`NONE` RUNNING. `TR-0007` and `TR-0013` are both closed at `REJECTED` (screen); `TR-0008` is
+named and activated by DEC-0014 but not registered. `DG-0007` is registered (`BLOCKED`,
+pre-registration) with no compute authorized for its scope. Every other `TR-xxxx` still
+requires its own explicit human authorization under DEC-0009/DEC-0010, and `TR-0012` is a
+proposal, not a registration.
 
 Result (CONFIRMED, F10):
 
@@ -723,23 +741,45 @@ Unresolved questions:
 
 Next recommended action:
 
-**TR-0007 is closed at `REJECTED`; the next mechanism step is a human decision.** The
-registered screen ran to completion and its classification came from the pre-registered rule
-(FL-0005). Nothing is authorized to follow it: confirmation seeds, a λ grid, `TR-0008`,
-`DG-0007` and any further compute each need a new human grant. The three questions the screen
-left have been re-read against the screen's own artifacts (2026-09-29, no compute;
-`studies/TR-0007/analysis.md` §2026-09-29, `literature_survey/POST_TR0007_SYNTHESIS.md`):
-(i) a scale-calibrated `lambda_2` **cannot** make the published precision informative — the
-coupling term's magnitude is invariant along the published `λ₂` grid, so that axis moves the
-support and not the scale; (ii) a magnitude control independent of Ω's scale is therefore the
-binding question, and it is a declared-deviation question the autonomy policy reserves to the
-researcher; (iii) the shared mean-head summary adapter is **not** what limited the comparison —
-the uncoupled matched baseline ends the same protocol with nearly orthogonal summaries. The
-successors are drafted, not registered: `proposals/TR-0013_published_lambda2_axis.md` (faithful,
-cheapest, tests the last non-deviating explanation) and
-`proposals/TR-0012_scale_commensurate_coupling.md` (the deviation-class mechanism test). Any
-revisit needs its own pre-registration; the sparse-precision family itself is not closed by a
-single-seed screen.
+**Both published-arm screens are closed at `REJECTED`; the next mechanism step is a human
+decision.** `TR-0007` (researcher-fixed `λ₂`) and `TR-0013` (the paper's own validation-selected
+`λ₂` over `{0.01, 0.1}`) each ran their registered screen to completion and took their verdict from
+the pre-registered rule (`FL-0005`, `FL-0006`). TR-0013 closes the last faithful explanation: the
+validation signal cannot distinguish the two published penalty values (0.0702pp), and the selected
+one delivers the same regression, so the failure is not the `λ₂` choice. What remains is the
+coupling's *imposition magnitude* — a declared deviation on a published objective, which the
+autonomy policy reserves to the researcher (`proposals/TR-0012_scale_commensurate_coupling.md`).
+Nothing is authorized to follow: confirmation seeds, LOSO, any λ value, `TR-0008`, `TR-0012`,
+`DG-0007` and further compute each need a new human grant. `proposals/TR-0013_published_lambda2_axis.md`
+is executed, not a draft.
+
+Latest iteration (2026-09-30, compute: 3.28 paid hours, $1.6074): **TR-0013 screen executed and
+closed at `REJECTED`.** The human approved TR-0013 for a paid screen with a narrow envelope (0.80
+USD/GPU-h, 3.00 USD, 4 h, one worker, the existing volume, no new persistent resources, destroy on
+completion) and explicitly did **not** approve TR-0012. The registered four-run screen ran at
+`f2d746a8` on one `NVIDIA L4` ($0.49/h, EU-RO-1, reused network volume, destroyed immediately after
+the last arm): the faithful published p-MSSL arm with `λ₂` validation-selected over the paper's two
+smallest published grid values `{0.01, 0.1}` reaches `test_epoch_acc_all` **0.965727 at both
+values**, against classical MTRL 0.974679 and the matched wavCSE baseline 0.975190 — below both,
+SI −1.78pp/−1.85pp, KS +0.06/+0.04, ER +0.54/+0.36 on the speaker-leaky split (context only, F3).
+The pre-registered rule gives `REJECTED`; the validation selection itself is **indiscriminate**
+(`val_acc_all` 0.963311 vs 0.964013 = 0.0702pp, inside the pre-registered 0.20pp tie band), so the
+paper's own cross-validation procedure could not have rescued the arm — TR-0007's `λ₂` caveat is
+closed as a faithful explanation. `λ₂` does change the relation object (support 3, partials all
+`+0.4911`, trace 1.13e5 at `0.01`; support 1 with both ER edges exactly zero, partials
+`+0.8997`/0/0, converged Ω step at `0.1`), but not the collapse (cosines 0.9999), the plateau (flat
+from epoch 11/12 for 20/19 epochs) or the outcome; the coupling's *value* stays `O(2–4e3)` at both,
+while a like-for-like gradient measurement shows its *gradient* below the task gradient at `0.01`
+(ratio 0.015 at the end, above 10 only at epochs 4–5) and up to `8.3e9` at `0.1` — so TR-0007's
+permanent "1e5× domination" is not reproduced in the parameter space the optimizer updates (FL-0006
+carries the refinement). Six of twelve submissions failed before any science (a wrong raw-dataset
+link, three container-disk exhaustions from a stale job workspace, two job-launch failures
+coinciding with large scratch deletions), each repaired at the environment level and re-run with the
+identical configuration, evidence in `studies/TR-0013/logs/`; a defect in the newly added
+`support_edges` field was found and fixed with a regression test after the run, with the affected
+values recomputed from the correctly recorded raw Ω. Records: `studies/TR-0013/{analysis.md,
+result.json,NOTE.md,PLAN.md,mechanism/,runs.json}`, `STUDIES.jsonl`, FL-0006. Nothing follows it:
+TR-0012, TR-0008, DG-0007, confirmation, LOSO and any further λ each need a new human grant.
 
 Latest iteration (2026-09-29, no compute, no worker, no job, no authorization created):
 **post-TR-0007 integration — literature survey in, scale reading of TR-0007's own artifacts,
@@ -938,8 +978,10 @@ the runs above.
 
 Current consecutive unsuccessful mechanism studies:
 
-`1` — classical MTRL (F4). Diagnostic and literature studies do not increment
-the plateau counter.
+`2` — classical MTRL (F4) and the faithful published p-MSSL arm, whose two screens
+(`TR-0007` at a researcher-fixed `λ₂`, `TR-0013` at the paper's own validation-selected `λ₂`) both
+closed `REJECTED` without beating either control (`FL-0005`, `FL-0006`). Diagnostic and literature
+studies do not increment the plateau counter.
 
 Literature-search trigger:
 

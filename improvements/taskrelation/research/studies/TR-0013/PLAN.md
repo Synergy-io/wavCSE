@@ -1,7 +1,8 @@
 # TR-0013 — PLAN (pre-registration)
 
-Status: **REGISTERED — screen approved by the researcher, executed under
-`authorizations/TR-0013.yaml`.** Written 2026-09-29. Study registry: `../../STUDIES.jsonl`.
+Status: **SCREEN EXECUTED — `REJECTED`** (2026-09-30). Registered and run under
+`authorizations/TR-0013.yaml`; classification, mechanism and execution record in `analysis.md`,
+`result.json` and `NOTE.md`.
 Study ID: `TR-0013`. Predecessor: `TR-0007` (`REJECTED`, `FL-0005`).
 Arm identity: **faithful published-method implementation** (DEC-0013 §3, DEC-0014 §4, DEC-0015
 Option A). No deviation is introduced by this study.

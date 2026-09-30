@@ -84,9 +84,52 @@ Recorded after execution — see `analysis.md`, `result.json`, and the appended 
 
 ---
 
-# 2026-09-29 — Screen executed (result appended, pre-registration untouched)
+# 2026-09-30 — Screen executed (result appended, pre-registration untouched)
 
 Appended, never substituted: everything above is the state of the study before paid execution.
 
-_To be completed at collection; the pre-registered classification and the mechanism
-measurements are recorded here verbatim from the runs._
+**Classification: `REJECTED`** (pre-registered rule, applied unchanged).
+
+| arm | run id | `test_epoch_acc_all` | ks | si | er |
+|---|---|---|---|---|---|
+| p-MSSL `lambda_2 = 0.01` (selected) | `03e9b2d2` | 0.965727 | 0.986540 | 0.959884 | 0.795660 |
+| p-MSSL `lambda_2 = 0.1` | `237f3880` | 0.965727 | 0.987125 | 0.960005 | 0.786618 |
+| classical MTRL (control) | `ff9f3b13` | 0.974679 | 0.985955 | 0.977700 | 0.790235 |
+| matched wavCSE baseline (control) | `09f78efc` | 0.975190 | 0.986101 | 0.978427 | 0.792043 |
+
+Deltas of the selected candidate: vs classical MTRL `−0.8952pp` aggregate (`ks +0.0585`, `si
+−1.7816`, `er +0.5425`); vs the matched baseline `−0.9464pp` (`ks +0.0439`, `si −1.8543`, `er
++0.3617`). Below both controls with SI regressing ~1.8pp → `REJECTED`.
+
+**Validation selection was indiscriminate:** `val_acc_all` at epoch 30 is `0.963311` (`0.01`) vs
+`0.964013` (`0.1`) — 0.0702pp apart, inside the pre-registered 0.20pp tie band — so the registered
+tie rule selected `lambda_2 = 0.01` as the representative. The paper's own cross-validation signal
+cannot distinguish the two published values at this representation.
+
+**Mechanism, measured (not inferred).** `lambda_2` changed the relation object materially but not the
+outcome: support 3 (dense equicorrelated, partials all `+0.4911`, trace 113 438, ADMM at its
+iteration cap) at `0.01` versus support 1 (both ER edges exactly zero, partials `+0.8997 / 0 / 0`,
+trace 127 864, ADMM converged, gap `−1.1e-4`) at `0.1`; the coupling's value stays `O(2–4e3)` at both;
+the summary collapse persists at both (cosines 0.9999; at `0.1` the ER summary row additionally
+shrinks to norm `2e-5`); both plateau (flat from epoch 11/12 for 20/19 epochs). The like-for-like
+gradient measurement shows the coupling's gradient is *smaller* than the task gradient at `0.01`
+(ratio 0.015 at the end, above 10 only at epochs 4–5) and enormously larger at `0.1` (up to 8e9) —
+so TR-0007's permanent "1e5× domination" is not reproduced by a same-parameter-space measurement,
+while the value-scale domination is. Full analysis: `analysis.md`; machine-readable: `result.json`;
+negative evidence: FL-0006.
+
+**Execution.** One worker (`al5b4m763ci2bu`, `NVIDIA L4`, `$0.49/h`, EU-RO-1, existing network
+volume, container disk 100 GB, destroyed at the end so billing stopped with the science). Six of
+twelve submissions failed *before* any science (one wrong raw-dataset link, three container-disk
+exhaustion, two job-launch failures coinciding with large scratch deletions while a job started);
+each was repaired at the environment level and re-run with the identical registered configuration,
+evidence preserved in `logs/`. Runs and their exact commit:
+`runs.json` and `analysis.md` §6.
+
+**Defect found and fixed after the run.** The recorded `support_edges` / `zero_offdiagonals` fields
+were wrong (the count ran over `torch.triu`'s whole output, which includes its zeroed region); the
+raw Ω was recorded correctly, this analysis recomputes support from it, and the code now counts the
+strict-upper edge pairs with a regression test.
+
+**Not done, and not authorized:** confirmation seeds, LOSO, any further λ value, `TR-0012`,
+`TR-0008`, `DG-0007`, further compute.

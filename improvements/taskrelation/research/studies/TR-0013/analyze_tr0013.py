@@ -192,6 +192,99 @@ def _pp(value):
     return round(float(value) * 100.0, 4)
 
 
+
+def _exact_support(omega):
+    """Exact edge count from the recorded matrix.
+
+    The in-run `support_edges` field of the TR-0013 runs is defective (`torch.triu`
+    returns the whole matrix with the lower part zeroed, so the recorded count also
+    counted that zeroed region: for a 3x3 snapshot with two zero edges it recorded
+    zero_offdiagonals = 8 and support_edges = -5). The raw matrix is recorded
+    correctly, so the count is recomputed here and both values are reported.
+    """
+    size = len(omega)
+    zeros = sum(
+        1 for i in range(size) for j in range(i + 1, size)
+        if float(omega[i][j]) == 0.0
+    )
+    pairs = size * (size - 1) // 2
+    return {"pairs": pairs, "zero_offdiagonals": zeros, "support_edges": pairs - zeros}
+
+
+def _summarize_omega_history(payload):
+    """Per-epoch relation object and summary geometry, as recorded in the run."""
+    history = payload.get("history") or []
+    rows = []
+    for entry in history:
+        omega = entry.get("omega") or []
+        support = _exact_support(omega) if omega else {}
+        rows.append({
+            "epoch": entry.get("epoch"),
+            "omega_trace": entry.get("omega_trace"),
+            "omega_eigenvalues": entry.get("omega_eigenvalues"),
+            "support_edges": support.get("support_edges"),
+            "zero_offdiagonals": support.get("zero_offdiagonals"),
+            "recorded_support_edges": entry.get("support_edges"),
+            "recorded_zero_offdiagonals": entry.get("zero_offdiagonals"),
+            "mean_abs_offdiagonal": entry.get("mean_abs_offdiagonal"),
+            "partial_correlations": entry.get("partial_correlations"),
+            "summary_cosines": entry.get("summary_cosines"),
+            "summary_gram_eigenvalues": entry.get("summary_gram_eigenvalues"),
+            "summary_raw_row_norms": entry.get("summary_raw_row_norms"),
+            "coupling_value": entry.get("coupling_value"),
+            "relative_duality_gap": entry.get("relative_duality_gap"),
+        })
+    collinear = [row for row in rows
+                 if row["summary_cosines"] and min(row["summary_cosines"]) > 0.9]
+    supports = [row["support_edges"] for row in rows if row["support_edges"] is not None]
+    summary = {
+        "snapshots": len(rows),
+        "epochs": [row["epoch"] for row in rows],
+        "support_edges_trajectory": supports,
+        "support_edges_first": supports[0] if supports else None,
+        "support_edges_last": supports[-1] if supports else None,
+        "support_edges_final_snapshot": rows[-1]["support_edges"] if rows else None,
+        "support_source": ("recomputed from the recorded Omega matrix; the in-run "
+                           "support_edges / zero_offdiagonals fields of these runs are "
+                           "defective (they counted the region torch.triu zeroes). The "
+                           "recorded values are kept beside them for the record."),
+        "summary_collinear_from_epoch": collinear[0]["epoch"] if collinear else None,
+        "final": rows[-1] if rows else None,
+        "rows": rows,
+    }
+    return summary
+
+
+def _summarize_coupling_scale(payload):
+    """The coupling's value and gradient scale beside the task gradient, per epoch."""
+    history = payload.get("history") or []
+    ratios = [(row.get("epoch"), row.get("relation_over_task_grad_ratio_heads"))
+              for row in history if row.get("relation_over_task_grad_ratio_heads") is not None]
+    values = [row.get("relation_value") for row in history
+              if row.get("relation_value") is not None]
+    task = [row.get("task_grad_norm_heads") for row in history
+            if row.get("task_grad_norm_heads") is not None]
+    relation = [row.get("relation_grad_norm_heads") for row in history
+                if row.get("relation_grad_norm_heads") is not None]
+    return {
+        "probe": payload.get("probe"),
+        "lambda_2": payload.get("lambda_2"),
+        "lambda_2_selection": payload.get("lambda_2_selection"),
+        "normalize_w": payload.get("normalize_w"),
+        "warmup_epochs": payload.get("warmup_epochs"),
+        "coupling_onset_epoch": payload.get("coupling_onset_epoch"),
+        "epochs_probed": [row.get("epoch") for row in history],
+        "coupling_value_trajectory": values,
+        "task_grad_norm_heads_trajectory": task,
+        "relation_grad_norm_heads_trajectory": relation,
+        "ratio_trajectory": [value for _, value in ratios],
+        "ratio_max": max((value for _, value in ratios), default=None),
+        "ratio_min": min((value for _, value in ratios), default=None),
+        "ratio_final": ratios[-1][1] if ratios else None,
+        "ratio_epochs_above_10": [epoch for epoch, value in ratios if value > 10.0],
+        "rows": history,
+    }
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runs", required=True, help="JSON mapping arm -> MLflow run id")
@@ -282,6 +375,11 @@ def main(argv=None):
                     "sha256": _sha256(target),
                     "repository_path": str(target.relative_to(REPO_ROOT)),
                 }
+                payload = json.loads(target.read_text())
+                if name == "omega_history.json":
+                    entry["omega_history"] = _summarize_omega_history(payload)
+                else:
+                    entry["coupling_scale"] = _summarize_coupling_scale(payload)
         result["arms"][arm] = entry
 
     # ---- the registered validation-only selection -------------------------------
