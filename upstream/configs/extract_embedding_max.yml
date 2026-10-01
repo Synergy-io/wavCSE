@@ -1,0 +1,73 @@
+# ============================================================
+# Upstream Embedding Extraction Configuration -- WavLM Large + MAX pooling
+#
+# Identical schema to extract_embedding.yml / extract_embedding_mean.yml, but
+# pins the pooling strategy to max pooling with no parameter. This file exists
+# so the scientific configuration used to regenerate an embedding set is an
+# explicit, reviewable artifact in Git (job specs reference this path at an
+# exact commit) instead of depending on a hand-edited working file.
+#
+# Only the pooling block differs from extract_embedding_mean.yml.
+#
+# The paths below are defaults inherited from the original training
+# machine. They are intentionally overridable per run:
+#
+#   python main.py --dataset_name <name> --config configs/extract_embedding_max.yml \
+#       --root_data_path <raw datasets root> \
+#       --root_emb_path <embeddings output root> \
+#       --checkpoint <WavLM-Large.pt path> \
+#       --limit <N>
+#
+# (The CLI flags take precedence over this file; see upstream/main.py.)
+# ============================================================
+
+# ----------------------------
+# Logging
+# ----------------------------
+log_level: INFO        # Logging verbosity level
+
+# ----------------------------
+# Device configuration
+# ----------------------------
+device:
+  type: cuda          # Device type to use (cuda, cpu)
+  index: 0             # GPU index (only used if type = cuda)
+
+# ----------------------------
+# Paths
+# ----------------------------
+paths:
+  root_data_path: ~/voice_dataset
+                       # Root directory containing raw audio datasets.
+                       # Expected: <root_data_path>/<dataset_name>/
+
+  root_emb_path: ~/embedding2
+                       # Root directory for extracted embeddings.
+                       # Output: <root_emb_path>/<model_type>/<pooling_id>/<dataset_name>/
+
+  upstream_checkpoint_path: ~/pretrained_checkpoints/SSL/WavLM-Large.pt
+                       # Fairseq-format WavLM Large checkpoint (keys: "cfg", "model").
+                       # Must already exist; it is NOT downloaded automatically.
+
+# ----------------------------
+# Upstream model
+# ----------------------------
+upstream:
+  model_type: wavlm_large
+
+# ----------------------------
+# Pooling
+# ----------------------------
+pooling:
+  # Pools the frame/time dimension of the concatenated per-layer outputs.
+  # "max" -> element-wise temporal maximum per layer per channel.
+  # Resulting per-utterance embedding: (encoder_layers + 1, encoder_embed_dim)
+  # = (25, 1024) float32 for WavLM Large.
+  frame_pooling_type: max
+  frame_pooling_param: null   # max pooling takes no parameter
+
+# ----------------------------
+# Dataset control
+# ----------------------------
+dataset:
+  limit: null         # null -> entire dataset; integer N -> first N samples per split
