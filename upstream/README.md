@@ -122,9 +122,23 @@ no such comparison has been run.
 - `process_and_write_data` calls `torch.cuda.empty_cache()` once per sample — pure
   overhead at 30 k samples, but it is execution behaviour, not semantics.
 
-## Operator tooling (lives outside this repository)
+## Operator tooling
 
-The recorded-job specs, the S3 manifest builder, and the archive acceptance test used for
-the artifact above live on the controller (`~/jobs/*.json`, `/tmp/make_embedding_manifest.py`,
-`/tmp/verify_embedded_artifact.py`). They depend on `wavcse-infra` (its storage namespace
-and manifest model), so they belong in that repository rather than here.
+The deterministic packagers live in `tools/` and run as the packaging job's own input:
+
+| Script | Dataset |
+| --- | --- |
+| `tools/package-iemocap-tar.py` | IEMOCAP (one archive, no sharding) |
+| `tools/package-speechcommand-shards.py` | Speech Commands (per-split shards) |
+| `tools/package-voxceleb-shards.py` | VoxCeleb1 (per-split shards) |
+
+Each takes `--pooling <pooling>` (default `mean`) and derives the
+`wavlm_large/<pooling>/` embedding directory, the `<dataset>_wavlm_large_<pooling>.csv`
+index, the `.pt` filename suffix and the default archive name from it, so one packager
+serves every pooling strategy. They are stdlib-only and depend on nothing in
+`wavcse-infra`; a run pins the exact revision by checking out the job's commit.
+
+The recorded-job specs, the S3 manifest builder, and the archive acceptance test remain on
+the controller (`~/jobs/*.json`, `~/jobs/make-*.py`, `~/jobs/tools/*.sh`). They depend on
+`wavcse-infra` (its storage namespace and manifest model), so they belong in that
+repository rather than here.
