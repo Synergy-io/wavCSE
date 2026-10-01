@@ -58,8 +58,18 @@ def process_and_write_data(
             if limit is not None and index >= limit:
                 break
 
-            embpath = os.path.join(dir_emb_path, wavpath)
-            embpath = embpath.replace(".wav", f"_{upstream_model_type}_{frame_pool_id}.pt")
+            # Rewrite only the *source extension*. Replacing the first ".wav" in the joined
+            # path also rewrote a ".wav" appearing anywhere in the embedding root, so an
+            # output root like "/content/.wavcse/jobs/<id>/outputs/embeddings" silently sent
+            # every embedding to a parallel "/content/_wavlm_large_<pool>.ptcse/..." tree
+            # while the CSV still recorded the correct sizes. On the RunPod root
+            # (/workspace/wavcse-jobs) the root never contained ".wav", so the defect stayed
+            # hidden.
+            if wavpath.endswith(".wav"):
+                relative = f"{wavpath[: -len('.wav')]}_{upstream_model_type}_{frame_pool_id}.pt"
+                embpath = os.path.join(dir_emb_path, relative)
+            else:
+                embpath = os.path.join(dir_emb_path, wavpath)
 
             os.makedirs(os.path.dirname(embpath), exist_ok=True)
             torch.save(embedding, embpath)
