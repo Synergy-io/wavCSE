@@ -1,5 +1,9 @@
 # Literature Agent Architecture Reconnaissance and Incremental Roadmap
 
+> **Historical design record — not the current specification.** This document is
+> the increment-by-increment plan and history (INC-001 … INC-018). For how the
+> subsystem works *now*, read [`LITERATURE.md`](LITERATURE.md).
+
 **Status:** planning only. This document introduces no agent, tool, schema, migration, storage operation, or change to an existing research record.
 
 **Reconnaissance basis:** repository state, agent instructions and workflows, representative research records, the two `LT-*` Studies, literature cards, the integrated literature survey, task-relation outputs, tests, and relevant Git history through 2026-09-30.

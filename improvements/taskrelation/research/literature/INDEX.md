@@ -6,9 +6,9 @@ Paper identity is declared in [`catalog.jsonl`](catalog.jsonl): each existing
 card filename stem is its immutable `paper_id`, and the catalog maps that ID and
 recorded external identifiers to the canonical card. The catalog contains no
 screening verdicts; those live in [`assessments.jsonl`](assessments.jsonl), the
-canonical structured authority, and the `LT-*` tables below remain as
-transitional human witnesses. Validate it with
-`python -m improvements.taskrelation.research.literature_catalog`.
+canonical structured authority. Validate it with
+`python -m improvements.taskrelation.research.literature_catalog`. The current
+architecture is described in [`../LITERATURE.md`](../LITERATURE.md).
 
 ## Structured query interface
 
@@ -59,8 +59,10 @@ silent pick.
 | `get_study` | READ | `STUDIES.jsonl` + Study folder | artifact presence only |
 
 Every operation above is read-only, idempotent and deterministic; none mutates
-research state. Mutation of literature state remains outside this interface and
-belongs to the future increments.
+research state. Literature mutation belongs to the operator-side deterministic
+modules (`literature_record` for the one investigation-scoped agent write, and
+`literature_admit` / `literature_ingest` / `literature_acquire` /
+`literature_investigation` for the rest) — see `../LITERATURE.md`.
 
 ## Canonical paper assessments
 
@@ -135,8 +137,8 @@ Authority split:
 | Store | Owns |
 | --- | --- |
 | Git (`primary_manifest.jsonl`) | which `paper_id` has a retained artifact, its SHA-256, size, media type, provenance URL and object key |
-| S3 | the canonical durable artifact bytes; publication, credentials, transfer and eviction live in the `wavcse-infra` checkout |
-| local cache | disposable performance copies, never authoritative |
+| local store (`WAVCSE_PRIMARY_CACHE`) | the retained original bytes; the manifest checksum is their identity, so they are trusted only while they match it |
+| S3 | the deferred durable boundary, owned by the `wavcse-infra` checkout; until the transfer seam is wired the fetcher is `None` and a cache miss reports `STORAGE_NOT_CONFIGURED` rather than fabricating bytes |
 
 The manifest contains storage metadata only — never title, authors, year or any
 other catalog identity. `object_key` is validated to equal the deterministic
@@ -158,9 +160,11 @@ Deterministic failure kinds: `UNKNOWN_PAPER`, `PRIMARY_NOT_AVAILABLE`,
 
 Retrieving a paper establishes trustworthy access to primary evidence only; it
 does not summarize, extract claims from, parse, or modify any card. Claim-level
-work is a later increment.
+work is a separate authority: recorded, source-bound claims live in
+[`claims.jsonl`](claims.jsonl), written by `literature_claims` (operator) or the
+investigation-scoped `literature_record`.
 
-## Literature Agent (read-only V1)
+## Literature Agent (bounded V1)
 
 A bounded Literature Review specialist exists for delegating one literature
 question to a fresh, isolated context:
@@ -172,32 +176,37 @@ question to a fresh, isolated context:
   paper claim / reported evidence / agent interpretation / research implication.
 - `.omp/tools/literature.ts` — the semantic model-facing capabilities.
 
-Exposed capabilities (all read-only over canonical research state):
+Exposed capabilities (six; all read-only over canonical research state except
+`literature_record`):
 
 | Tool | Purpose | Deterministic backing |
 | --- | --- | --- |
 | `literature_resolve` | identity resolution and candidate dedup (`known`/`new`/`ambiguous`) | `literature_query.identify_candidate` |
-| `literature_query` | enumerate retained papers; Study-scoped literature state | `list_papers`, `papers_for_study`, `studies_for_paper`, `get_study` |
-| `literature_read` | bounded text of one card or one registered `LT-*` artifact | `literature_read.LiteratureReader` |
-| `literature_primary` | primary-artifact status / verified local copy | `literature_primary.LiteraturePrimary` |
+| `literature_query` | enumerate retained papers; Study-scoped assessments; recorded claims; synthesis metadata | `literature_query` (+ `literature_claims` reads) |
+| `literature_read` | bounded text of a card, a survey document, a registered synthesis, or a registered `LT-*` artifact | `literature_read.LiteratureReader` |
+| `literature_primary` | primary-artifact status / version selection / bounded page read | `literature_primary.LiteraturePrimary` |
+| `literature_discover` | metadata-only structured discovery of papers *not yet* retained | `literature_discovery` |
+| `literature_record` | bounded, investigation-scoped write: `note` / `assessment` / `claim` / `synthesis` | `literature_record` |
 
 The agent is addressed by `paper_id` or a registered Study artifact kind; it is
-never given a bucket, object key, filesystem path, credential, or shell. Its only
-write is the disposable primary cache. It cannot modify any research record,
-authorize an experiment, or provision compute.
+never given a bucket, object key, filesystem path, credential, or shell. Its
+writes are exactly the disposable primary cache and the `literature_record`
+output accepted under the ONE currently *delegated* `LT-*` investigation; it
+cannot create or close a Study, admit a CandidatePaper, acquire an artifact,
+edit a card or the catalog, or modify findings, decisions, failures, backlog,
+proposals or authorizations.
 
 Verify the adapter with `make literature-tools-check` (needs `bun`); its static
-contract is additionally enforced inside `make research-check`.
+contract is additionally enforced inside `make research-check`, and a run's own
+transcript proves the runtime grant with
+`scripts/agents/literature_agent_transcript.py`.
 
-Two open gaps observed from real use are recorded in the roadmap: primary
-artifacts are not yet retained (`PRIMARY_NOT_AVAILABLE` for every paper, so
-primary verification is unavailable and answers rest on cards), and no wiring
-exists to `infra/` (INC-004B).
-
-This interface does not answer semantic claim questions such as which papers
-support asymmetric transfer, contradict a mechanism, or learn a particular
-relation. Those require claim-level evidence that is not represented yet; do
-not infer it from titles or screening outcomes.
+Papers the corpus does not yet retain are reached by structured discovery
+(metadata only) followed by operator-side canonical admission
+(`literature_admit`) and acquisition (`literature_acquire`) — never by the agent
+directly. Recorded, source-bound claims (`literature/claims.jsonl`) answer
+semantic questions such as which papers support a mechanism; prefer them before
+opening prose.
 
 ## Current literature Study
 

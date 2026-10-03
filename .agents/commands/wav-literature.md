@@ -59,14 +59,19 @@ Boundaries: mutates-research-state, no-paid-compute
 6. Before retaining a paper, resolve its identity through
    `improvements/taskrelation/research/literature/catalog.jsonl`. The existing
    card slug is the immutable `paper_id`; never mint a second identity for the
-   same source. Add a verified card under
-   `improvements/taskrelation/research/literature/` and record the source's
-   identity and checks in that card. There is no `literature/papers/` directory
-   — the cards remain the retained record of verified sources. Keep screening
-   decisions in the `LT-*` Study, never in the identity catalog.
-7. Compare candidates by assumption rather than by reported accuracy, and update
-   the comparison table in
-   `improvements/taskrelation/research/literature/INDEX.md`.
+   same source. Retain a new source through the deterministic operator-side
+   path, not by hand: a candidate from `literature_discovery` is admitted by
+   `literature_admit` (canonical catalog row + card), and its bytes are retained
+   by `literature_ingest` or `literature_acquire`. When a source has no
+   discoverable provider record, the operator authors the card and catalog row
+   directly in the main session — the Literature Agent never does. There is no
+   `literature/papers/` directory — the cards remain the retained record of
+   verified sources. Keep screening decisions in the `LT-*` Study, never in the
+   identity catalog.
+7. Compare candidates by assumption rather than by reported accuracy. The
+   per-paper table in `improvements/taskrelation/research/literature/INDEX.md`
+   is generated from `assessments.jsonl`; record the assessment through the
+   investigation rather than editing that table by hand.
 8. For each justified candidate add a backlog entry under
    `improvements/taskrelation/research/BACKLOG.md` with the next free reserved
    identifier and the gate that keeps it blocked. Register the literature

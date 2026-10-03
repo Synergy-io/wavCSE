@@ -186,6 +186,7 @@ Never weaken or delete a failing test to make the gate pass.
 - `STUDIES.jsonl` — study registry; `studies/` — one folder per Study ID;
 - `FINDINGS.md`, `FAILURES.md`, `DECISIONS.md`, `BACKLOG.md`;
 - `FRAMEWORK.md`, `VARIANT_BENCHMARK_PROTOCOL.md` — the comparison contract;
+- `LITERATURE.md` — current literature-subsystem architecture and operator entry point;
 - `literature/` — verified sources; `literature/claims.jsonl` — source-bound claim records keyed
   `paper_id#claim_id`, validated by `literature_claims.py` (each quote must be verbatim inside the
   named section); `weekly/` — supervisor-facing reports.

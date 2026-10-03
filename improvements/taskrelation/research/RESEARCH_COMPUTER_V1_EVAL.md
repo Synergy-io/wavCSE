@@ -1,5 +1,8 @@
 # wavCSE Research Computer V1 — audit and vertical-slice evaluation
 
+> **Historical evaluation record — not the current specification.** For the
+> literature subsystem, read [`LITERATURE.md`](LITERATURE.md).
+
 **Evaluation date:** 2026-10-03
 
 **Starting revision:** `8a0878231c6cff6acbe22481856549c572d9ad8d`

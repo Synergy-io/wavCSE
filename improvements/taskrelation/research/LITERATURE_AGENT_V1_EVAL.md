@@ -1,5 +1,8 @@
 # Literature Agent V1 — evaluation runs
 
+> **Historical evaluation record — not the current specification.** For how the
+> subsystem works now, read [`LITERATURE.md`](LITERATURE.md).
+
 Purpose: exercise the read-only Literature Agent vertical slice
 (`.omp/agents/literature-reviewer.md`) on two real Task Relation Learning
 questions and record what worked, what it cost, and what infrastructure is
