@@ -704,6 +704,10 @@ equation numbering, notation (`K`/`λ`/`γ`) and objective differ from the JMLR
 formulation recorded in the card, which is itself a result: verifying the card's
 `−d log|Ω|` / `−log|Ω|` claim requires the JMLR PDF, which is not retained.
 
+> Superseded by **INC-004C**: the published JMLR artifact is now retained as role
+> `published` alongside the preprint (role `preprint`), and the card's
+> JMLR-derived objective claims are primary-verified against it.
+
 **Deferred (unchanged)**
 
 S3/`infra`, bulk ingestion, web/DOI acquisition, OCR, a document database, claim

@@ -727,3 +727,115 @@ Every primary statement carries the artifact sha and page locator; card/survey
 statements carry their own level; the version gap leads the synthesis. The agent
 did not fabricate any JMLR equation, did not open implementation code, wrote
 nothing, and asked for no credentials. Unsupported attributions: none found.
+
+# V6 (2026-10-03) — multi-version primary artifacts (INC-004C)
+
+The first evaluation in which **two retained versions of one paper** are
+distinguished, and in which recorded claims are bound to a specific artifact
+version and digest.
+
+**Code state.** Commit `8f836747829c3c6fccd8864c9100b19cb145e5d3` ("Distinguish
+retained primary artifact versions by role"), author Kevin Sanjula
+`<kevinxsanjula@gmail.com>`. The worktree carries another workstream's uncommitted
+files (`infra/*`, `improvements/compute/*`, `AGENTS.md`, `Makefile`,
+`.agents/policies/autonomy.md`, `wavcse-research-runner/SKILL.md`, untracked
+`.github/`, `docs/`, `mcp.json`); the literature evidence surface itself is clean —
+`git status --porcelain -- .omp .agents/skills/wavcse-literature-review
+improvements/taskrelation/research scripts/agents` reports only two untracked
+`weekly/` presentation assets.
+
+**Retained artifacts for `goncalves-2016-mssl`** (both in `primary_manifest.jsonl`):
+
+| role | source | sha256 |
+| --- | --- | --- |
+| `preprint` | `https://arxiv.org/abs/1409.0272` | `34521f28bbc43ec1b100d09e7befd2b8c26f34527e695bf2f1148fae0dbc7bc3` |
+| `published` | `https://jmlr.org/papers/volume17/15-215/15-215.pdf` | `5dcca4cf3cc70a0eecf99757628c0dab165e8f499c69ed96ea77a86cd3d1ce2b` |
+
+The published artifact was fetched from the official JMLR URL already recorded in
+the catalog (a single operator-side retrieval of one known identity, not a
+discovery or crawler); both URLs are catalog `source_urls`, and registration is
+the intended entry point.
+
+**Invocation** (V3 protocol, fresh isolated process):
+
+```bash
+cd <repo-root>
+timeout 960 omp -p --auto-approve --session-dir=/tmp/lit-agent-eval/inc004c --max-time=840 "<prompt>"
+```
+
+## Preflight (transcript-proven)
+
+| Field | Value |
+| --- | --- |
+| Child transcript | `Goncalves2016ArtifactCompare.jsonl` |
+| Granted | `literature_resolve, literature_query, literature_read, literature_primary, yield` |
+| Verdict | **VALID** (`missing_required: []`, `forbidden_*: []`; 0 `deja` mentions) |
+
+## Tool use
+
+| # | Call | Purpose |
+| --- | --- | --- |
+| 1 | `literature_primary operation=status` (no role) | enumerate both retained versions |
+| 2 | `literature_query operation=paper_claims` | recorded claims first |
+| 3 | `literature_read source=card` | card context |
+| 4 | `literature_read source=survey document=MSSL_SPARSITY_ANALYSIS.md` | survey context |
+| 5 | `literature_primary read role=published page=8..9` | published Eq. (4b), (8) |
+| 6 | `literature_primary read role=preprint page=6` | preprint Eq. (4), (5), (7) |
+| 7 | `literature_primary read role=preprint page=4..5` | preprint notation (`K`, `d`) |
+| 8 | `literature_primary read role=published page=7` | published Eq. (3) |
+| 9 | `yield` | result |
+
+Every read named a `role`; the agent never asked for a path, and made no other
+tool call. `claim_ref`s cited: 4 (three primary-verified, one card-derived) — all
+present in `literature/claims.jsonl`; 0 invented.
+
+## Answer — the versions are materially different
+
+| | preprint (`preprint`, sha `34521f28…`) | published (`published`, sha `5dcca4cf…`) |
+| --- | --- | --- |
+| barrier | `−(K/2) log|Ω|`, `K` = number of tasks | `−d log|Ω|`, `d` = number of feature rows (Eq. 3 p. 7, Eq. 4b p. 8); `−log|Ω|` in Eq. (8) p. 9 |
+| coupling | `Tr(WΩWᵀ)` coefficient 1 | `λ₀ tr(WΩWᵀ)` |
+| ℓ1 on Ω | `λ‖Ω‖₁` (`γ` on `W`) | `λ₂‖Ω‖₁`, `(λ₂/d)‖Ω‖₁` in Eq. (8) |
+| `1/d` | absent (`S = WᵀW`) | explicit in Eq. (8): `S = (1/d)WᵀW`, absorbable into `λ₂` |
+
+Locators cited: `primary:page:6`, `primary:pages:4-5` (preprint); `primary:page:7`,
+`primary:pages:8-9` (published). The agent reported the barrier change as a version
+change, not a source conflict, and refused to treat `K`-vs-`d` as a relabeling.
+
+## Provenance and authority
+
+Every statement carried `paper_id` + `role` + page locator + evidence level.
+Unsupported attributions: none found. The agent wrote nothing, opened no code, and
+asked for no credentials or paths. Two repository defects it surfaced were
+accepted rather than smoothed over; both are now corrected (see below). It also
+reported the artifact-level limitation honestly: `pdftotext` drops superscripts
+(`Wᵀ` → `W>`), the preprint read carries an xref-reconstruction warning, and it
+therefore reported every equation as a paraphrase, never as a transcription —
+including declining to assert that the preprint's `K/2` is a typo.
+
+## Consequences accepted from this run
+
+1. **Card citation block corrected.** It still said only the preprint "is the
+   locally retained primary artifact". It now lists both roles with their digests.
+2. **`published-lambda2-classification-grid` qualification corrected.** It said
+   "not re-verified against the paper because no primary artifact is retained". The
+   retained published artifact places the grid on page 25, in **§4.2
+   (Classification)** — not §4.1, which is Regression — as "the regularization
+   parameters for all algorithms were selected using cross-validation from the set
+   `{0.01, 0.1, 1, 10, 100}`". The claim stays at `survey` provenance because the
+   paper's sentence scopes the grid to the algorithms' regularization parameters,
+   not specifically to `λ₂`; that inference is recorded, not upgraded.
+3. **`l1-penalty-is-off-diagonal` qualified.** The published equations write
+   `‖Ω‖₁` / `λ₂‖Z‖₁` without excluding diagonal entries; the off-diagonal reading
+   is the cited graphical-lasso convention (DEC-0015), now stated in the record.
+4. **Survey §4.1 corrected by dated note.** Its parenthetical "(Eq. 4b / Eq. 8,
+   p. 9) carries `−log|Ω|`" is loose: Eq. (4b) carries `−d log|Ω|` (p. 8). The
+   original sentence is preserved and the note added.
+
+## Not done, deliberately
+
+Published page 10 (Eqs. 10–11, soft-thresholding) was not read, so the
+off-diagonal-penalty question is qualified rather than settled; the agent named it
+as a follow-up. No OCR or equation recognition was used: imperfect extraction is
+reported as uncertainty, which is the correct behaviour and the reason the
+equation-level reading stays a paraphrase.

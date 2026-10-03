@@ -6,10 +6,17 @@ André R. Gonçalves, Fernando J. Von Zuben, and Arindam Banerjee. “Multi-task
 
 Primary source: https://jmlr.org/papers/volume17/15-215/15-215.pdf (verified 2026-09-22; the `/v17/…` short path 404s)
 
-Preprint: https://arxiv.org/abs/1409.0272 (arXiv:1409.0272v2, 2014). It is the
-locally retained primary artifact; it is a predecessor version whose equation
-numbering, notation and author list differ from the JMLR version above, so an
-assertion verified against it is not thereby verified against the JMLR version.
+Retained primary artifacts (both are registered in
+`literature/primary_manifest.jsonl` and independently addressable by role):
+
+* `preprint` — https://arxiv.org/abs/1409.0272 (arXiv:1409.0272v2, 2014),
+  sha256 `34521f28bbc43ec1b100d09e7befd2b8c26f34527e695bf2f1148fae0dbc7bc3`. A
+  predecessor version whose equation numbering, notation (`K`/`λ`/`γ`) and
+  objective differ from the JMLR version below, so an assertion verified against
+  it is not thereby verified against the JMLR version.
+* `published` — https://jmlr.org/papers/volume17/15-215/15-215.pdf,
+  sha256 `5dcca4cf3cc70a0eecf99757628c0dab165e8f499c69ed96ea77a86cd3d1ce2b`. The
+  version this card describes.
 
 ## Problem
 

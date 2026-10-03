@@ -217,7 +217,12 @@ class RegistryContentTests(unittest.TestCase):
 
         self.assertEqual(grid.source_level, "survey")
         self.assertNotEqual(grid.source_level, "card")
-        self.assertIn("not in the per-paper card", grid.qualification)
+        # The corrected qualification now records where the retained published
+        # artifact places the grid, and keeps the claim at survey provenance
+        # because the paper scopes it to the algorithms' regularization parameters.
+        self.assertIn("section 4.2", grid.qualification)
+        self.assertIn("page 25", grid.qualification)
+        self.assertEqual(grid.verification, "unverified_primary")
         selection = self.registry.get_claim(
             "goncalves-2016-mssl", "lambda-penalties-selected-on-data"
         )
