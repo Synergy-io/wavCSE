@@ -53,7 +53,7 @@ FORBIDDEN_AGENT_TOOLS = (
 )
 ALLOWED_AGENT_TOOLS = (
     "literature_resolve", "literature_query", "literature_read",
-    "literature_primary", "literature_discover", "yield",
+    "literature_primary", "literature_discover", "literature_record", "yield",
 )
 FORBIDDEN_TOOL_SOURCE = (
     "child_process", "spawnSync", "shell: true", "boto3", "botocore",
@@ -61,7 +61,7 @@ FORBIDDEN_TOOL_SOURCE = (
 )
 EXPECTED_TOOL_NAMES = (
     "literature_discover", "literature_primary", "literature_query",
-    "literature_read", "literature_resolve",
+    "literature_read", "literature_record", "literature_resolve",
 )
 
 def parse_frontmatter(path):
@@ -233,7 +233,7 @@ class SkillAssetTests(unittest.TestCase):
 
         for phrase in (
             "findings.md", "decisions.md", "studies.jsonl",
-            "authoriz", "creating a claim record is not yours to do",
+            "authoriz", "investigation-scoped", "cannot create or close",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, lowered)
@@ -299,7 +299,7 @@ class ToolAdapterTests(unittest.TestCase):
         # existing query tool rather than a tool of its own.
         self.assertIn('"assessment"', self.code)
         self.assertIn('"assessment", params.studyId, params.paperId', self.code)
-        self.assertEqual(len(re.findall(r'name:\s*"(literature_[a-z_]+)"', self.source)), 5)
+        self.assertEqual(len(re.findall(r'name:\s*"(literature_[a-z_]+)"', self.source)), 6)
 
     def test_adapter_exposes_primary_read_but_never_registration(self):
         # The agent may read a retained primary artifact by page, and may never
@@ -330,7 +330,7 @@ class ToolAdapterTests(unittest.TestCase):
         blocks = declared_parameters(self.code)
         declared = set().union(*blocks) if blocks else set()
 
-        self.assertEqual(len(blocks), 5, "one parameter block per exposed tool")
+        self.assertEqual(len(blocks), 6, "one parameter block per exposed tool")
         for name in ("paperId", "studyId", "source", "operation"):
             with self.subTest(param=name):
                 self.assertIn(name, declared)
@@ -340,7 +340,7 @@ class ToolAdapterTests(unittest.TestCase):
 
 
 class MutationBoundaryTests(unittest.TestCase):
-    """Only literature_primary may write, and only inside the disposable cache."""
+    """Reader modules never write; the scoped writer writes only its bounded set."""
 
     READ_ONLY_MODULES = (
         "literature_catalog.py", "literature_query.py", "literature_read.py",
@@ -354,6 +354,67 @@ class MutationBoundaryTests(unittest.TestCase):
             for pattern in self.WRITE_PATTERNS:
                 with self.subTest(module=name, pattern=pattern):
                     self.assertNotIn(pattern, source)
+
+    def test_scoped_writer_cannot_reach_other_research_state(self):
+        """literature_record is the one Literature Agent mutator, and it is bounded."""
+
+        source = (RESEARCH_DIR / "literature_record.py").read_text(encoding="utf-8")
+
+        self.assertIn("OUTSIDE_DELEGATED_SCOPE", source)
+        self.assertIn("assessments.jsonl", source)
+        self.assertIn("claims.jsonl", source)
+        # No write-bearing line reaches a Study, finding, decision, backlog,
+        # proposal, authorization or admission ledger, and it never shells out,
+        # admits a paper or acquires an artifact.
+        write_lines = [
+            line
+            for line in source.splitlines()
+            if any(
+                call in line
+                for call in (
+                    "write_text(", "open(", "os.replace(", "os.unlink(", "unlink(",
+                    "mkdir(", "NamedTemporaryFile", "subprocess", "os.system",
+                    "os.popen", "boto3", "botocore", "urllib.request", "requests",
+                )
+            )
+        ]
+        for forbidden in (
+            "STUDIES.jsonl", "FINDINGS", "FAILURES", "DECISIONS", "BACKLOG",
+            "proposals", "authorizations", "canonicalizations",
+            "literature_admit", "literature_acquire",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertFalse(
+                    any(forbidden in line for line in write_lines),
+                    "a writer line reaches {!r}".format(forbidden),
+                )
+
+    def test_lifecycle_owns_study_registry_writes_and_nothing_else(self):
+        source = (RESEARCH_DIR / "literature_investigation.py").read_text(encoding="utf-8")
+
+        self.assertIn("STUDIES.jsonl", source)
+        self.assertIn("INVESTIGATION_ALREADY_DELEGATED", source)
+        write_lines = [
+            line
+            for line in source.splitlines()
+            if any(
+                call in line
+                for call in (
+                    "write_text(", "open(", "os.replace(", "os.unlink(", "unlink(",
+                    "mkdir(", "NamedTemporaryFile", "subprocess", "os.system",
+                    "boto3", "botocore", "requests",
+                )
+            )
+        ]
+        for forbidden in (
+            "FINDINGS", "FAILURES", "DECISIONS", "BACKLOG", "proposals",
+            "authorizations", "claims.jsonl", "assessments.jsonl",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertFalse(
+                    any(forbidden in line for line in write_lines),
+                    "a lifecycle write line reaches {!r}".format(forbidden),
+                )
 
     def test_primary_module_writes_only_paths_derived_from_paper_id(self):
         source = (RESEARCH_DIR / "literature_primary.py").read_text(encoding="utf-8")

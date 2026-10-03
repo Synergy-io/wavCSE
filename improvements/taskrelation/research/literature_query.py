@@ -151,14 +151,17 @@ class LiteratureQuery:
         syntheses_path=None,
     ):
         self._repo_root = Path(repo_root).resolve()
+        research = self._repo_root / "improvements" / "taskrelation" / "research"
         self._catalog_path = self._input_path(
-            catalog_path if catalog_path is not None else _DEFAULT_CATALOG
+            catalog_path if catalog_path is not None else research / "literature" / "catalog.jsonl"
         )
         self._studies_path = self._input_path(
-            studies_path if studies_path is not None else _DEFAULT_STUDIES
+            studies_path if studies_path is not None else research / "STUDIES.jsonl"
         )
         self._assessments_path = self._input_path(
-            assessments_path if assessments_path is not None else _DEFAULT_ASSESSMENTS
+            assessments_path
+            if assessments_path is not None
+            else research / "literature" / "assessments.jsonl"
         )
         self._catalog = literature_catalog.load_catalog(
             self._catalog_path,
@@ -178,7 +181,9 @@ class LiteratureQuery:
         except literature_assessment.AssessmentError as exc:
             raise LiteratureQueryError(str(exc)) from exc
         self._syntheses_path = self._input_path(
-            syntheses_path if syntheses_path is not None else _DEFAULT_SYNTHESES
+            syntheses_path
+            if syntheses_path is not None
+            else research / "literature_survey" / "registry.jsonl"
         )
         try:
             # Schema-only here: the query layer returns compact synthesis metadata

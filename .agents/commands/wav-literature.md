@@ -69,8 +69,25 @@ Boundaries: mutates-research-state, no-paid-compute
    `improvements/taskrelation/research/literature/INDEX.md`.
 8. For each justified candidate add a backlog entry under
    `improvements/taskrelation/research/BACKLOG.md` with the next free reserved
-   identifier and the gate that keeps it blocked, and register the literature
-   Study in `improvements/taskrelation/research/STUDIES.jsonl`.
+   identifier and the gate that keeps it blocked. Register the literature
+   investigation deterministically rather than hand-editing the registry:
+
+   ```
+   python -m improvements.taskrelation.research.literature_investigation open \
+       --question "..." --scope "..." [--role R ... --verdict V ...]
+   python -m improvements.taskrelation.research.literature_investigation delegate LT-XXXX
+   ```
+
+   Delegate the bounded question to the `literature-reviewer` subagent with an
+   explicit contract (the `investigation_id`, question, scope, context and
+   stopping criteria). Within that investigation the agent persists only
+   investigation-scoped output through `literature_record` (note / assessment /
+   claim / synthesis); it cannot write the registry. When it returns, verify its
+   completion summary against durable state and close it:
+
+   ```
+   python -m improvements.taskrelation.research.literature_investigation complete LT-XXXX --decision ...
+   ```
 9. Stop. Implementation, screening and training are separate work.
 
 ## Durable state
@@ -96,11 +113,13 @@ This command is the write-capable workflow: it may retain a verified card, updat
 the comparison table and reserve a backlog identifier.
 
 For a question that only needs *existing* retained evidence answered, delegate it
-to the read-only `literature-reviewer` subagent instead (task tool,
+to the `literature-reviewer` subagent instead (task tool,
 `agent: "literature-reviewer"`), which carries
 `.agents/skills/wavcse-literature-review/SKILL.md` and can read cards, `LT-*`
-Study artifacts and any locally available primary artifact. It returns a
-provenance-carrying investigation result and cannot mutate research state.
+Study artifacts and any locally available primary artifact, and persist only
+investigation-scoped output (note / assessment / claim / synthesis) through
+`literature_record` under the investigation you delegate to it. It cannot create
+a Study or mutate any other research state.
 
 Defer study semantics, gates and evaluation requirements to
 `wavcse-experiment-operator`.

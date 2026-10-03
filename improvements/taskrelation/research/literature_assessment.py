@@ -556,6 +556,24 @@ def _require_string(record, key, where):
     return value
 
 
+def _scoped_vocabulary(investigations, investigation_id, field, legacy_table):
+    """The role/verdict vocabulary for one investigation.
+
+    A new investigation self-describes its vocabulary in the registered Study
+    row's ``assessment_scope``; the migrated LT-0001/LT-0002 tables remain the
+    fallback for rows that predate INC-018, so an investigation's vocabulary is
+    owned by the investigation rather than a shared ontology.
+    """
+
+    study = investigations.get(investigation_id) or {}
+    scope = study.get("assessment_scope")
+    if isinstance(scope, dict):
+        values = scope.get(field)
+        if isinstance(values, list) and values:
+            return frozenset(values)
+    return legacy_table.get(investigation_id, frozenset())
+
+
 def _validate_record(record, line_number, *, repo_root, papers, investigations):
     where = "assessments line {}".format(line_number)
     if not isinstance(record, dict):
@@ -590,7 +608,9 @@ def _validate_record(record, line_number, *, repo_root, papers, investigations):
         )
 
     role = _require_string(record, "role", where)
-    role_vocabulary = ROLE_VOCABULARY.get(investigation_id, frozenset())
+    role_vocabulary = _scoped_vocabulary(
+        investigations, investigation_id, "roles", ROLE_VOCABULARY
+    )
     if role not in role_vocabulary:
         raise AssessmentError(
             "{}.role {!r} is not a known role for {}".format(
@@ -599,7 +619,9 @@ def _validate_record(record, line_number, *, repo_root, papers, investigations):
         )
 
     verdict = _require_string(record, "verdict", where)
-    verdict_vocabulary = VERDICT_VOCABULARY.get(investigation_id, frozenset())
+    verdict_vocabulary = _scoped_vocabulary(
+        investigations, investigation_id, "verdicts", VERDICT_VOCABULARY
+    )
     if verdict not in verdict_vocabulary:
         raise AssessmentError(
             "{}.verdict {!r} is not a known verdict for {}".format(

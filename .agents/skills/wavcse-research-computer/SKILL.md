@@ -21,8 +21,8 @@ and `.agents/commands/wav-cycle.md`, literature evidence is the read-only
 
 | Role | Agent | Reads | Writes | Never |
 |---|---|---|---|---|
-| Orchestrator | main session | all research state, git, runtime status | a DRAFT proposal file under `proposals/`, the approval request, this cycle's report | grant human authority; register a study; create an authorization; provision compute |
-| Literature | `literature-reviewer` | retained literature corpus only | disposable primary cache | touch research state; decide |
+| Orchestrator | main session | all research state, git, runtime status | a DRAFT proposal file under `proposals/`, the approval request, this cycle's report, an `LT-*` literature investigation (register / delegate / complete) | grant human authority; register a DG/TR mechanism study; create an authorization; provision compute |
+| Literature | `literature-reviewer` | retained literature corpus only | investigation-scoped output under its delegated `LT-*` (note, assessment, claim, synthesis) + disposable primary cache | write outside its delegated investigation; decide |
 | Designer | `research-designer` | repo research evidence + literature tools | nothing (returns proposal text) | write, commit, authorize, provision |
 | Reviewer | `research-reviewer` | repo research evidence + the proposal | nothing (returns a verdict) | write, execute, approve |
 | Validator | `proposal_check.py` | `proposals/`, `STUDIES.jsonl`, `studies/` | nothing | invent state |
@@ -44,9 +44,34 @@ deterministic boundary; the prompt is not the only control.
 1. **Frame the question.** State the open question in the programme's own terms,
    the framework row or backlog entry it acts on, and the evidence that leaves it
    open. An already-settled question is not a cycle.
-2. **Gather literature evidence** only when the question is literature-bound:
-   delegate to `literature-reviewer` and carry its `paper_id#claim_id` references
-   forward. Reuse an existing investigation before commissioning a new one.
+2. **Gather literature evidence** only when the question is literature-bound.
+   Reuse an existing completed investigation before commissioning a new one. To
+   commission one, register a bounded `LT-*` investigation deterministically and
+   delegate it:
+
+   ```
+   python -m improvements.taskrelation.research.literature_investigation open \
+       --question "<the bounded question>" --scope "<what is in / out of scope>" \
+       [--role R ... --verdict V ...] [--request-id <id>]
+   python -m improvements.taskrelation.research.literature_investigation delegate LT-XXXX
+   ```
+
+   Registration and delegation are bookkeeping, not a human gate. Delegate to
+   `literature-reviewer` with an explicit contract — the `investigation_id`, the
+   question, the scope/subquestions, the relevant project context and the
+   stopping criteria — and the agent may then persist only investigation-scoped
+   output. When it returns its completion summary, verify it against durable
+   state and close the investigation:
+
+   ```
+   python -m improvements.taskrelation.research.literature_investigation complete LT-XXXX --decision ...
+   ```
+
+   Then carry its `paper_id#claim_id` / `investigation#paper` / `synthesis_id`
+   references forward. If the agent needs a paper we do not retain, it returns a
+   structured request; the main session admits and acquires it operator-side
+   (`literature_admit`, `literature_acquire`) and the agent reads the resulting
+   canonical evidence — the agent never writes the catalog.
 3. **Design.** Delegate to `research-designer` with the question, the reconciled
    evidence and any literature result. It returns the proposal body.
 4. **Persist the draft.** Write `proposals/<STUDY-ID>_<slug>.md` from the
@@ -90,10 +115,12 @@ and the reviewer. After every reviewer verdict it classifies the result with
   cycle.
 
 The loop may **never**: broaden the scientific question silently; change a
-human-fixed decision; register a study; create or widen an authorization;
-provision or submit compute; execute an experiment; modify `FINDINGS.md`,
-`DECISIONS.md`, `FAILURES.md`, `BACKLOG.md` or `STUDIES.jsonl`; or bypass a
-reviewer `PASS` to reach `READY_FOR_HUMAN`.
+human-fixed decision; register a DG/TR/AB study (an `LT-*` literature
+investigation is the one registration the orchestrator owns); create or widen an
+authorization; provision or submit compute; execute an experiment; modify
+`FINDINGS.md`, `DECISIONS.md`, `FAILURES.md`, `BACKLOG.md`, a `DG/TR` row of
+`STUDIES.jsonl`, or any registered non-`LT` Study; or bypass a reviewer `PASS` to
+reach `READY_FOR_HUMAN`.
 
 ## Proposal object
 
@@ -143,10 +170,11 @@ execution; screening is never presented as confirmation.
 
 ## Never
 
-- register a study, create or widen an authorization, provision or submit
-  compute, or spend money;
-- write `FINDINGS.md`, `FAILURES.md`, `DECISIONS.md`, `BACKLOG.md` or
-  `STUDIES.jsonl`;
+- register a `DG`/`TR`/`AB` study, create or widen an authorization, provision or
+  submit compute, or spend money (registering and closing a bounded `LT-*`
+  literature investigation is the one lifecycle the orchestrator owns);
+- write `FINDINGS.md`, `FAILURES.md`, `DECISIONS.md`, `BACKLOG.md`, or any
+  non-`LT` Study in `STUDIES.jsonl`;
 - let a proposal claim authorization or a registered state;
 - turn a `READY_FOR_HUMAN` proposal into execution, or treat silence as approval;
 - yield on a correctable `CHANGES_REQUIRED` that needs no human decision and is

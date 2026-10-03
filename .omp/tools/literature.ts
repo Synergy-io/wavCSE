@@ -13,11 +13,16 @@
  *   literature_discover -> improvements.taskrelation.research.literature_discovery
  *                          (metadata-only structured discovery: candidates and
  *                           unvalidated artifact locations, never artifact bytes)
+ *   literature_record  -> improvements.taskrelation.research.literature_record
+ *                          (bounded, investigation-scoped writes: a note, a
+ *                           PaperAssessment, a Claim, a Synthesis — only under the
+ *                           single ACTIVE, DELEGATED LT-* investigation)
  *
- * Authority: these tools READ canonical research state. The only write any of
- * them can perform is the disposable primary cache owned by literature_primary.
- * None of them can modify a card, the catalog, the primary manifest, a Study, a
- * finding, a decision, or authorize an experiment.
+ * Authority: these tools READ canonical research state. `literature_record` is the
+ * one bounded mutator, and it can only write output scoped to the delegated
+ * investigation. None of them can create a Study, or modify a card, the catalog,
+ * the primary manifest, a finding, a decision, a backlog entry, a proposal, or an
+ * authorization.
  *
  * The caller never supplies a bucket, object key, filesystem path, credential,
  * or shell command: the model addresses a `paper_id` (or a registered `LT-*`
@@ -131,6 +136,37 @@ export interface DiscoverParams {
 	limit?: number;
 }
 
+/**
+ * Bounded, investigation-scoped writes. `operation` selects what is persisted
+ * under the single ACTIVE, DELEGATED `LT-*` investigation; every operation is
+ * validated by the deterministic layer before it changes state, and a rejected
+ * write changes nothing. `claim` stays paper-global (it records no
+ * investigation); `synthesis` must name the investigation in `derivesFrom`.
+ */
+export interface RecordParams {
+	operation: "note" | "assessment" | "claim" | "synthesis";
+	investigationId?: string;
+	paperId?: string;
+	heading?: string;
+	body?: string;
+	role?: string;
+	verdict?: string;
+	reason?: string;
+	anchor?: string;
+	gates?: unknown[];
+	claimId?: string;
+	claimType?: string;
+	assertionKind?: string;
+	assertion?: string;
+	qualification?: string;
+	evidence?: unknown[];
+	synthesisId?: string;
+	kind?: string;
+	status?: string;
+	document?: string;
+	derivesFrom?: string[];
+}
+
 /** Build the deterministic CLI argv for a validated query request. */
 function queryArgv(params: QueryParams): string[] | undefined {
 	const argv = ["literature_query"];
@@ -236,6 +272,82 @@ function discoverArgv(params: DiscoverParams): string[] | undefined {
 			return params.paperId
 				? [...base, "citations", params.paperId, ...limit]
 				: undefined;
+		default:
+			return undefined;
+	}
+}
+
+/** Build the deterministic CLI argv for a validated scoped write request. */
+function recordArgv(params: RecordParams): string[] | undefined {
+	const base = ["literature_record"];
+	switch (params.operation) {
+		case "note": {
+			if (!params.investigationId || !params.heading || !params.body) return undefined;
+			return [
+				...base, "note",
+				"--investigation", params.investigationId,
+				"--heading", params.heading,
+				"--body", params.body,
+			];
+		}
+		case "assessment": {
+			if (
+				!params.investigationId || !params.paperId || !params.role ||
+				!params.verdict || !params.reason || !params.anchor
+			) {
+				return undefined;
+			}
+			const argv = [
+				...base, "assessment",
+				"--investigation", params.investigationId,
+				"--paper-id", params.paperId,
+				"--role", params.role,
+				"--verdict", params.verdict,
+				"--reason", params.reason,
+				"--anchor", params.anchor,
+			];
+			if (params.gates !== undefined) argv.push("--gates", JSON.stringify(params.gates));
+			return argv;
+		}
+		case "claim": {
+			if (
+				!params.investigationId || !params.paperId || !params.claimId ||
+				!params.claimType || !params.assertionKind || !params.assertion ||
+				params.evidence === undefined
+			) {
+				return undefined;
+			}
+			const argv = [
+				...base, "claim",
+				"--investigation", params.investigationId,
+				"--paper-id", params.paperId,
+				"--claim-id", params.claimId,
+				"--claim-type", params.claimType,
+				"--assertion-kind", params.assertionKind,
+				"--assertion", params.assertion,
+				"--evidence", JSON.stringify(params.evidence),
+			];
+			if (params.qualification) argv.push("--qualification", params.qualification);
+			return argv;
+		}
+		case "synthesis": {
+			if (
+				!params.investigationId || !params.synthesisId || !params.kind ||
+				!params.status || !params.document || !params.derivesFrom || !params.body
+			) {
+				return undefined;
+			}
+			return [
+				...base, "synthesis",
+				"--investigation", params.investigationId,
+				"--synthesis-id", params.synthesisId,
+				"--kind", params.kind,
+				"--status", params.status,
+				"--document", params.document,
+				"--derives-from", JSON.stringify(params.derivesFrom),
+				"--body", params.body,
+			];
+		}
 		default:
 			return undefined;
 	}
@@ -584,6 +696,110 @@ const factory: CustomToolFactory = (pi) => {
 											? "paperId"
 											: "operation";
 					return invalid(needed, `literature_discover operation=${p.operation}`);
+				}
+				return invoke(argv, rest);
+			},
+		},
+		{
+			name: "literature_record",
+			label: "Record Scoped Literature Output",
+			description:
+				"Persist bounded, investigation-scoped literature output under the ONE " +
+				"ACTIVE, DELEGATED LT-* investigation you were given: operation=note " +
+				"upserts a reasoning section in the investigation's analysis artifact; " +
+				"operation=assessment records one (investigation, paper) PaperAssessment; " +
+				"operation=claim records one paper-attributed, evidence-validated Claim " +
+				"(paper-global: supply investigationId only as the authority you act " +
+				"under); operation=synthesis registers one cross-source Synthesis whose " +
+				"derivesFrom must name the investigation. Every write is validated " +
+				"against the whole registry before it is committed, a rejected write " +
+				"changes nothing, and re-recording the same identity updates in place. " +
+				"You cannot create a Study, write under another investigation, or touch " +
+				"any finding, decision, backlog entry, proposal or authorization.",
+			parameters: z.object({
+				operation: z
+					.enum(["note", "assessment", "claim", "synthesis"])
+					.describe("which bounded, investigation-scoped write to perform"),
+				investigationId: z
+					.string()
+					.describe(
+						"the delegated LT investigation this write is scoped to; required " +
+							"by every operation",
+					),
+				paperId: z
+					.string()
+					.optional()
+					.describe("required by assessment and claim; a canonical paper_id"),
+				heading: z.string().optional().describe("required by note: a bare heading text"),
+				body: z
+					.string()
+					.optional()
+					.describe("required by note and synthesis: the bounded Markdown body"),
+				role: z.string().optional().describe("required by assessment"),
+				verdict: z.string().optional().describe("required by assessment"),
+				reason: z
+					.string()
+					.optional()
+					.describe("required by assessment: the bounded reason summary"),
+				anchor: z
+					.string()
+					.optional()
+					.describe(
+						"required by assessment: the slug of a heading the note op wrote in " +
+							"the investigation's analysis artifact",
+					),
+				gates: z
+					.array(z.unknown())
+					.optional()
+					.describe("optional assessment gate outcomes, each {gate_id, verdict}"),
+				claimId: z.string().optional().describe("required by claim"),
+				claimType: z
+					.string()
+					.optional()
+					.describe(
+						"required by claim, e.g. relation-object or method-objective",
+					),
+				assertionKind: z
+					.string()
+					.optional()
+					.describe("required by claim: paraphrase or quote"),
+				assertion: z.string().optional().describe("required by claim"),
+				qualification: z.string().optional().describe("optional claim qualification"),
+				evidence: z
+					.array(z.unknown())
+					.optional()
+					.describe(
+						"required by claim: a non-empty list of evidence references, each " +
+							"naming a retained artifact location",
+					),
+				synthesisId: z.string().optional().describe("required by synthesis"),
+				kind: z
+					.string()
+					.optional()
+					.describe("required by synthesis: e.g. synthesis, theory, comparison"),
+				status: z
+					.string()
+					.optional()
+					.describe("required by synthesis: active or historical"),
+				document: z
+					.string()
+					.optional()
+					.describe(
+						"required by synthesis: a direct literature_survey/*.md filename",
+					),
+				derivesFrom: z
+					.array(z.string())
+					.optional()
+					.describe(
+						"required by synthesis: references such as investigation:LT-0003, " +
+							"paper:<id>, claim:<paper>#<claim>; must name the investigation",
+					),
+			}),
+			async execute(_toolCallId: string, params: unknown, ...rest: unknown[]) {
+				const p = params as RecordParams;
+				const argv = recordArgv(p);
+				if (!argv) {
+					return invalid("the operation's required fields", `literature_record operation=${p.operation}`);
 				}
 				return invoke(argv, rest);
 			},

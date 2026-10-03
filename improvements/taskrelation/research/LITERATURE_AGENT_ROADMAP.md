@@ -319,6 +319,7 @@ the increment numbers are not mistaken for the build order.
 | INC-013 | Deterministic public primary-artifact acquisition (acquisition path B, retrieval half) | done (operator-side; paper hunter and desktop→remote transport are INC-014..015, not built) |
 | INC-016 | Literature Agent capability surface reachable and drift-proof | done (commit `65f6ecf`) |
 | INC-017 | Deterministic canonical-Paper admission from structured discovery | done (operator-side; discovery → admission → acquisition vertical slice) |
+| INC-018 | Literature investigation lifecycle and scoped persistence | done (operator-side lifecycle; one bounded investigation-scoped write surface) |
 
 Roadmap INC-002 was not built to restore numbering, and must not be. Query-time
 joins in `literature_query` already derive Study-scoped assessments from their
@@ -1559,6 +1560,66 @@ no LT-investigation lifecycle, no Research Computer proposal-lifecycle change, n
 database, and no model-facing widening. The investigation-lifecycle question
 (`PaperAssessment` requires an `LT-*` Study that nobody may currently register)
 is the next architectural problem and is untouched.
+
+
+## INC-018 — Literature investigation lifecycle and scoped persistence
+
+**Status:** `done`. INC-017 closed the evidence-access path (discovery → canonical
+admission → acquisition → primary read), but the first real Literature Agent
+investigation exposed the remaining gap: a `PaperAssessment` requires a
+registered `LT-*` investigation, yet no deterministic operation could register
+one and the agent had no bounded way to persist investigation-scoped output.
+
+**What was built**
+
+- `improvements/taskrelation/research/literature_investigation.py` — the
+  operator-side lifecycle: `open(question, scope)` allocates the next `LT-%04d`,
+  creates `studies/<LT>/` and appends the Study row (status `active`, with an
+  optional `assessment_scope` vocabulary); `delegate` marks the single writable
+  scope; `complete` verifies durable outputs, writes `result.json` and closes;
+  `abandon` records a reasoned close. Registration is bookkeeping, not a human
+  gate; completion creates no Finding or Decision.
+- `improvements/taskrelation/research/literature_record.py` — the one bounded,
+  investigation-scoped write surface (`note` / `assessment` / `claim` /
+  `synthesis`), model-facing as the `literature_record` tool. Every write is
+  validated by the owning module's loader against the whole registry before it is
+  committed; re-recording an identity updates in place. `claim` stays
+  paper-global (the investigation only supplies authority); `synthesis`
+  provenance must name the investigation.
+- `literature_assessment.py` — an investigation self-describes its role/verdict
+  vocabulary at registration (falling back to the migrated LT-0001/LT-0002
+  tables), so a new investigation can be assessed without a second ontology.
+
+**Authority boundary.** Writes are accepted only under the ONE currently
+delegated investigation, so "write under LT-Y while delegated to LT-X" is
+`OUTSIDE_DELEGATED_SCOPE`. The agent cannot create or close a Study, touch
+findings/decisions/failures/backlog/proposals/authorizations, edit the catalog or
+card, admit a paper or acquire an artifact; canonical admission and acquisition
+stay operator-side, reached from the main session when the agent returns a
+structured request.
+
+**Tests/verification.** `tests/test_literature_investigation.py` (17) and
+`tests/test_literature_record.py` (23) cover registration/idempotency, the
+single-delegation rule, verified completion, scoped-write acceptance, and the
+negative authority (another investigation, closed/unknown/non-literature cases,
+invalid evidence, catalog untouched). Agent-asset tests pin the six-tool surface
+and the writer's bounded reach; `make check` and `literature-tools-check` pass.
+
+**Live vertical slice (2026-10-03, transient — no repository state retained).**
+One real `LT-0003` investigation was registered, delegated, given a reasoning
+note, an assessment (`LT-0003#goncalves-2016-mssl`), and a registered synthesis
+citing two recorded MSSL claims, then completed; a fresh process reconstructed
+the whole investigation from durable state alone (study, assessment, synthesis,
+`result.json`), and post-completion writes were refused. The registry validated
+at 24 assessments / 20 syntheses during the slice; the slice's Study folder,
+assessment row, synthesis document/row and `INDEX.md` regeneration were then
+reverted, leaving only this record.
+
+**Remaining gap before Research Designer integration.** A completed investigation
+is queryable by the existing tools, but `StudyRecord` does not yet surface the
+investigation's `question`/`scope`, and no operation turns a completed
+investigation into a Research Designer input. That read path is the next
+increment.
 
 
 # First Implementation Recommendation

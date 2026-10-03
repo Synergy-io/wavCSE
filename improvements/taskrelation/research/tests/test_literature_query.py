@@ -141,6 +141,9 @@ class QueryFixture(unittest.TestCase):
                 "# {}\n".format(record["title"]), encoding="utf-8"
             )
         self.assessments_path = self.literature_dir / "assessments.jsonl"
+        self.syntheses_path = self.research_dir / "literature_survey" / "registry.jsonl"
+        self.syntheses_path.parent.mkdir(parents=True, exist_ok=True)
+        self.syntheses_path.write_text("", encoding="utf-8")
         assessments = [
             {
                 "schema_version": 1,
@@ -189,6 +192,7 @@ class QueryFixture(unittest.TestCase):
             catalog_path=self.catalog_path,
             studies_path=self.studies_path,
             assessments_path=self.assessments_path,
+            syntheses_path=self.syntheses_path,
         )
 
 

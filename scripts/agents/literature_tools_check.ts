@@ -59,6 +59,18 @@ const host = {
 			schema.optional = () => schema;
 			return schema;
 		},
+		unknown: () => {
+			const schema: Record<string, unknown> = {};
+			schema.describe = () => schema;
+			schema.optional = () => schema;
+			return schema;
+		},
+		any: () => {
+			const schema: Record<string, unknown> = {};
+			schema.describe = () => schema;
+			schema.optional = () => schema;
+			return schema;
+		},
 		array: () => {
 			const schema: Record<string, unknown> = {};
 			schema.describe = () => schema;
@@ -100,16 +112,40 @@ async function call(name: string, params: unknown): Promise<ToolResult> {
 }
 
 check(
-	"exposes exactly the five semantic capabilities",
-	tools.length === 5 &&
+	"exposes exactly the six semantic capabilities",
+	tools.length === 6 &&
 		[
 			"literature_resolve",
 			"literature_query",
 			"literature_read",
 			"literature_primary",
 			"literature_discover",
+			"literature_record",
 		].every((name) => byName.has(name)),
 	tools.map((t) => t.name),
+);
+
+// record: a scoped write with no delegated investigation is refused, and writes
+// nothing. The check must not mutate real research state.
+const refusedWrite = await call("literature_record", {
+	operation: "assessment",
+	investigationId: "LT-9999",
+	paperId: "goncalves-2016-mssl",
+	role: "family_b_estimator",
+	verdict: "pass",
+	reason: "adapter check",
+	anchor: "assessment",
+});
+check(
+	"record refuses a write outside a delegated investigation",
+	refusedWrite.details.ok === false &&
+		refusedWrite.details.kind === "INVESTIGATION_NOT_FOUND",
+	refusedWrite.details,
+);
+check(
+	"record requires its operation's required fields",
+	(await call("literature_record", { operation: "assessment", investigationId: "LT-0001" }))
+		.details.kind === "INVALID_REFERENCE",
 );
 
 // discovery: providers report capabilities without any network call

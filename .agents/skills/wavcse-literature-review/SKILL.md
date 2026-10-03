@@ -10,9 +10,10 @@ question needs external published evidence, an existing claim needs checking
 against the retained sources, or a mechanism's literature standing must be
 established.
 
-This skill is read-only with respect to canonical research state. It pairs with
-the literature tools and, for the write-capable workflow that retains a new
-paper, with `.agents/commands/wav-literature.md`.
+This skill writes only investigation-scoped output, under the single active,
+delegated `LT-*` investigation named in the delegation. It pairs with the
+literature tools and, for the write-capable workflow that retains a new paper,
+with `.agents/commands/wav-literature.md`.
 
 ## Stance
 
@@ -196,6 +197,60 @@ caveat. An unsupported synthesis is a fabrication with a disclaimer.
     papers, the evidence level behind each conclusion, what was not inspected,
     and what would change the answer.
 
+## Persisting your output (investigation-scoped)
+
+You are delegated exactly one `LT-*` investigation; its id, question, scope and
+stopping criteria are named explicitly in your task, and you pass that id as
+`investigationId` to every `literature_record` call. The deterministic layer knows
+which single investigation is currently delegated, so a write naming any other
+investigation is refused (`OUTSIDE_DELEGATED_SCOPE`). If no investigation id was
+given, stop and report that the delegation is incomplete; do not write.
+
+`literature_record` is the only write surface, and each operation is bounded:
+
+- `note` upserts a reasoning section in your investigation's `analysis.md`. Write
+  the section first, then anchor an assessment to its heading slug;
+- `assessment` records one `(investigation, paper)` PaperAssessment. Its role and
+  verdict must come from the vocabulary your investigation declared at
+  registration;
+- `claim` records one paper-attributed, evidence-validated Claim. The Claim is
+  paper-global — it stores no investigation id; the investigation only supplies
+  the authority to record it. Every evidence reference must resolve to a retained
+  artifact (card, survey, Study artifact, or a manifest-bound primary version);
+- `synthesis` registers one cross-source Synthesis. You supply the Markdown body
+  and a `derivesFrom` that names your investigation (`investigation:LT-XXXX`) plus
+  the papers/claims it rests on, so the durable record answers *which
+  investigation produced this synthesis and what supports it*.
+
+The deterministic layer validates every write against the whole registry before
+committing it: an unknown role, an anchor that does not resolve, an unknown paper,
+an unverifiable or duplicated evidence reference, or a synthesis that loses its
+provenance is rejected and changes nothing. Re-recording the same identity updates
+in place; it never duplicates a row. A rejected write is a finding to report, not
+something to work around.
+
+When the investigation is done, return the completion summary below. **Counts must
+come from the structured tool results, never from memory or recounting prose**, and
+the main session verifies them against durable state: a completion claim that
+disagrees with the registry is a fabrication even when the records are real.
+
+## Completion summary
+
+```
+investigation_id
+status                  # complete | blocked
+papers_considered
+papers_selected
+primary_artifacts_inspected
+claim_refs_created      # paper_id#claim_id, from tool results
+claim_refs_reused
+assessment_refs         # investigation#paper, from tool results
+synthesis_ids
+unresolved_uncertainties[]
+coverage_limitations[]
+tooling_or_external_blockers[]
+```
+
 ## Evidence levels
 
 Every conclusion carries one, and it travels with the claim:
@@ -267,10 +322,13 @@ Report evidence; do not decide what to do with it.
 
 - No research roadmap, experiment, screening or compute authorization.
 - No edits to `FINDINGS.md`, `FAILURES.md`, `DECISIONS.md`, `BACKLOG.md`,
-  `STUDIES.jsonl`, any card, the catalog, the primary manifest, or any Study.
-- No new papers, no PDF uploads. Querying recorded claims is expected and
-  read-only; creating a claim record is not yours to do.
-- No external discovery: the retained corpus is the input.
+  `STUDIES.jsonl`, `proposals/`, `authorizations/`, any card, the catalog, the
+  primary manifest, or a Study you were not delegated. You cannot create or close
+  a Study.
+- No new papers, no PDF uploads, no CandidatePaper admission, no acquisition:
+  the retained corpus is the input, and a new paper is retained operator-side.
+- Your writes are exactly the investigation-scoped `literature_record` output
+  above and the disposable primary cache. Nothing else.
 
 Useful output includes "this evidence suggests testing X would distinguish these
 mechanisms". It never includes "TR-0014 is authorized" or a chosen architecture.

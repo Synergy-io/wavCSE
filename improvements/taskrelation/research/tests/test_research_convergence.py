@@ -129,8 +129,11 @@ class ConvergenceAuthorityTests(unittest.TestCase):
             lowered = text.lower()
             for needle in ("register", "authorization", "compute"):
                 self.assertIn(needle, lowered, "{} lacks {!r}".format(label, needle))
-        # The skill enumerates the loop's hard prohibitions.
-        self.assertIn("register a study; create or widen an authorization", skill)
+        # The skill enumerates the loop's hard prohibitions, and names the one
+        # registration the orchestrator owns (a bounded LT literature investigation).
+        self.assertIn("register a DG/TR/AB study", skill)
+        self.assertIn("the one registration the orchestrator owns", skill)
+        self.assertIn("create or widen an authorization", skill)
         self.assertIn("bypass a reviewer `PASS`", skill)
 
 
