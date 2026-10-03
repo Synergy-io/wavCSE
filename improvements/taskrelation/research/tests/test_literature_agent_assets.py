@@ -431,6 +431,53 @@ class AcquisitionBoundaryTests(unittest.TestCase):
         self.assertNotIn("literature_acquire", agent)
 
 
+class AdmissionBoundaryTests(unittest.TestCase):
+    """Canonical admission (INC-017) is deterministic, operator-side tooling.
+
+    The Literature Agent may select a discovered paper, but the catalog write is
+    owned by the deterministic layer; admission is never a model-facing tool.
+    """
+
+    ADMIT_PATH = RESEARCH_DIR / "literature_admit.py"
+
+    def test_admission_module_converges_on_the_canonical_sources(self):
+        source = self.ADMIT_PATH.read_text(encoding="utf-8")
+
+        self.assertTrue(self.ADMIT_PATH.is_file())
+        self.assertIn("literature_catalog", source)
+        # One source policy, reused: admission classifies a source URL with the
+        # same acquisition policy rather than a second host convention.
+        self.assertIn("literature_acquire", source)
+        # No shell, no dynamic code, no cloud SDK and no second HTTP stack.
+        for forbidden in ("subprocess", "os.system", "os.popen", "eval(", "exec(",
+                          "__import__", "boto3", "botocore", "urllib.request",
+                          "requests"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
+
+    def test_admission_writes_only_canonical_literature_state(self):
+        source = self.ADMIT_PATH.read_text(encoding="utf-8")
+
+        # It may write the catalog, the canonical card and the ledger; it must
+        # never reach another research record.
+        for forbidden in ("FINDINGS", "FAILURES", "DECISIONS", "BACKLOG",
+                          "STUDIES.jsonl", "proposals", "authorizations",
+                          "assessments.jsonl", "claims.jsonl", "primary_manifest"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
+
+    def test_model_facing_adapter_never_exposes_admission(self):
+        adapter = TOOLS_PATH.read_text(encoding="utf-8")
+        agent = AGENT_PATH.read_text(encoding="utf-8")
+
+        self.assertNotIn("literature_admit", adapter)
+        self.assertNotIn("admit", adapter)
+        self.assertNotIn("literature_admit", agent)
+        # The agent may *describe* that discovery cannot admit; it must never be
+        # granted an admission capability.
+        self.assertNotIn("tools: literature_admit", agent)
+
+
 class BoundedReadCliTests(unittest.TestCase):
     def test_card_read_returns_card_derived_text_for_a_known_paper(self):
         result = run_module("literature_read", "card", "goncalves-2016-mssl", "--max-chars", "400")

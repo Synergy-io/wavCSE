@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wavcse.local/schemas/literature-canonicalization-attempt-v1.json",
+  "title": "wavCSE canonical Paper admission attempt",
+  "description": "One append-only provenance record of an attempt to admit a discovered CandidatePaper as a canonical Paper. The Paper's identity and bibliography live in catalog.jsonl and its canonical card; this row only records where the bibliographic identity came from (discovery provider and provider record id), the normalized identifiers considered, the outcome and a bounded detail. It never stores credentials, headers or raw provider payloads.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "admission_id",
+    "recorded_at",
+    "status",
+    "paper_id",
+    "kind",
+    "matched_field",
+    "identifiers",
+    "provenance",
+    "detail"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "admission_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "deterministic identity of the attempt, from its inputs only"
+    },
+    "recorded_at": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ISO 8601 UTC instant the attempt was recorded"
+    },
+    "status": {
+      "enum": ["ADMITTED", "KNOWN", "REJECTED"]
+    },
+    "paper_id": {
+      "type": ["string", "null"]
+    },
+    "kind": {
+      "type": ["string", "null"],
+      "description": "the structured failure kind for a REJECTED attempt, null otherwise"
+    },
+    "matched_field": {
+      "type": ["string", "null"],
+      "description": "the strongest identity field that matched an existing Paper for KNOWN"
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "doi": { "type": "string" },
+        "arxiv": { "type": "string" },
+        "openreview": { "type": "string" },
+        "title": { "type": "string" }
+      }
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider", "provider_record_id"],
+        "properties": {
+          "provider": { "type": "string" },
+          "provider_record_id": { "type": "string" }
+        }
+      }
+    },
+    "detail": {
+      "type": "object"
+    }
+  }
+}

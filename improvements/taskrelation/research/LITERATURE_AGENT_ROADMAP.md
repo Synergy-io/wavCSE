@@ -317,6 +317,8 @@ the increment numbers are not mistaken for the build order.
 | INC-011 | User-supplied primary-artifact ingestion (acquisition path A) | done (operator-side) |
 | INC-012 | Structured scholarly discovery (acquisition path B, discovery half) | done (metadata-only) |
 | INC-013 | Deterministic public primary-artifact acquisition (acquisition path B, retrieval half) | done (operator-side; paper hunter and desktop→remote transport are INC-014..015, not built) |
+| INC-016 | Literature Agent capability surface reachable and drift-proof | done (commit `65f6ecf`) |
+| INC-017 | Deterministic canonical-Paper admission from structured discovery | done (operator-side; discovery → admission → acquisition vertical slice) |
 
 Roadmap INC-002 was not built to restore numbering, and must not be. Query-time
 joins in `literature_query` already derive Study-scoped assessments from their
@@ -1434,6 +1436,129 @@ widening.
   remote controller can ingest a file that lives on the researcher's machine; the
   bytes arrive and invoke the *same* `LiteratureIngest.ingest` path. No file
   sync, upload service or desktop infrastructure is built before then.
+
+## INC-016 — Make the Literature Agent capability surface reachable and drift-proof
+
+**Status:** `done` (2026-10-03, commit `65f6ecf`). Repaired the model-facing
+literature adapter (`.omp/tools/literature.ts`) and the `literature-reviewer`
+agent so every capability the skill requires is actually callable, added the
+`literature_discover` tool, and added a bun-based adapter check plus static
+agent-asset tests that lock the read-only surface against drift.
+
+## INC-017 — Deterministic canonical-Paper admission from structured discovery
+
+**Status:** `done`. The missing transition between discovery and acquisition:
+structure discovery (INC-012) returns a `CandidatePaper` — external metadata that
+is *not* canonical state — while acquisition (INC-013) requires a canonical
+catalog `Paper`, so a discovered paper previously could not be acquired without
+hand-editing the catalog.
+
+**Goal**
+
+Own, deterministically, the one transition discovery never had:
+
+    CandidatePaper (normalized, provider-carried)
+        -> identity/provenance validation against the catalog
+        -> canonical Paper (new catalog row + canonical card)
+        -> the existing literature_acquire path
+        -> PrimaryArtifact
+
+`discovery ≠ admission`, and model judgment never mutates a canonical identity;
+the Literature Agent may *select* a paper it needs, but the write is owned by the
+deterministic layer.
+
+**What was built**
+
+`improvements/taskrelation/research/literature_admit.py` — a deterministic,
+operator-side module and `admit` / `validate` CLI:
+
+- **Identity, strongest first.** DOI, then arXiv, then OpenReview, then exact
+  normalized bibliographic identity (title + authors + year). Fuzzy title
+  similarity is never proof of identity; only exact normalized equality counts,
+  and it is the weakest admissible tier.
+- **Fail-closed classification.** Each present identity field is resolved against
+  the existing catalog through `LiteratureCatalog.lookup` (the same vocabulary as
+  `literature_query.identify_candidate`). Evidence that resolves to more than one
+  Paper is `IDENTITY_CONFLICT`; a title-only match while a strong identifier is
+  present but unrecorded is `AMBIGUOUS_PAPER`; no match is a new Paper.
+- **Multi-provider agreement.** One candidate or a compatible set of provider
+  records is merged by shared identifier. Providers that disagree on a strong
+  identifier or on the title fail closed; nothing is chosen because a provider
+  ran first — the resulting identity is order-independent.
+- **Deterministic `paper_id`.** `<first-author-family>-<year>-<title-slug>` from
+  the merged identity, matching the existing corpus shape (existing IDs are never
+  rewritten); a slug collision with a different work is `CATALOG_CONFLICT`.
+- **Canonical source URLs.** Identifier-derived canonical URLs (`doi.org`,
+  `arxiv.org/abs`, `openreview.net/forum`) plus provider record URLs whose host
+  the *existing* acquisition source policy classifies as recognized scholarly /
+  publisher / repository. Provider metadata/API hosts are dropped, artifact
+  locations are never persisted, and a candidate with no admissible source URL
+  fails `SOURCE_CORRESPONDENCE_INVALID` — so INC-013's `recorded_source_url`
+  correspondence is preserved without weakening it.
+- **Atomic, idempotent mutation.** The canonical card is written first and the
+  `catalog.jsonl` row is inserted in sorted position, each through a temp file +
+  `os.replace`; existing rows are preserved byte-for-byte. A repeat admission is
+  `KNOWN` (no new row); a partial write is self-healing on re-run.
+- **Provenance.** `literature/canonicalizations.jsonl` — an append-only,
+  schema-validated ledger (one row per attempt, deduplicated by a deterministic
+  `admission_id`) recording the discovery provider(s), provider record id(s),
+  the normalized identifiers considered, the outcome and a bounded detail. No
+  credentials, headers or raw provider payloads are stored.
+
+**Authority boundary**
+
+Option A of the three considered (operator/Main-OMP-side only), consistent with
+INC-011 ingestion, INC-013 acquisition and the Research Computer V1 authority
+model: deterministic mutating primitives are operator-side modules reached from
+the Main OMP session, while the specialized agents stay read-only. Admission is
+therefore deliberately **not** added to `.omp/tools/literature.ts`; the
+Literature Agent gains no catalog-write authority, and the agent-asset tests pin
+the five-tool surface and the module's write set.
+
+**Tests/verification**
+
+`tests/test_literature_admit.py` (26 fixtures-only cases, no live service): new
+DOI/arXiv admission; idempotent repeat; same DOI/arXiv from two providers → one
+Paper; DOI↔different-Paper conflict; exact-title collision failing closed; fuzzy
+title never merging; provider-order independence; deterministic slug collision;
+canonical vs arbitrary vs metadata source URLs; atomic/idempotent mutation with
+the existing rows unchanged; admission cannot touch another research record and
+never persists a credential or raw payload; INC-013 acquisition still fails
+closed for an unknown Paper; and the admitted Paper flowing through the existing
+`literature_acquire` → `literature_primary`/`literature_read` path.
+`tests/test_literature_agent_assets.py` locks the operator-side boundary. The
+whole research suite stays green under `make check`.
+
+**Live vertical slice (2026-10-03, transient — no repository state retained)**
+
+One real NEW paper was carried end-to-end through the deterministic path and then
+reverted, so the committed corpus stays at its 23 papers:
+
+- discovery: `literature_discovery discover --arxiv 2001.06782` returned
+  `Gradient Surgery for Multi-Task Learning` (arXiv, identity `new`) with an open
+  artifact location `https://arxiv.org/pdf/2001.06782v4`;
+- admission: `literature_admit admit --discovery … --index 0` →
+  `ADMITTED paper_id=yu-2020-gradient-surgery-multi-task`, source URLs
+  `https://arxiv.org/abs/2001.06782` (identifier-derived) and
+  `https://arxiv.org/abs/2001.06782v4` (recognized scholarly host);
+- acquisition: `literature_acquire acquire` → `ACQUIRED`,
+  `sha256=4b960b81a001f376e8cb551c61c5578129dd99a9d1ff147be5ea56b9e578cbdf`,
+  `recorded_source_url=https://arxiv.org/abs/2001.06782`,
+  `identity_evidence=[candidate:arxiv, pdf:arxiv, title]`;
+- read: `literature_primary read --page 1` returned `evidence_level=primary`
+  with the paper's own title and arXiv id on page 1.
+
+The catalog validated at 24 papers during the slice and every literature test
+passed; the slice's catalog row, card, manifest row, acquisition row and
+canonicalization row were then reverted, leaving only this record.
+
+**What is deliberately NOT done**
+
+No paper hunter, no provider added, no discovery/PrimaryArtifact/claim redesign,
+no LT-investigation lifecycle, no Research Computer proposal-lifecycle change, no
+database, and no model-facing widening. The investigation-lifecycle question
+(`PaperAssessment` requires an `LT-*` Study that nobody may currently register)
+is the next architectural problem and is untouched.
 
 
 # First Implementation Recommendation
