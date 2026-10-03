@@ -3,12 +3,19 @@
 Sources remain authoritative where they already live:
 
 * ``literature/catalog.jsonl`` owns paper identity and metadata;
-* the canonical card path points to per-paper derived knowledge;
-* ``STUDIES.jsonl`` owns Study lifecycle and LT-0002 card membership;
-* an LT Study's ``result.json`` may own structured paper-level assessment data.
+* ``literature/assessments.jsonl`` is the canonical machine-readable authority
+  for how an ``LT-*`` investigation assessed a paper;
+* ``STUDIES.jsonl`` owns Study lifecycle;
+* the canonical card path points to per-paper derived knowledge.
 
-This module creates no persisted state and never promotes a Study-scoped decision
-to a global paper status. It deliberately cannot answer claim/topic questions.
+During the INC-V2-2 transition the legacy assessment shapes (the LT-0001
+``result.json`` ``primary_sources_reviewed`` list, ``STUDIES.jsonl`` ``cards``,
+per-card verdict sections and ``INDEX.md`` tables) remain in place as migration
+witnesses and are checked for equivalence by
+:mod:`improvements.taskrelation.research.literature_assessment_equivalence`. This
+module reads the canonical registry, not those shapes, and never promotes an
+investigation-scoped assessment to a global paper status. It deliberately cannot
+answer claim/topic questions.
 
 Usage::
 
@@ -17,6 +24,7 @@ Usage::
     python -m improvements.taskrelation.research.literature_query identify --doi <doi>
     python -m improvements.taskrelation.research.literature_query paper-studies <identity>
     python -m improvements.taskrelation.research.literature_query study-papers LT-0001
+    python -m improvements.taskrelation.research.literature_query assessment LT-0002 <paper_id>
 
 Every operation here is read-only, idempotent and deterministic. ``identify``
 deduplicates a candidate paper against existing identity and returns ``known``,
@@ -34,12 +42,14 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping, Optional, Tuple
 
+from improvements.taskrelation.research import literature_assessment
 from improvements.taskrelation.research import literature_catalog
 
 
 _RESEARCH_DIR = Path(__file__).resolve().parent
 _DEFAULT_REPO_ROOT = _RESEARCH_DIR.parents[2]
 _DEFAULT_CATALOG = _RESEARCH_DIR / "literature" / "catalog.jsonl"
+_DEFAULT_ASSESSMENTS = _RESEARCH_DIR / "literature" / "assessments.jsonl"
 _DEFAULT_STUDIES = _RESEARCH_DIR / "STUDIES.jsonl"
 _ARTIFACT_NAMES = ("PLAN.md", "NOTE.md", "analysis.md", "result.json")
 _CANDIDATE_FIELDS = ("paper_id", "title", "doi", "arxiv", "source_url")
@@ -81,17 +91,30 @@ class StudyRecord:
 
 
 @dataclass(frozen=True)
-class AssessmentReference:
-    """One paper's state inside one LT Study, never a global paper verdict."""
+class GateReference:
+    """One eligibility gate outcome carried by a canonical assessment."""
 
-    study_id: str
+    gate_id: str
+    verdict: str
+
+
+@dataclass(frozen=True)
+class AssessmentReference:
+    """One canonical investigation-scoped assessment, never a global verdict.
+
+    Compact projection of a ``literature/assessments.jsonl`` record: enough to
+    answer relationship questions without opening a card.
+    """
+
+    investigation_id: str
     paper_id: str
-    source_kind: str
+    role: str
+    verdict: str
+    gates: Tuple[GateReference, ...]
+    reason_summary: str
     source_path: str
     detail_path: str
     detail_anchor: str
-    decision: Optional[str]
-    role: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -121,7 +144,8 @@ class LiteratureQuery:
         *,
         repo_root=_DEFAULT_REPO_ROOT,
         catalog_path=None,
-        studies_path=None
+        studies_path=None,
+        assessments_path=None
     ):
         self._repo_root = Path(repo_root).resolve()
         self._catalog_path = self._input_path(
@@ -129,6 +153,9 @@ class LiteratureQuery:
         )
         self._studies_path = self._input_path(
             studies_path if studies_path is not None else _DEFAULT_STUDIES
+        )
+        self._assessments_path = self._input_path(
+            assessments_path if assessments_path is not None else _DEFAULT_ASSESSMENTS
         )
         self._catalog = literature_catalog.load_catalog(
             self._catalog_path,
@@ -138,6 +165,15 @@ class LiteratureQuery:
         self._papers = tuple(self._paper_record(entry) for entry in self._catalog.entries)
         self._papers_by_id = {paper.paper_id: paper for paper in self._papers}
         self._all_studies, self._literature_studies = self._load_studies()
+        try:
+            self._assessments = literature_assessment.load_assessments(
+                self._assessments_path,
+                repo_root=self._repo_root,
+                literature_dir=self._catalog_path.parent,
+                studies_path=self._studies_path,
+            )
+        except literature_assessment.AssessmentError as exc:
+            raise LiteratureQueryError(str(exc)) from exc
         relationships = self._load_relationships()
         self._relationships_by_paper = self._group_relationships(
             relationships, lambda relationship: relationship.paper.paper_id
@@ -274,6 +310,21 @@ class LiteratureQuery:
         study = self.get_study(study_id)
         return self._relationships_by_study.get(study.study_id, ())
 
+    def get_assessment(self, investigation_id, paper_id):
+        """Return the canonical ``(investigation_id, paper_id)`` assessment record.
+
+        This is the detailed read: the full canonical ``PaperAssessment`` rather
+        than the compact relationship projection. Identity and semantics are the
+        registry's; the Study is resolved only to fail clearly on an unknown or
+        non-literature investigation id.
+        """
+
+        self.get_study(investigation_id)
+        try:
+            return self._assessments.get_assessment(investigation_id, paper_id)
+        except literature_assessment.AssessmentError as exc:
+            raise LiteratureQueryError(str(exc)) from exc
+
     @staticmethod
     def _normalize_text(value):
         return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
@@ -399,134 +450,31 @@ class LiteratureQuery:
         return path.relative_to(self._repo_root).as_posix()
 
     def _load_relationships(self):
-        relationships = {}
-        registry_source = self._relative_path(self._studies_path)
-        for study_id in sorted(self._literature_studies):
-            raw = self._all_studies[study_id]
-            study = self._literature_studies[study_id]
-            cards = raw.get("cards", [])
-            if cards is None:
-                cards = []
-            if not isinstance(cards, list):
-                raise LiteratureQueryError(
-                    "Study {!r} cards must be a list".format(study_id)
-                )
-            for paper_id in cards:
-                if not isinstance(paper_id, str):
-                    raise LiteratureQueryError(
-                        "Study {!r} card IDs must be strings".format(study_id)
-                    )
-                paper = self._paper_by_id(paper_id, study_id)
-                assessment = AssessmentReference(
-                    study_id=study_id,
-                    paper_id=paper.paper_id,
-                    source_kind="studies_registry.cards",
-                    source_path=registry_source,
-                    detail_path=paper.card_path,
-                    detail_anchor="{}-assessment".format(study_id.casefold()),
-                    decision=None,
-                    role=None,
-                )
-                self._add_relationship(relationships, paper, study, assessment)
-            if study.result_path is not None:
-                self._load_result_relationships(relationships, study)
-        return tuple(
-            relationships[key]
-            for key in sorted(relationships, key=lambda item: (item[0], item[1]))
-        )
+        """Project the canonical assessment registry into paper/Study joins."""
 
-    def _load_result_relationships(self, relationships, study):
-        result_path = self._repo_root / study.result_path
-        try:
-            result = json.loads(result_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise LiteratureQueryError(
-                "cannot read Study {!r} result {}: {}".format(
-                    study.study_id, study.result_path, exc
-                )
-            ) from exc
-        if not isinstance(result, dict):
-            raise LiteratureQueryError(
-                "Study {!r} result must be an object".format(study.study_id)
-            )
-        result_study_id = result.get("study_id")
-        if result_study_id is not None and result_study_id != study.study_id:
-            raise LiteratureQueryError(
-                "Study {!r} result identifies {!r}".format(
-                    study.study_id, result_study_id
-                )
-            )
-        reviewed = result.get("primary_sources_reviewed", [])
-        if not isinstance(reviewed, list):
-            raise LiteratureQueryError(
-                "Study {!r} primary_sources_reviewed must be a list".format(
-                    study.study_id
-                )
-            )
-        for index, raw_assessment in enumerate(reviewed):
-            where = "Study {!r} primary_sources_reviewed[{}]".format(
-                study.study_id, index
-            )
-            if not isinstance(raw_assessment, dict):
-                raise LiteratureQueryError("{} must be an object".format(where))
-            source_url = raw_assessment.get("url")
-            if not isinstance(source_url, str) or not source_url.strip():
-                raise LiteratureQueryError("{} url must be a string".format(where))
-            try:
-                entry = self._catalog.lookup(source_url)
-            except literature_catalog.CatalogError as exc:
-                raise LiteratureQueryError(
-                    "{} does not resolve to a catalog paper: {}".format(where, exc)
-                ) from exc
-            paper = self._papers_by_id[entry.paper_id]
-            decision = raw_assessment.get("decision")
-            role = raw_assessment.get("role")
-            for field, value in (("decision", decision), ("role", role)):
-                if value is not None and not isinstance(value, str):
-                    raise LiteratureQueryError(
-                        "{} {} must be a string or null".format(where, field)
-                    )
+        registry_source = self._relative_path(self._assessments_path)
+        relationships = []
+        for record in self._assessments.records:
+            paper = self._papers_by_id[record.paper_id]
+            study = self._literature_studies[record.investigation_id]
             assessment = AssessmentReference(
-                study_id=study.study_id,
-                paper_id=paper.paper_id,
-                source_kind="result_json.primary_sources_reviewed",
-                source_path=study.result_path,
-                detail_path=paper.card_path,
-                detail_anchor="{}-decision".format(study.study_id.casefold()),
-                decision=decision,
-                role=role,
+                investigation_id=record.investigation_id,
+                paper_id=record.paper_id,
+                role=record.role,
+                verdict=record.verdict,
+                gates=tuple(
+                    GateReference(gate.gate_id, gate.verdict)
+                    for gate in record.gates
+                ),
+                reason_summary=record.reason_summary,
+                source_path=registry_source,
+                detail_path=record.detail_path,
+                detail_anchor=record.detail_anchor,
             )
-            self._add_relationship(relationships, paper, study, assessment)
-
-    def _paper_by_id(self, paper_id, study_id):
-        try:
-            return self._papers_by_id[paper_id]
-        except KeyError as exc:
-            raise LiteratureQueryError(
-                "Study {!r} references unknown paper_id {!r}".format(
-                    study_id, paper_id
-                )
-            ) from exc
-
-    @staticmethod
-    def _add_relationship(relationships, paper, study, assessment):
-        key = (study.study_id, paper.paper_id)
-        existing = relationships.get(key)
-        if existing is not None:
-            raise LiteratureQueryError(
-                "conflicting literature assessments for Study {!r}, paper {!r}: "
-                "{} and {}".format(
-                    study.study_id,
-                    paper.paper_id,
-                    existing.assessment.source_kind,
-                    assessment.source_kind,
-                )
+            relationships.append(
+                PaperStudyRecord(paper=paper, study=study, assessment=assessment)
             )
-        relationships[key] = PaperStudyRecord(
-            paper=paper,
-            study=study,
-            assessment=assessment,
-        )
+        return tuple(relationships)
 
     @staticmethod
     def _group_relationships(relationships, key):
@@ -580,14 +528,18 @@ def _study_dict(study):
 
 def _assessment_dict(assessment):
     return {
-        "study_id": assessment.study_id,
+        "investigation_id": assessment.investigation_id,
         "paper_id": assessment.paper_id,
-        "source_kind": assessment.source_kind,
+        "role": assessment.role,
+        "verdict": assessment.verdict,
+        "gates": [
+            {"gate_id": gate.gate_id, "verdict": gate.verdict}
+            for gate in assessment.gates
+        ],
+        "reason_summary": assessment.reason_summary,
         "source_path": assessment.source_path,
         "detail_path": assessment.detail_path,
         "detail_anchor": assessment.detail_anchor,
-        "decision": assessment.decision,
-        "role": assessment.role,
     }
 
 
@@ -625,6 +577,11 @@ def _build_parser():
         "study-papers", help="list paper relationships for one LT Study"
     )
     study_papers.add_argument("study_id")
+    assessment = commands.add_parser(
+        "assessment", help="return one canonical (investigation, paper) assessment"
+    )
+    assessment.add_argument("investigation_id")
+    assessment.add_argument("paper_id")
     identify = commands.add_parser(
         "identify", help="deduplicate a candidate paper against known identity"
     )
@@ -671,6 +628,12 @@ def main(argv=None):
                     _relationship_dict(relationship)
                     for relationship in query.studies_for_paper(args.identity)
                 ],
+            }
+        elif args.command == "assessment":
+            document = {
+                "assessment": query.get_assessment(
+                    args.investigation_id, args.paper_id
+                ).as_dict()
             }
         else:
             relationships = query.papers_for_study(args.study_id)

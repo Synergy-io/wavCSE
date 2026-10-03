@@ -5,8 +5,9 @@ Primary-source literature cards for the formal Task Relation Learning programme.
 Paper identity is declared in [`catalog.jsonl`](catalog.jsonl): each existing
 card filename stem is its immutable `paper_id`, and the catalog maps that ID and
 recorded external identifiers to the canonical card. The catalog contains no
-screening verdicts; those remain specific to the `LT-*` Study tables below.
-Validate it with
+screening verdicts; those live in [`assessments.jsonl`](assessments.jsonl), the
+canonical structured authority, and the `LT-*` tables below remain as
+transitional human witnesses. Validate it with
 `python -m improvements.taskrelation.research.literature_catalog`.
 
 ## Structured query interface
@@ -24,9 +25,9 @@ python -m improvements.taskrelation.research.literature_query study-papers LT-00
 ```
 
 Results contain compact paper metadata, canonical card paths, Study metadata
-and Study-scoped assessment pointers. A structured per-paper decision is
-returned only where the existing `LT-*` result records one; otherwise the query
-returns the exact card section to open. Study decisions are never paper status.
+and Study-scoped assessment records. A structured per-paper assessment is
+returned for every `(investigation, paper)` pair; the assessment is canonical and
+never a global paper status.
 
 `identify` is the deduplication front door for a candidate paper: it reports
 `known` (with the existing `paper_id` and card), `new`, or `ambiguous`. It uses
@@ -43,13 +44,39 @@ silent pick.
 | `list_papers` | READ | `catalog.jsonl` | exact metadata filters only |
 | `resolve_paper` | READ | `catalog.jsonl` | raises on unknown identity |
 | `identify_candidate` | READ | `catalog.jsonl` | returns `known` / `new` / `ambiguous` |
-| `studies_for_paper` | READ | catalog × `STUDIES.jsonl` × LT `result.json` | each record Study-scoped |
-| `papers_for_study` | READ | `STUDIES.jsonl` × LT `result.json` | raises on unknown Study |
+| `studies_for_paper` | READ | `catalog.jsonl` × `assessments.jsonl` | each record investigation-scoped |
+| `papers_for_study` | READ | `assessments.jsonl` | raises on unknown Study |
+| `get_assessment` | READ | `assessments.jsonl` | exact `(investigation_id, paper_id)` |
 | `get_study` | READ | `STUDIES.jsonl` + Study folder | artifact presence only |
 
 Every operation above is read-only, idempotent and deterministic; none mutates
 research state. Mutation of literature state remains outside this interface and
 belongs to the future increments.
+
+## Canonical paper assessments
+
+[`assessments.jsonl`](assessments.jsonl) is the one structured machine-readable
+authority for how an `LT-*` investigation assessed a paper. Its identity is
+exactly `(investigation_id, paper_id)` and at most one current record exists for
+that pair; `investigation_id` stays in the shared Study-ID namespace (`LT-0001`
+and `LT-0002` are registered Studies) and `paper_id` is always a canonical
+catalog identity. There is no global paper verdict: the catalog carries no
+screening status and a card carries no global verdict.
+
+Each record carries the paper's investigation-scoped `role`, the investigation's
+`verdict`, the `gates` it applied (with normalised gate outcomes where the
+investigation was gate-structured), a verbatim `reason_summary`, an
+`assessment_anchor` (`<card>#<section>`) that points at the full prose, and the
+`assessed_at` boundary. Vocabularies are investigation-scoped and derived from
+the existing records.
+
+Validate it with
+`python -m improvements.taskrelation.research.literature_assessment`; prove it
+still agrees with the legacy shapes (the LT-0001 `result.json`
+`primary_sources_reviewed` list, `STUDIES.jsonl` `cards`, per-card verdict
+sections and the tables below) with
+`python -m improvements.taskrelation.research.literature_assessment_equivalence`
+while those witnesses remain in place.
 
 ## Primary artifacts
 

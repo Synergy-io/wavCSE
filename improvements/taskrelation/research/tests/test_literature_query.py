@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from improvements.taskrelation.research import literature_assessment
 from improvements.taskrelation.research import literature_query
 
 
@@ -124,7 +125,7 @@ class QueryFixture(unittest.TestCase):
                     "primary_sources_reviewed": [
                         {
                             "key": "beta",
-                            "role": "direct_symptom_match",
+                            "role": "direct_gradient_scale_balancing",
                             "url": "https://example.org/beta",
                             "decision": "exclude_taxonomy",
                         }
@@ -132,6 +133,49 @@ class QueryFixture(unittest.TestCase):
                 }
             ),
             encoding="utf-8",
+        )
+        for record in self.records:
+            (self.literature_dir / (record["paper_id"] + ".md")).write_text(
+                "# {}\n".format(record["title"]), encoding="utf-8"
+            )
+        self.assessments_path = self.literature_dir / "assessments.jsonl"
+        assessments = [
+            {
+                "schema_version": 1,
+                "investigation_id": "LT-0001",
+                "paper_id": "beta-2020-method",
+                "role": "direct_gradient_scale_balancing",
+                "gates": [],
+                "verdict": "exclude_taxonomy",
+                "reason_summary": "Boundary case excluded by taxonomy.",
+                "assessment_anchor": "research/literature/beta-2020-method.md#lt-0001-decision",
+                "assessed_at": "2026-01-01T00:00:00+00:00",
+            },
+            {
+                "schema_version": 1,
+                "investigation_id": "LT-0002",
+                "paper_id": "beta-2020-method",
+                "role": "family_b_estimator",
+                "gates": [],
+                "verdict": "fail",
+                "reason_summary": "Screened and closed.",
+                "assessment_anchor": "research/literature/beta-2020-method.md#lt-0002-assessment",
+                "assessed_at": "2026-01-02T00:00:00+00:00",
+            },
+            {
+                "schema_version": 1,
+                "investigation_id": "LT-0002",
+                "paper_id": "gamma-2024-method",
+                "role": "family_b_estimator",
+                "gates": [],
+                "verdict": "pass",
+                "reason_summary": "Clean pass.",
+                "assessment_anchor": "research/literature/gamma-2024-method.md#lt-0002-assessment",
+                "assessed_at": "2026-01-02T00:00:00+00:00",
+            },
+        ]
+        self.assessments_path.write_text(
+            "".join(json.dumps(row) + "\n" for row in assessments), encoding="utf-8"
         )
 
     def tearDown(self):
@@ -142,6 +186,7 @@ class QueryFixture(unittest.TestCase):
             repo_root=self.repo_root,
             catalog_path=self.catalog_path,
             studies_path=self.studies_path,
+            assessments_path=self.assessments_path,
         )
 
 
@@ -223,14 +268,31 @@ class LiteratureStudyRelationshipTests(QueryFixture):
             ["LT-0001", "LT-0002"],
         )
         first, second = relationships
-        self.assertEqual(first.assessment.study_id, "LT-0001")
+        self.assertEqual(first.assessment.investigation_id, "LT-0001")
         self.assertEqual(first.assessment.paper_id, "beta-2020-method")
-        self.assertEqual(first.assessment.decision, "exclude_taxonomy")
-        self.assertEqual(first.assessment.role, "direct_symptom_match")
-        self.assertEqual(second.assessment.study_id, "LT-0002")
-        self.assertIsNone(second.assessment.decision)
+        self.assertEqual(first.assessment.verdict, "exclude_taxonomy")
+        self.assertEqual(first.assessment.role, "direct_gradient_scale_balancing")
+        self.assertEqual(second.assessment.investigation_id, "LT-0002")
+        self.assertEqual(second.assessment.verdict, "fail")
+        self.assertEqual(second.assessment.role, "family_b_estimator")
         self.assertEqual(second.assessment.detail_anchor, "lt-0002-assessment")
         self.assertEqual(second.study.decision, "CANDIDATES_FOUND")
+
+    def test_relationship_queries_never_open_a_card(self):
+        # Queries are backed by the registry, so card *content* is irrelevant;
+        # replacing every card with unparseable text must not change an answer.
+        query = self.open_query()
+        for record in self.records:
+            (self.literature_dir / (record["paper_id"] + ".md")).write_text(
+                "not a card at all\n", encoding="utf-8"
+            )
+
+        relationships = query.papers_for_study("LT-0002")
+
+        self.assertEqual(
+            [relationship.paper.paper_id for relationship in relationships],
+            ["beta-2020-method", "gamma-2024-method"],
+        )
 
     def test_study_to_papers_returns_deterministic_relationship_order(self):
         query = self.open_query()
@@ -242,7 +304,10 @@ class LiteratureStudyRelationshipTests(QueryFixture):
             ["beta-2020-method", "gamma-2024-method"],
         )
         self.assertTrue(
-            all(relationship.assessment.study_id == "LT-0002" for relationship in relationships)
+            all(
+                relationship.assessment.investigation_id == "LT-0002"
+                for relationship in relationships
+            )
         )
 
     def test_known_paper_without_study_relationship_returns_empty_tuple(self):
@@ -279,16 +344,21 @@ class LiteratureStudyRelationshipTests(QueryFixture):
         self.assertIsNone(study.result_path)
 
     def test_two_records_for_one_paper_in_one_study_are_a_conflict(self):
-        self.studies_path.write_text(
-            json.dumps(
+        # Canonical uniqueness is enforced by the registry: a duplicate
+        # (investigation, paper) pair is rejected when the query loads.
+        self.assessments_path.write_text(
+            self.assessments_path.read_text(encoding="utf-8")
+            + json.dumps(
                 {
-                    "study_id": "LT-0001",
-                    "type": "literature",
-                    "title": "First literature question",
-                    "status": "rejected",
-                    "stage": "primary_source_review",
-                    "path": "research/studies/LT-0001",
-                    "cards": ["beta-2020-method"],
+                    "schema_version": 1,
+                    "investigation_id": "LT-0002",
+                    "paper_id": "gamma-2024-method",
+                    "role": "family_b_estimator",
+                    "gates": [],
+                    "verdict": "fail",
+                    "reason_summary": "duplicate",
+                    "assessment_anchor": "research/literature/gamma-2024-method.md#lt-0002-assessment",
+                    "assessed_at": "2026-01-02T00:00:00+00:00",
                 }
             )
             + "\n",
@@ -297,7 +367,7 @@ class LiteratureStudyRelationshipTests(QueryFixture):
 
         with self.assertRaisesRegex(
             literature_query.LiteratureQueryError,
-            "conflicting literature assessments for Study 'LT-0001', paper 'beta-2020-method'",
+            "duplicate paper assessment 'LT-0002#gamma-2024-method'",
         ):
             self.open_query()
 
@@ -465,15 +535,31 @@ class RealRepositoryQueryTests(unittest.TestCase):
         self.assertEqual(len(self.query.papers_for_study("LT-0001")), 8)
         self.assertEqual(len(self.query.papers_for_study("LT-0002")), 15)
 
-    def test_real_structured_and_pointer_only_assessments_stay_distinct(self):
+    def test_real_assessments_stay_investigation_scoped(self):
         gradnorm = self.query.studies_for_paper("chen-et-al-2018-gradnorm")
         mssl = self.query.studies_for_paper("goncalves-2016-mssl")
 
-        self.assertEqual(gradnorm[0].assessment.study_id, "LT-0001")
-        self.assertEqual(gradnorm[0].assessment.decision, "exclude_taxonomy")
-        self.assertEqual(mssl[0].assessment.study_id, "LT-0002")
-        self.assertIsNone(mssl[0].assessment.decision)
+        self.assertEqual(gradnorm[0].assessment.investigation_id, "LT-0001")
+        self.assertEqual(gradnorm[0].assessment.verdict, "exclude_taxonomy")
+        self.assertEqual(mssl[0].assessment.investigation_id, "LT-0002")
+        self.assertEqual(mssl[0].assessment.verdict, "pass")
+        self.assertEqual(mssl[0].assessment.role, "family_b_estimator")
         self.assertEqual(mssl[0].assessment.detail_anchor, "lt-0002-assessment")
+
+    def test_real_assessment_operation_returns_the_canonical_record(self):
+        record = self.query.get_assessment("LT-0002", "goncalves-2016-mssl")
+
+        self.assertEqual(record.assessment_ref, "LT-0002#goncalves-2016-mssl")
+        self.assertEqual(record.verdict, "pass")
+        self.assertEqual(len(record.gates), 6)
+        self.assertEqual(
+            [gate.gate_id for gate in record.gates], list(literature_assessment.GATE_IDS)
+        )
+        self.assertEqual(
+            record.assessment_anchor,
+            "improvements/taskrelation/research/literature/goncalves-2016-mssl.md"
+            "#lt-0002-assessment",
+        )
 
 
 if __name__ == "__main__":

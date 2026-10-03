@@ -144,10 +144,30 @@ const first = (parse(relationships).relationships as Record<string, unknown>[])[
 const assessment = first.assessment as Record<string, unknown>;
 check(
 	"query keeps the assessment Study-scoped with a resolvable pointer",
-	assessment.study_id === "LT-0001" &&
-		assessment.decision === "exclude_taxonomy" &&
+	assessment.investigation_id === "LT-0001" &&
+		assessment.verdict === "exclude_taxonomy" &&
 		typeof assessment.detail_anchor === "string",
 	assessment,
+);
+
+// 5b. query: one canonical (investigation, paper) assessment record
+const record = await call("literature_query", {
+	operation: "assessment",
+	studyId: "LT-0002",
+	paperId: "goncalves-2016-mssl",
+});
+const canonical = parse(record).assessment as Record<string, unknown>;
+check(
+	"assessment returns the canonical record keyed by investigation and paper",
+	canonical.assessment_ref === "LT-0002#goncalves-2016-mssl" &&
+		canonical.verdict === "pass" &&
+		(Array.isArray(canonical.gates) ? canonical.gates.length : -1) === 6,
+	canonical,
+);
+check(
+	"assessment requires both an investigation and a paper",
+	(await call("literature_query", { operation: "assessment", paperId: "goncalves-2016-mssl" }))
+		.details.kind === "INVALID_REFERENCE",
 );
 
 // 6. bounded read: card

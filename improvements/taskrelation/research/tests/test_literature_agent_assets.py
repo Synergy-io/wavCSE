@@ -231,6 +231,13 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertIn('"literature_claims"', self.code)
         self.assertIn('"survey"', self.code)
 
+    def test_adapter_exposes_the_canonical_assessment_query(self):
+        # One canonical (investigation, paper) assessment read, addable without a
+        # fifth literature tool.
+        self.assertIn('"assessment"', self.code)
+        self.assertIn('"assessment", params.studyId, params.paperId', self.code)
+        self.assertEqual(len(re.findall(r'name:\s*"(literature_[a-z_]+)"', self.source)), 4)
+
     def test_adapter_exposes_primary_read_but_never_registration(self):
         # The agent may read a retained primary artifact by page, and may never
         # register one: registration is an operator-side act.
@@ -274,7 +281,7 @@ class MutationBoundaryTests(unittest.TestCase):
 
     READ_ONLY_MODULES = (
         "literature_catalog.py", "literature_query.py", "literature_read.py",
-        "literature_claims.py",
+        "literature_claims.py", "literature_assessment.py",
     )
     WRITE_PATTERNS = ("write_text(", "open(", ".unlink(", "mkdir(", "os.replace(")
 

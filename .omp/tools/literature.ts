@@ -68,6 +68,7 @@ export interface QueryParams {
 		| "paper_studies"
 		| "study_papers"
 		| "study"
+		| "assessment"
 		| "paper_claims"
 		| "claim";
 	paperId?: string;
@@ -118,6 +119,10 @@ function queryArgv(params: QueryParams): string[] | undefined {
 		case "study":
 			return params.studyId
 				? [...argv, "study-papers", params.studyId]
+				: undefined;
+		case "assessment":
+			return params.studyId && params.paperId
+				? [...argv, "assessment", params.studyId, params.paperId]
 				: undefined;
 		case "paper_claims": {
 			if (!params.paperId) return undefined;
@@ -230,9 +235,10 @@ const factory: CustomToolFactory = (pi) => {
 			name: "literature_query",
 			label: "Query Literature",
 			description:
-				"Enumerate retained papers and read Study-scoped literature state as compact " +
-				"records with card and artifact pointers. A Study's decision describes that " +
-				"Study's question only; it is never a global paper status.",
+				"Enumerate retained papers and read investigation-scoped literature state as " +
+				"compact records with card and artifact pointers. Each paper assessment is " +
+				"canonical, keyed by (investigation, paper) and answers how that investigation " +
+				"assessed the paper; it is never a global paper status.",
 			parameters: z.object({
 				operation: z
 					.enum([
@@ -241,19 +247,29 @@ const factory: CustomToolFactory = (pi) => {
 						"paper_studies",
 						"study_papers",
 						"study",
+						"assessment",
 						"paper_claims",
 						"claim",
 					])
 					.describe(
-						"which bounded read-only query to run; paper_claims and claim return " +
-							"recorded source-bound literature claims (paper_claims: all claims for a " +
-							"paper, optionally filtered by claimType; claim: one exact claim)",
+						"which bounded read-only query to run; assessment returns one " +
+							"canonical (investigation, paper) PaperAssessment record; paper_claims " +
+							"and claim return recorded source-bound literature claims (paper_claims: " +
+							"all claims for a paper, optionally filtered by claimType; claim: one " +
+							"exact claim)",
 					),
 				paperId: z
 					.string()
 					.optional()
-					.describe("required by resolve, paper_studies, paper_claims and claim"),
-				studyId: z.string().optional().describe("required by study_papers and study"),
+					.describe(
+						"required by resolve, paper_studies, assessment, paper_claims and claim",
+					),
+				studyId: z
+					.string()
+					.optional()
+					.describe(
+						"required by study_papers, study and assessment (as the investigation id)",
+					),
 				claimId: z.string().optional().describe("required by claim"),
 				claimType: z
 					.string()
@@ -272,9 +288,11 @@ const factory: CustomToolFactory = (pi) => {
 							? "operation"
 							: p.operation === "claim"
 								? "paperId and claimId"
-								: p.operation === "paper_claims"
-									? "paperId"
-									: "paperId or studyId";
+								: p.operation === "assessment"
+									? "studyId and paperId"
+									: p.operation === "paper_claims"
+										? "paperId"
+										: "paperId or studyId";
 					return invalid(needed, `literature_query operation=${p.operation}`);
 				}
 				return invoke(argv, rest);
