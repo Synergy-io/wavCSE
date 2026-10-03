@@ -314,6 +314,7 @@ the increment numbers are not mistaken for the build order.
 | INC-008 | Bounded Literature Review Agent | later |
 | INC-009 | Exercise real questions, measure query behaviour | later |
 | INC-010 | Broader research query index | later |
+| INC-011 | User-supplied primary-artifact ingestion (acquisition path A) | done (operator-side; structured discovery, web acquisition, paper hunter and desktop→remote transport are INC-012..015, designed only) |
 
 Roadmap INC-002 was not built to restore numbering, and must not be. Query-time
 joins in `literature_query` already derive Study-scoped assessments from their
@@ -1088,6 +1089,151 @@ No relational/graph/vector database, no event bus, no rewrite of `STATE.md`/`FIN
 **Exit criteria**
 
 Measured cross-domain queries are cheap and evidence-linked, while canonical historical records stay in place.
+
+## INC-011 — User-supplied primary-artifact ingestion (the acquisition entry path)
+
+**Status:** `done` (2026-10-03). Operator-side only; the model-facing literature
+surface (`literature_primary`: `status | get | read`) is unchanged and still
+cannot register an artifact.
+
+**Goal**
+
+Open the first *acquisition* entry path without letting an LLM, a browsing agent
+or a URL create an admitted `PrimaryArtifact` directly. A researcher hands the
+system one local file and, optionally, identity hints; deterministic code
+resolves the Paper, validates the bytes, hashes them and admits them through the
+existing storage contract.
+
+**Why now**
+
+`INC-004B.1`/`INC-004C` built the retained artifact, its manifest and multi-version
+retrieval, and `INC-004B.1` exposed the gap in its own record: `register` was
+exercised by hand, needs an exact `paper_id`, and records the artifact but not
+*how the bytes arrived*. Acquisition is the next capability the Literature Agent
+needs (it can only request it, never perform it), and it must converge on one
+admission pipeline rather than accrete per-source tooling later.
+
+**The acquisition contract (design; only path A is implemented here)**
+
+Three entry paths converge on one deterministic pipeline:
+
+```
+A. user-supplied local file            ─┐
+B. structured scholarly discovery       ├─→ candidate bytes
+   (DOI/Crossref, arXiv, OpenReview,    │      ↓ format/integrity validation
+    Semantic Scholar, proceedings,      │      ↓ scholarly identity/version validation
+    repositories, publisher/author PDFs)│      ↓ exact-byte SHA-256 identity
+C. narrow paper-hunter public-web       │      ↓ duplicate/version handling
+   location discovery (fallback only)  ─┘      ↓ immutable local retention
+                                               → PrimaryArtifact manifest row
+                                               → acquisition-attempt ledger row
+```
+
+An LLM or browsing agent may only ever *request* acquisition or *propose a
+candidate location* (path C); it never validates, hashes, associates or admits.
+
+**What was built**
+
+- `literature_ingest.py`: `LiteratureIngest.ingest(source_path, *, paper_id=,
+  doi=, arxiv=, title=, source_url=, role=, source_label=)` and the `ingest` /
+  `validate` CLI subcommands. It resolves identity hints through the existing
+  `literature_catalog` vocabulary (`lookup`: exact paper_id, title/alias, DOI,
+  arXiv, source URL — no fuzzy matching, no second identity system), then admits
+  through `literature_primary.register`, which owns byte validation, SHA-256,
+  dedup, immutable local retention and the manifest row. `LiteratureIngest` is a
+  resolver/recorder over that primitive, never a parallel store.
+- `literature/acquisitions.jsonl` (+ `.schema.json`): an append-only,
+  Git-tracked ledger of acquisition attempts — the one piece of state the
+  artifact manifest cannot express.
+
+**New state and why**
+
+The manifest row records the *retained artifact*; it has no field for the
+acquisition channel, and its `source_url` is constrained to a catalog URL by
+design (provenance, not storage identity). Rather than weaken that schema, the
+attempt is recorded in a separate append-only ledger:
+
+`acquisitions.jsonl` row = `schema_version`, `acquisition_id` (deterministic
+digest of channel + hints + resolved `paper_id`/`role`/`sha256`),
+`recorded_at`, `provenance` (`USER_SUPPLIED`), `status`
+(`ADMITTED | DUPLICATE | REJECTED`), `paper_id`, `role`, `sha256`,
+`size_bytes`, `media_type`, `source_url`, `source_label` (an opaque basename,
+never a path), `failure_kind` and `detail`.
+
+`validate()` binds every admitted/duplicate row back to a retained manifest
+artifact `(paper_id, role, sha256, size_bytes)`, so a ledger that claims bytes
+the manifest does not declare is corrupt, not merely stale. The ledger is
+idempotent per `acquisition_id`: a repeated identical attempt grows no state.
+
+**Identity / version / dedup semantics**
+
+- **Same Paper, same bytes → `DUPLICATE`.** A digest already retained for the
+  Paper under any role is returned, and no second row (or ledger row) is written.
+- **Same Paper, different version → a separate `PrimaryArtifact`.** The caller
+  names the role (`preprint`/`published`); both rows coexist and stay
+  independently addressable. Supplying different bytes for the *same* role is
+  refused as `REGISTRATION_CONFLICT`, never overwritten.
+- **Different Paper → refused.** An explicit `paper_id` that disagrees with
+  another hint is `IDENTITY_MISMATCH`; hints that resolve to more than one Paper
+  with no explicit anchor are `AMBIGUOUS_PAPER`; a hint in no catalog entry is
+  `UNKNOWN_PAPER` (or `SOURCE_URL_NOT_RECORDED` for a provenance URL).
+- **Unversioned second artifact → `ROLE_REQUIRED`**, so a new version can never
+  be silently created under the default `source` role.
+- **Missing provenance → `SOURCE_URL_REQUIRED`** when the Paper records several
+  source URLs and the caller names neither a URL nor a role-consistent one.
+
+**Authority / security boundary**
+
+- Raw bytes are untrusted data: the only facts read from a file are its length,
+  its SHA-256 and its `%PDF-` header. Nothing parses PDF *content*; there is no
+  shell, no network and no credential anywhere in the path.
+- An attempt writes exactly three things: the disposable cache and the primary
+  manifest (both via `register`) and the ledger. `INC-011` can create no Claim,
+  `PaperAssessment`, card, synthesis, finding, decision, Study or proposal, and
+  never edits project research state.
+- Ingestion is operator-side; the Literature Agent's granted tools are
+  unchanged, and a browsing agent has no admit capability.
+
+**Tests/verification**
+
+`tests/test_literature_ingest.py` (26 cases): admission to an existing Paper via
+`paper_id` and via DOI hint; byte-identical duplicate idempotency; distinct
+versions preserved; same-role conflict refused; unversioned second artifact
+`ROLE_REQUIRED`; `AMBIGUOUS_PAPER`, `IDENTITY_MISMATCH`, `UNKNOWN_PAPER`,
+`SOURCE_URL_REQUIRED`, `SOURCE_URL_NOT_RECORDED`; non-PDF and missing file
+rejected; reachability through `literature_primary.get` and
+`literature_read.read_primary`; the write set is exactly manifest + ledger +
+cache; `USER_SUPPLIED` provenance and machine-readable failure kinds; ledger
+binding failure detected; and untrusted-PDF handling — injection text in the PDF
+body never appears in any result or ledger field, and the module source contains
+no shell or dynamic-code primitive. All 26 pass, inside `make check`.
+
+**What is deliberately NOT done**
+
+No network, no HTTP client, no crawler, no S3/`infra`, no OCR, no claims or card
+mutation, no model-facing widening. `register(replace=True)` exists but ingestion
+never exposes it: overwrite/correction and quarantine of a mistakenly admitted
+artifact are deferred with the acquisition paths below.
+
+### Planned acquisition increments (designed, not implemented)
+
+- **INC-012 — Structured scholarly discovery.** Resolve a DOI/Crossref, arXiv,
+  OpenReview or Semantic Scholar record (and proceedings/repository pages) into a
+  candidate `(identity, artifact locations)`; identity still resolves through the
+  catalog, and a new Paper identity is a separate, explicit concern.
+- **INC-013 — Deterministic public-artifact acquisition.** A source policy, HTTP
+  retrieval with redirects, content/size validation, identity/version
+  verification, bounded retries/backoff, rate limiting, caching and provenance —
+  producing candidate bytes for the same `LiteratureIngest` admission path.
+- **INC-014 — Narrow paper hunter.** A read-only specialist invoked only when
+  structured acquisition is insufficient; public location discovery and
+  structured candidate-location output only, with no admission authority and no
+  bypass of authentication/paywalls/anti-bot controls. Its agent would follow the
+  `literature-reviewer` pattern (`tools:` limited, transcript-checkable).
+- **INC-015 — Local-PC → remote-controller transport.** A thin transfer step so a
+  remote controller can ingest a file that lives on the researcher's machine; the
+  bytes arrive and invoke the *same* `LiteratureIngest.ingest` path. No file
+  sync, upload service or desktop infrastructure is built before then.
 
 # First Implementation Recommendation
 

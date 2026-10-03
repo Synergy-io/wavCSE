@@ -411,6 +411,10 @@ class LiteraturePrimary:
     def manifest_path(self):
         return self._manifest_path
 
+    @property
+    def catalog_path(self):
+        return self._catalog_path
+
     def cache_path(self, paper_id, role=_DEFAULT_ROLE):
         return self.policy.cache_path(paper_id, role)
 

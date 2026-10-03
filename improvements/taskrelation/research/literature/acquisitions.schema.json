@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wavcse.local/schemas/literature-acquisition-attempt-v1.json",
+  "title": "wavCSE primary-artifact acquisition attempt",
+  "description": "One append-only provenance record of an attempt to admit a primary artifact. The artifact's identity and bytes live in primary_manifest.jsonl and the disposable cache; this row only records how the attempt arrived, what it resolved to, and how it ended. Paper identity and bibliography stay in catalog.jsonl.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "acquisition_id",
+    "recorded_at",
+    "provenance",
+    "status",
+    "paper_id",
+    "role",
+    "sha256",
+    "size_bytes",
+    "media_type",
+    "source_url",
+    "source_label",
+    "failure_kind",
+    "detail"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "acquisition_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "deterministic identity of the attempt, derived from provenance, identity hints and the resolved artifact digest"
+    },
+    "recorded_at": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ISO 8601 timestamp of the attempt"
+    },
+    "provenance": {
+      "enum": ["USER_SUPPLIED"],
+      "description": "the acquisition channel; more channels are added by later increments, never a new pipeline"
+    },
+    "status": {
+      "enum": ["ADMITTED", "DUPLICATE", "REJECTED"]
+    },
+    "paper_id": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "resolved canonical paper_id, or null when the attempt was rejected before a Paper was identified"
+    },
+    "role": {
+      "enum": ["source", "preprint", "published", null],
+      "description": "artifact version/role the attempt addressed, or null when unresolved"
+    },
+    "sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "exact-byte identity of the candidate artifact, or null when the bytes were unavailable"
+    },
+    "size_bytes": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "media_type": {
+      "type": ["string", "null"],
+      "description": "canonical media type when a PDF was validated, else null"
+    },
+    "source_url": {
+      "type": ["string", "null"],
+      "description": "the catalog source URL the artifact was associated with, or null"
+    },
+    "source_label": {
+      "type": ["string", "null"],
+      "description": "opaque provenance label (a basename, never a filesystem path)"
+    },
+    "failure_kind": {
+      "type": ["string", "null"],
+      "description": "deterministic failure taxonomy on rejection, else null"
+    },
+    "detail": {
+      "type": "object",
+      "description": "machine-readable failure context; never credential material"
+    }
+  }
+}
