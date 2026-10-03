@@ -1,8 +1,9 @@
 """The canonical PaperAssessment registry: one investigation-scoped authority.
 
-Covers validation (identity, vocabularies, gates, anchors), the legacy
-private-key normalisation, the real-registry coverage of LT-0001/LT-0002, and the
-transitional equivalence with the legacy representations it will replace.
+Covers validation (identity, vocabularies, gates, investigation reasoning
+anchors), the real-registry coverage of LT-0001/LT-0002, the de-verdicting of the
+PaperCards, and the steady-state authority checks that replaced the INC-V2-2
+transitional equivalence with the legacy witnesses.
 """
 
 import json
@@ -11,8 +12,8 @@ import unittest
 from pathlib import Path
 
 from improvements.taskrelation.research import literature_assessment
-from improvements.taskrelation.research import literature_assessment_equivalence
 from improvements.taskrelation.research import literature_catalog
+from improvements.taskrelation.research import literature_claims
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -20,6 +21,144 @@ RESEARCH_DIR = REPO_ROOT / "improvements" / "taskrelation" / "research"
 LITERATURE_DIR = RESEARCH_DIR / "literature"
 STUDIES_PATH = RESEARCH_DIR / "STUDIES.jsonl"
 ASSESSMENTS_PATH = LITERATURE_DIR / "assessments.jsonl"
+
+# The 23 canonical assessments as a stable semantic snapshot: authority may move,
+# meaning may not. (investigation, paper) -> (role, verdict, gates).
+EXPECTED_ASSESSMENTS = {
+    ("LT-0001", "chang-et-al-2024-informative-relations"): (
+        "recent_explicit_relation_method", "exclude_decomposition_boundary", (),
+    ),
+    ("LT-0001", "chen-et-al-2018-gradnorm"): (
+        "direct_gradient_scale_balancing", "exclude_taxonomy", (),
+    ),
+    ("LT-0001", "feldman-et-al-2014-mta"): (
+        "sample_variance_aware_relation",
+        "retain_framework_evidence_reject_implementation", (),
+    ),
+    ("LT-0001", "kendall-et-al-2018-uncertainty-weighting"): (
+        "task_reliability_loss_scale", "exclude_taxonomy", (),
+    ),
+    ("LT-0001", "rakitsch-et-al-2013-structured-residuals"): (
+        "signal_noise_relation_separation",
+        "retain_diagnostic_principle_reject_implementation", (),
+    ),
+    ("LT-0001", "zhang-yang-2017-spats"): (
+        "sparse_task_covariance", "reject_for_F9", (),
+    ),
+    ("LT-0001", "zhang-yang-2021-mtl-survey"): ("taxonomy_anchor", "retain", ()),
+    ("LT-0001", "zhang-yeung-2010-mtgtp"): (
+        "bayesian_relation_uncertainty", "reject_implementation", (),
+    ),
+    ("LT-0002", "bonilla-2007-mtgp"): (
+        "family_b_estimator", "pass_with_documented_deviation", (
+            ("explicit_relation_object", "pass"), ("taxonomy", "pass"),
+            ("heterogeneous_heads", "fail"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "fail"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "fifty-2021-tag"): (
+        "family_b_estimator", "fail", (
+            ("explicit_relation_object", "pass"), ("taxonomy", "fail"),
+            ("heterogeneous_heads", "pass"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "fail"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "goncalves-2016-mssl"): (
+        "family_b_estimator", "pass", (
+            ("explicit_relation_object", "pass"), ("taxonomy", "pass"),
+            ("heterogeneous_heads", "pass"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "pass"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "graffeuille-2024-self-auxiliaries"): (
+        "family_a_directed", "fail", (
+            ("explicit_relation_object", "partial"), ("taxonomy", "fail"),
+            ("heterogeneous_heads", "fail"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "fail"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "lee-2016-asymmetric-mtl"): (
+        "family_a_directed", "pass_with_documented_deviation", (
+            ("explicit_relation_object", "pass"), ("taxonomy", "pass"),
+            ("heterogeneous_heads", "pass_with_deviation"),
+            ("fixed_representation", "pass"), ("faithful_implementability", "pass"),
+            ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "lee-2018-deep-asymmetric-mtfl"): (
+        "family_a_directed", "fail", (
+            ("explicit_relation_object", "partial"), ("taxonomy", "fail"),
+            ("heterogeneous_heads", "fail"), ("fixed_representation", "partial"),
+            ("faithful_implementability", "fail"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "liu-2017-trace-lasso-gamtl"): (
+        "family_a_directed", "fail", (
+            ("explicit_relation_object", "pass"), ("taxonomy", "fail"),
+            ("heterogeneous_heads", "fail"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "fail"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "nguyen-2021-tp-amtl"): (
+        "family_a_directed", "fail", (
+            ("explicit_relation_object", "partial"), ("taxonomy", "fail"),
+            ("heterogeneous_heads", "fail"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "fail"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "oliveira-2019-group-lasso-asymmetric"): (
+        "family_a_directed", "pass_with_documented_deviation", (
+            ("explicit_relation_object", "pass"), ("taxonomy", "pass"),
+            ("heterogeneous_heads", "pass_with_deviation"),
+            ("fixed_representation", "pass"), ("faithful_implementability", "pass"),
+            ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "yu-2007-t-processes"): (
+        "family_b_estimator", "fail", (
+            ("explicit_relation_object", "fail"), ("taxonomy", "fail"),
+            ("heterogeneous_heads", "fail"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "fail"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "yu-2020-graph-adjacency-gamtl"): (
+        "family_a_directed", "fail", (
+            ("explicit_relation_object", "fail"), ("taxonomy", "pass"),
+            ("heterogeneous_heads", "fail"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "pass"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "zhang-schneider-2010-sparse-matrix-normal"): (
+        "family_b_estimator", "fail", (
+            ("explicit_relation_object", "pass"), ("taxonomy", "pass"),
+            ("heterogeneous_heads", "fail"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "fail"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "zhang-yeung-2014-mtrl-asymmetric"): (
+        "family_a_directed", "fail", (
+            ("explicit_relation_object", "fail"), ("taxonomy", "pass"),
+            ("heterogeneous_heads", "pass"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "not_applicable"),
+            ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "zhao-2020-fetr"): (
+        "family_b_estimator", "fail", (
+            ("explicit_relation_object", "pass"), ("taxonomy", "pass"),
+            ("heterogeneous_heads", "fail"), ("fixed_representation", "pass"),
+            ("faithful_implementability", "fail"), ("source_verification", "pass"),
+        ),
+    ),
+    ("LT-0002", "zhou-2023-autotr"): (
+        "family_a_directed", "pass_with_documented_deviation", (
+            ("explicit_relation_object", "pass"), ("taxonomy", "pass"),
+            ("heterogeneous_heads", "pass_with_deviation"),
+            ("fixed_representation", "pass"), ("faithful_implementability", "pass"),
+            ("source_verification", "pass"),
+        ),
+    ),
+}
 
 
 def paper_record(paper_id, title, url):
@@ -46,7 +185,7 @@ def valid_row(**overrides):
         "gates": [],
         "verdict": "pass",
         "reason_summary": "Clean pass.",
-        "assessment_anchor": "research/literature/beta-2020-method.md#lt-0002-assessment",
+        "assessment_anchor": "research/studies/LT-0002/analysis.md#assessment",
         "assessed_at": "2026-01-02T00:00:00+00:00",
     }
     row.update(overrides)
@@ -116,6 +255,12 @@ class AssessmentFixture(unittest.TestCase):
         )
         for study_id in ("DG-0001", "LT-0001", "LT-0002"):
             (self.studies_dir / study_id).mkdir()
+        (self.studies_dir / "LT-0001" / "analysis.md").write_text(
+            "# LT-0001 analysis\n\n## Decision\n\nlt-0001 body\n", encoding="utf-8"
+        )
+        (self.studies_dir / "LT-0002" / "analysis.md").write_text(
+            "# LT-0002 analysis\n\n## Assessment\n\nlt-0002 body\n", encoding="utf-8"
+        )
 
     def load(self, rows):
         self.assessments_path.write_text(
@@ -128,6 +273,15 @@ class AssessmentFixture(unittest.TestCase):
             studies_path=self.research_dir / "STUDIES.jsonl",
         )
 
+    def check(self):
+        return literature_assessment.check_authority(
+            self.assessments_path,
+            repo_root=self.repo_root,
+            literature_dir=self.literature_dir,
+            studies_path=self.research_dir / "STUDIES.jsonl",
+            index_path=self.literature_dir / "INDEX.md",
+        )
+
 
 class AssessmentValidationTests(AssessmentFixture):
     def test_valid_record_loads_and_exposes_exact_lookup(self):
@@ -138,7 +292,10 @@ class AssessmentValidationTests(AssessmentFixture):
         self.assertEqual(record.assessment_ref, "LT-0002#beta-2020-method")
         self.assertEqual(record.role, "family_b_estimator")
         self.assertEqual(record.verdict, "pass")
-        self.assertEqual(record.detail_anchor, "lt-0002-assessment")
+        self.assertEqual(record.detail_anchor, "assessment")
+        self.assertEqual(
+            record.detail_path, "research/studies/LT-0002/analysis.md"
+        )
 
     def test_unknown_paper_id_fails(self):
         with self.assertRaisesRegex(
@@ -212,16 +369,43 @@ class AssessmentValidationTests(AssessmentFixture):
         ):
             self.load([valid_row(screening_status="included")])
 
-    def test_anchor_must_point_at_the_papers_own_card(self):
+    def test_anchor_must_point_at_the_investigations_own_analysis(self):
+        # A card path is no longer a valid anchor: cards hold no verdict state.
         with self.assertRaisesRegex(
-            literature_assessment.AssessmentError, "canonical card"
+            literature_assessment.AssessmentError, "analysis artifact"
         ):
             self.load(
                 [
                     valid_row(
                         assessment_anchor=(
-                            "research/literature/alpha-2024-method.md"
+                            "research/literature/beta-2020-method.md"
                             "#lt-0002-assessment"
+                        )
+                    )
+                ]
+            )
+        with self.assertRaisesRegex(
+            literature_assessment.AssessmentError, "analysis artifact"
+        ):
+            self.load(
+                [
+                    valid_row(
+                        assessment_anchor=(
+                            "research/studies/LT-0001/analysis.md#decision"
+                        )
+                    )
+                ]
+            )
+
+    def test_anchor_slug_must_be_a_heading_in_the_analysis_artifact(self):
+        with self.assertRaisesRegex(
+            literature_assessment.AssessmentError, "is not a heading"
+        ):
+            self.load(
+                [
+                    valid_row(
+                        assessment_anchor=(
+                            "research/studies/LT-0002/analysis.md#missing-section"
                         )
                     )
                 ]
@@ -242,8 +426,7 @@ class AssessmentValidationTests(AssessmentFixture):
                     valid_row(
                         paper_id="gamma-2024-method",
                         assessment_anchor=(
-                            "research/literature/gamma-2024-method.md"
-                            "#lt-0002-assessment"
+                            "research/studies/LT-0002/analysis.md#assessment"
                         ),
                     ),
                     valid_row(paper_id="beta-2020-method"),
@@ -259,7 +442,7 @@ class AssessmentValidationTests(AssessmentFixture):
                     role="direct_gradient_scale_balancing",
                     verdict="exclude_taxonomy",
                     assessment_anchor=(
-                        "research/literature/beta-2020-method.md#lt-0001-decision"
+                        "research/studies/LT-0001/analysis.md#decision"
                     ),
                 ),
                 valid_row(paper_id="beta-2020-method"),
@@ -314,28 +497,21 @@ class RealRegistryTests(unittest.TestCase):
                 self.assertIn(record.investigation_id, studies)
                 self.assertTrue(record.investigation_id.startswith("LT-"))
 
-    def test_all_lt_0001_assessed_papers_are_represented(self):
-        lt0001 = self.registry.assessments_for_investigation("LT-0001")
-        reviewed = set(
-            literature_assessment_equivalence.private_key_map().values()
-        )
+    def test_the_registry_holds_the_23_canonical_assessments(self):
+        self.assertEqual(len(self.registry.records), 23)
+        self.assertEqual(len(self.registry.assessments_for_investigation("LT-0001")), 8)
+        self.assertEqual(len(self.registry.assessments_for_investigation("LT-0002")), 15)
 
-        self.assertEqual(len(lt0001), 8)
-        self.assertEqual({record.paper_id for record in lt0001}, reviewed)
-
-    def test_all_lt_0002_assessed_papers_are_represented(self):
-        lt0002 = self.registry.assessments_for_investigation("LT-0002")
-        studies = [
-            json.loads(line)
-            for line in STUDIES_PATH.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        registered = next(
-            study["cards"] for study in studies if study["study_id"] == "LT-0002"
-        )
-
-        self.assertEqual(len(lt0002), 15)
-        self.assertEqual({record.paper_id for record in lt0002}, set(registered))
+    def test_every_assessment_meaning_is_unchanged(self):
+        actual = {
+            (record.investigation_id, record.paper_id): (
+                record.role,
+                record.verdict,
+                tuple((gate.gate_id, gate.verdict) for gate in record.gates),
+            )
+            for record in self.registry.records
+        }
+        self.assertEqual(actual, EXPECTED_ASSESSMENTS)
 
     def test_catalog_still_carries_no_global_screening_status(self):
         for entry in self.catalog.entries:
@@ -343,77 +519,149 @@ class RealRegistryTests(unittest.TestCase):
                 for forbidden in ("status", "decision", "verdict", "role", "gates"):
                     self.assertFalse(hasattr(entry, forbidden))
 
-    def test_paper_cards_keep_their_legacy_verdict_sections(self):
-        # INC-V2-2 does not de-verdict cards; they remain migration witnesses.
-        for record in self.registry.records:
-            card = REPO_ROOT / record.detail_path
+    def test_paper_cards_carry_no_investigation_verdict_sections(self):
+        for entry in self.catalog.entries:
+            card = REPO_ROOT / entry.card_path
             text = card.read_text(encoding="utf-8")
-            heading = "## {}".format(
-                "LT-0001 decision"
-                if record.investigation_id == "LT-0001"
-                else "LT-0002 assessment"
-            )
+            with self.subTest(paper_id=entry.paper_id):
+                self.assertNotIn("## Candidate Study ID", text)
+                self.assertNotIn("## LT-0001 decision", text)
+                self.assertNotIn("## LT-0002 assessment", text)
+
+    def test_paper_cards_keep_their_paper_scoped_knowledge(self):
+        for entry in self.catalog.entries:
+            card = REPO_ROOT / entry.card_path
+            text = card.read_text(encoding="utf-8")
+            with self.subTest(paper_id=entry.paper_id):
+                self.assertIn("## Relation representation", text)
+                self.assertIn("## Implementation difficulty", text)
+        goncalves = (
+            LITERATURE_DIR / "goncalves-2016-mssl.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("PMR", goncalves)
+        zhao = (LITERATURE_DIR / "zhao-2020-fetr.md").read_text(encoding="utf-8")
+        self.assertIn("ill-posedness analysis is the cleanest", zhao)
+
+    def test_no_assessment_points_at_a_card_or_a_deleted_anchor(self):
+        for record in self.registry.records:
             with self.subTest(paper_id=record.paper_id):
-                self.assertIn("## Candidate Study ID", text)
-                self.assertIn(heading, text)
+                self.assertNotIn("/literature/", record.detail_path)
+                self.assertIn("/studies/", record.detail_path)
+                self.assertTrue(record.detail_path.endswith("analysis.md"))
+                self.assertNotIn(record.detail_anchor, {"lt-0001-decision",
+                                                        "lt-0002-assessment"})
 
+    def test_studies_registry_no_longer_duplicates_assessment_membership(self):
+        for line in STUDIES_PATH.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                self.assertNotIn("cards", json.loads(line))
 
-class LegacyPrivateKeyTests(unittest.TestCase):
-    def test_private_lt_0001_keys_map_to_canonical_paper_ids(self):
-        mapping = literature_assessment_equivalence.private_key_map()
-
-        self.assertEqual(
-            mapping["zhang_yang_2021_survey"], "zhang-yang-2021-mtl-survey"
+    def test_index_assessment_block_matches_the_registry(self):
+        block = literature_assessment._index_assessment_block(
+            LITERATURE_DIR / "INDEX.md"
         )
-        self.assertEqual(mapping["chen_2018_gradnorm"], "chen-et-al-2018-gradnorm")
-        self.assertEqual(len(mapping), 8)
-        for key, paper_id in mapping.items():
-            with self.subTest(key=key):
-                self.assertNotIn("_", paper_id)
-                self.assertFalse(key == paper_id)
+        self.assertIsNotNone(block)
+        self.assertEqual(
+            block, literature_assessment.render_assessment_tables().strip("\n")
+        )
 
 
-class TransitionalConsistencyTests(unittest.TestCase):
-    """While the legacy representations remain, they must agree with the registry.
+class AuthorityTests(AssessmentFixture):
+    """The steady-state gate: one active structured authority for assessments."""
 
-    This is the INC-V2-2 consistency gate: it fails if a card verdict, a
-    ``STUDIES.jsonl`` ``cards`` list or an LT result relationship changes without
-    the canonical registry (or the reverse).
-    """
+    def test_a_clean_repository_passes_the_authority_check(self):
+        registry = self.load(
+            [
+                valid_row(
+                    investigation_id="LT-0001",
+                    paper_id="beta-2020-method",
+                    role="direct_gradient_scale_balancing",
+                    verdict="exclude_taxonomy",
+                    assessment_anchor="research/studies/LT-0001/analysis.md#decision",
+                ),
+                valid_row(),
+            ]
+        )
+        self.assertEqual(len(self.check().records), len(registry.records))
 
-    def test_canonical_registry_matches_every_legacy_representation(self):
-        rows = literature_assessment_equivalence.check_equivalence()
+    def test_a_card_that_still_carries_a_verdict_section_is_detected(self):
+        self.load([valid_row()])
+        card = self.literature_dir / "beta-2020-method.md"
+        card.write_text(
+            card.read_text(encoding="utf-8") + "\n## LT-0002 assessment\n\nverdict\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(
+            literature_assessment.AssessmentError, "still carries an investigation"
+        ):
+            self.check()
 
-        self.assertEqual(len(rows), 23)
-
-    def test_a_drifted_registry_is_detected(self):
-        # A registry whose verdict disagrees with the card must fail the checker.
-        rows = [
-            json.loads(line)
-            for line in ASSESSMENTS_PATH.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        for row in rows:
-            if row["paper_id"] == "goncalves-2016-mssl":
-                row["verdict"] = "fail"
-        with tempfile.TemporaryDirectory(prefix="assessment-drift-") as tempdir:
-            drifted = Path(tempdir) / "assessments.jsonl"
-            drifted.write_text(
-                "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
-                encoding="utf-8",
+    def test_a_studies_cards_field_is_detected(self):
+        self.load([valid_row()])
+        (self.research_dir / "STUDIES.jsonl").write_text(
+            json.dumps(
+                {
+                    "study_id": "LT-0002",
+                    "type": "literature",
+                    "title": "Second literature question",
+                    "status": "complete",
+                    "stage": "verification",
+                    "path": "research/studies/LT-0002",
+                    "cards": ["beta-2020-method"],
+                }
             )
-            with self.assertRaisesRegex(
-                literature_assessment_equivalence.AssessmentEquivalenceError,
-                "disagrees with the legacy",
-            ) as caught:
-                literature_assessment_equivalence.check_equivalence(
-                    assessments_path=drifted
+            + "\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(
+            literature_assessment.AssessmentError, "legacy 'cards'"
+        ):
+            self.check()
+
+    def test_index_assessment_drift_is_detected(self):
+        self.load([valid_row()])
+        (self.literature_dir / "INDEX.md").write_text(
+            "# Literature\n\n"
+            + literature_assessment.INDEX_ASSESSMENTS_BEGIN
+            + "\n| Investigation | Paper | Role | Verdict |\n"
+            + "| --- | --- | --- | --- |\n"
+            + "| `LT-0002` | [beta-2020-method](beta-2020-method.md) | `x` | `y` |\n"
+            + literature_assessment.INDEX_ASSESSMENTS_END
+            + "\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(
+            literature_assessment.AssessmentError, "disagrees with the registry"
+        ):
+            self.check()
+
+
+class ClaimProvenanceTests(unittest.TestCase):
+    """Every card-sourced claim must still resolve after de-verdicting."""
+
+    def test_every_card_evidence_reference_resolves(self):
+        registry = literature_claims.load_claims()
+        card_refs = [
+            reference
+            for record in registry.records
+            for reference in record.evidence
+            if reference.kind == literature_claims.EVIDENCE_CARD
+        ]
+        self.assertTrue(card_refs)
+        for reference in card_refs:
+            with self.subTest(anchor=reference.fields.get("anchor")):
+                self.assertNotIn(
+                    reference.fields["anchor"],
+                    {"LT-0001 decision", "LT-0002 assessment", "Candidate Study ID"},
                 )
 
-        self.assertTrue(
-            any("goncalves-2016-mssl" in diff for diff in caught.exception.differences),
-            caught.exception.differences,
+    def test_the_adaptive_grouping_claim_now_points_at_a_surviving_section(self):
+        registry = literature_claims.load_claims()
+        record = registry.get_claim(
+            "liu-2017-trace-lasso-gamtl", "contribution-is-adaptive-task-grouping"
         )
+        self.assertEqual(record.evidence[0].kind, "card")
+        self.assertEqual(record.evidence[0].fields["anchor"], "Differences from our setting")
 
 
 if __name__ == "__main__":

@@ -41,18 +41,3 @@ TAG answers *which subset of tasks trains together*, a decision our protocol nev
 ## Implementation difficulty
 
 Moderate to implement the affinity measurement (one extra lookahead loss evaluation per task pair every few steps) but there is nothing to implement as a *relation mechanism*: acting on `Ẑ` means changing the training-set composition, which is a different study design (and the ER per-batch-share control, DG-0005, already showed that composition changes the observed signals).
-
-## Candidate Study ID
-
-`LT-0002` — family-B gradient/loss-based lead, verified and closed.
-
-## LT-0002 assessment
-
-1. **Explicit relation object — PASS.** A learned directed affinity matrix estimated from data (per-step losses under hypothetical single-task updates).
-2. **Taxonomy — FAIL.** The relation object is consumed by **task grouping** — the clustering category that Zhang & Yang keep separate from §2.4. TAG is a task-grouping method, not a task-relation regularizer.
-3. **Heterogeneous-head compatibility — PASS for the estimator.** `Z_ij` needs only shared-parameter gradients and per-task losses, both well-defined in our heterogeneous-head model.
-4. **Fixed-representation compatibility — PASS.** Nothing requires upstream retraining; the pilot run only reads gradients/losses.
-5. **Faithful implementability — FAIL.** Its published use is retraining selected task groups, a different protocol from our fixed three-task joint training; there is no published training-time update rule that turns `Ẑ` into a regularizer.
-6. **Primary-source verification — PASS.** Authors, venue (NeurIPS 2021, vol. 34, pp. 27503–27516), Eq. (1), Lemma 1/Proposition 1, and the CelebA/Taskonomy numbers checked against the NeurIPS PDF.
-
-**Verdict: FAIL — the gradient/loss-based relation estimator is real and explicit, but the paper’s method is task grouping (clustering), which is out of the §2.4 Task Relation Learning category.** Documented negative for the “estimate task relatedness from gradients or losses” lead: the published endpoint of that lead is grouping, not an eligible relation regularizer.

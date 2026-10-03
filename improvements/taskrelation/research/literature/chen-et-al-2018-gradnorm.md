@@ -37,11 +37,3 @@ This paper is the most direct mechanistic match to F9: its motivating symptom is
 ## Implementation difficulty
 
 Low to moderate; the existing DG-0002 instrumentation already computes most required norms. Category eligibility—not feasibility—is the blocker.
-
-## Candidate Study ID
-
-`LT-0001` — direct symptom match, taxonomy exclusion.
-
-## LT-0001 decision
-
-**EXCLUDE BY TAXONOMY.** Implementing GradNorm would answer an optimization branch question, not produce a Task Relation Learning extension. It may be an informative external control only with explicit human scope approval.

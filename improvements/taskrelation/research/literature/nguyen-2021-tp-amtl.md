@@ -46,18 +46,3 @@ An encoder–decoder network per task with a shared low-level embedding and RNN 
 ## Implementation difficulty
 
 Not implementable as published here: it would require replacing the shared-trunk/three-head model with per-task probabilistic encoders, per-pair attention networks and per-task feature transforms, and its asymmetry mechanism (temporal direction) does not exist for our task set.
-
-## Candidate Study ID
-
-`LT-0002` — screened candidate (family A), recorded as a taxonomy and architecture failure.
-
-## LT-0002 assessment
-
-* **Gate 1 — explicit relation object: PARTIAL.** Directed transfer coefficients are learned from data (per task pair, per sample), but they are an attention/uncertainty mechanism, not an explicit relation structure (covariance, precision, similarity matrix or global directed graph) held by the model.
-* **Gate 2 — taxonomy: FAIL.** Uncertainty-attenuated deep feature sharing with learned attention; the project excludes uncertainty weighting, and feature-attention transfer is not a §2.4 relation-learning object. (The paper itself benchmarks against, and improves on, Kendall-style uncertainty weighting.)
-* **Gate 3 — heterogeneous heads: FAIL.** Needs per-task probabilistic encoders and per-pair transfer/transform networks; a shared trunk makes `z_d` meaningless. Its own asymmetry is a temporal past→future constraint our non-temporal tasks do not have.
-* **Gate 4 — fixed representation: PASS.** No upstream retraining; it trains downstream representations from a fixed input embedding.
-* **Gate 5 — faithful implementability: FAIL.** The published model cannot be instantiated on a shared-trunk three-head architecture without replacing it; doing so would be a new hybrid.
-* **Gate 6 — source verified: PASS.** Authors, venue, equations (1)–(12) and the reported numbers checked against the official AAAI PDF.
-
-**Verdict: `FAIL — uncertainty-attenuated deep feature-attention transfer outside the Task Relation Learning taxonomy, whose structural asymmetry is a temporal past→future constraint unavailable to three non-temporal tasks.`**

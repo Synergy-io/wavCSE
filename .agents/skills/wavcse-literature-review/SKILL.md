@@ -24,7 +24,7 @@ assertion. Everything else is inadmissible, whatever it sounds like:
 - a previous session's answer, including your own;
 - recalled conversation, agent, or transcript text from a memory tool;
 - the main session's context, prompt, or paraphrase;
-- an identifier, locator, number, or quote reconstructed from any of the above.
+- an identifier, evidence reference, number, or quote reconstructed from any of the above.
 
 Recalled historical text is never evidence and never provenance: not weaker
 evidence, but not evidence at all. If the approved interfaces cannot support an assertion, the
@@ -100,8 +100,8 @@ caveat. An unsupported synthesis is a fabrication with a disclaimer.
 
    A recorded claim is repository-reviewed and source-bound: it names the
    artifact class and the section it came from, and a quoted claim carries text
-   verified verbatim against that section. Use its assertion and its locator, and
-   report it at the claim's own `source_level`.
+   verified verbatim against that section. Use its assertion and its evidence
+   reference(s), and report it at the claim's own `source_level`.
 
    **Every `claim_ref` you report must come from a tool call in this run.** A
    claim identifier that was remembered, inferred, extrapolated from a similar
@@ -177,9 +177,9 @@ unavailable, say so explicitly — that is a finding, not a failure.
 - Keep `paper_id` on every paper-specific conclusion.
 - Include an exact location (section, equation, table, figure, page) only when
   you can read it in evidence you actually have: either the artifact you opened
-  this run, or a recorded claim whose locator the deterministic layer validated.
-  A recorded claim's locator may be reported at that claim's evidence level and
-  never upgraded — citing a claim recorded from a survey does not make it
+  this run, or a recorded claim whose evidence reference(s) the deterministic layer
+  validated. A recorded claim's evidence reference(s) may be reported at that
+  claim's evidence level and never upgraded — citing a claim recorded from a survey does not make it
   card-derived.
 - Never invent a page or section number, and never restate a card's citation as
   if you had opened the paper. If the card does not state a number, the card is
@@ -215,7 +215,7 @@ evidence[]:
     paper_id
     supports            # what this source establishes for the question
     claim_ref           # recorded claim reference (paper_id#claim_id), when one answers it
-    location            # exact locator, only if read from available evidence
+    location            # exact location, only if read from available evidence
     evidence_level      # primary | card-derived | survey-derived | Study-derived
     confidence          # with the limitation that bounds it
 agreements[]            # where sources converge
@@ -228,7 +228,7 @@ suggested_followups[]
 
 When `evidence_status: unavailable`, `synthesis` says only that the question is
 not established from approved evidence. Keep the result compact: IDs and short
-locators, not pasted excerpts or whole cards.
+locations, not pasted excerpts or whole cards.
 
 ## Escalate instead of guessing
 

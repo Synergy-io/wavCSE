@@ -37,11 +37,3 @@ The motivating scale problem maps closely to F9 and the method handles mixed cla
 ## Implementation difficulty
 
 Low, but category-ineligible.
-
-## Candidate Study ID
-
-`LT-0001` — boundary case.
-
-## LT-0001 decision
-
-**EXCLUDE BY TAXONOMY.** Strong evidence that reliability-weighted losses can address scale imbalance, but it cannot carry this branch’s explicit Task Relation Learning contribution. It is useful as a diagnostic/control candidate only if the human broadens scope.

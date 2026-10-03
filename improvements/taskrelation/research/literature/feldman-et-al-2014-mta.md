@@ -37,11 +37,3 @@ The method is directly sample-size and variance aware, making it useful evidence
 ## Implementation difficulty
 
 Low for mean estimation; high and scientifically undefined for KS/SI/ER deep classification.
-
-## Candidate Study ID
-
-`LT-0001` — adjacent evidence.
-
-## LT-0001 decision
-
-**REJECT AS MECHANISM CANDIDATE; RETAIN AS FRAMEWORK EVIDENCE.** It validates sample/variance-aware relation strength, but a faithful implementation does not answer the current classification problem.

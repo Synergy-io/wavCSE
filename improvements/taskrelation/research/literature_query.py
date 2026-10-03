@@ -8,14 +8,14 @@ Sources remain authoritative where they already live:
 * ``STUDIES.jsonl`` owns Study lifecycle;
 * the canonical card path points to per-paper derived knowledge.
 
-During the INC-V2-2 transition the legacy assessment shapes (the LT-0001
-``result.json`` ``primary_sources_reviewed`` list, ``STUDIES.jsonl`` ``cards``,
-per-card verdict sections and ``INDEX.md`` tables) remain in place as migration
-witnesses and are checked for equivalence by
-:mod:`improvements.taskrelation.research.literature_assessment_equivalence`. This
-module reads the canonical registry, not those shapes, and never promotes an
-investigation-scoped assessment to a global paper status. It deliberately cannot
-answer claim/topic questions.
+The registry is the sole structured assessment authority: this module reads
+``assessments.jsonl`` directly and holds no fallback to any legacy shape (a
+``STUDIES.jsonl`` ``cards`` list, an ``LT-*`` ``result.json``
+``primary_sources_reviewed`` list, or a per-card verdict section) — if the
+canonical registry is invalid the query fails deterministically instead of
+reconstructing from a stale witness. It never promotes an investigation-scoped
+assessment to a global paper status, and it deliberately cannot answer
+claim/topic questions.
 
 Usage::
 

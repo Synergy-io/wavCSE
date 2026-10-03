@@ -37,18 +37,3 @@ Our tasks have disjoint data sets and heterogeneous multiclass heads (12 / 1251 
 ## Implementation difficulty
 
 High. Not a bolt-on regularizer: it requires marginal-likelihood optimisation (or EM) with a Cholesky-factorised `K^f`, an input kernel, and a multi-class likelihood replacement.
-
-## Candidate Study ID
-
-`LT-0002` — family-B candidate, screened and not advanced to a `TR-xxxx` arm as published.
-
-## LT-0002 assessment
-
-1. **Explicit relation object — PASS.** Learned `M × M` task covariance `K^f`, estimated from data by marginal likelihood.
-2. **Taxonomy — PASS.** Task Relation Learning in the §2.4 sense; it is the origin of the covariance-relation lineage, not low-rank/clustering/decomposition/loss weighting. (Its own optional PPCA rank reduction is an approximation of `K^f`, not the method.)
-3. **Heterogeneous-head compatibility — FAIL as published.** The formal model is scalar-output Gaussian regression over a shared input design; our disjoint multiclass heads with 12/1251/4 outputs require a different likelihood and a different parameterisation of the relation.
-4. **Fixed-representation compatibility — PASS in principle.** Nothing in the estimator requires retraining the upstream representation; frozen embeddings can serve as `x`.
-5. **Faithful implementability — FAIL.** The published update rule is a marginal-likelihood/EM procedure over latent function values, not a regularizer on classifier-head parameters. Implementing it here is a new hybrid.
-6. **Primary-source verification — PASS.** Authors, venue, year, Eq. (1)–(5) and the experimental numbers checked against the NIPS 2007 proceedings PDF.
-
-**Verdict: PASS WITH DOCUMENTED DEVIATION.** Deviation: the relation estimator would be applied to a deep multiclass model with disjoint data sets, replacing the Gaussian scalar-output likelihood. This counts as a fail for faithfulness (LT-0002 falsification condition), so the paper is eligible in category but not faithfully implementable in our setting.

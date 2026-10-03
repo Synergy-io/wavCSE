@@ -55,18 +55,3 @@ One shared data space and model space for all tasks; all tasks positively correl
 Moderate. Matched-pair update under a single optimizer: on each training step compute the three summaries from the current heads, take one gradient step on (trunk, heads) whose loss includes `λ Σ_t ‖w̃_t − Σ_s B_st w̃_s‖₂²` and the loss-scaled term, and periodically (e.g. once per epoch) re-solve `B` with the weighted non-negative LASSO sub-step on the current summaries — this is Algorithm 1 with the `W` step replaced by standard SGD steps, as the paper itself allows for non-quadratic losses. The gradient of the reconstruction penalty with respect to every row of head `t` is `(2/C_t)(w̃_t − Σ_s B_st w̃_s)`.
 
 **Documented deviation.** The published method regularises the *task models*; here the penalty can act only on a collapsed class-averaged summary of each head, because the trunk is shared and the head widths differ. The deviation is forced by the architecture, is the same device the project’s in-category control already uses for `Ω`, and does not alter the relation object or the update rule — but it is a deviation from the published form, so the verdict below is not a clean PASS.
-
-## Candidate Study ID
-
-`LT-0002` — screened candidate (family A). If adopted, one `TR-xxxx` variant Study is pre-registered per DEC-0013 under the shared matched protocol.
-
-## LT-0002 assessment
-
-* **Gate 1 — explicit relation object: PASS.** `B` is a learned sparse *directed transfer graph*, estimated jointly with the task parameters.
-* **Gate 2 — taxonomy: PASS.** Task Relation Learning in the Zhang & Yang §2.4 sense: an explicit parameter-reconstruction relation, not low-rank, clustering, decomposition, loss weighting, uncertainty weighting or gradient surgery. (Loss enters only as a *scale on the sparsity penalty over edges*, not as a per-task loss weight; the relation object is `B`.)
-* **Gate 3 — heterogeneous heads: PASS WITH THE STATED CHANGE.** The relation survives disjoint datasets (each task keeps its own loss) but not unequal widths in its published form; the stated change is the class-mean head summary, which supplies the aligned 2000-dim columns the published update needs. This change is what makes the verdict a documented deviation rather than a clean pass.
-* **Gate 4 — fixed representation: PASS.** Nothing upstream is retrained; the method touches only the trainable trunk and heads over frozen wavCSE/WavLM embeddings.
-* **Gate 5 — faithful implementability: PASS.** Eqs. (1)–(3), Theorem 1 and Algorithms 1–2 are implementable as published, with `λ`, `μ` cross-validated or taken from the paper’s ranges and `c_t = 1/√n_t` as the paper’s natural default for unequal sample sizes. No foreign weighting scheme is attached.
-* **Gate 6 — source verified: PASS.** Venue, year, authors, equations and evidence checked against the PMLR PDF.
-
-**Verdict: `PASS WITH DOCUMENTED DEVIATION`** — the relation object (sparse loss-scaled directed transfer graph `B`) and the alternating weighted-LASSO update are implementable as published, but the object being related must be a class-mean head summary rather than a per-task model parameter vector. Under the LT-0002 rule that a documented deviation is not a faithful implementation, this counts as a faithfulness fail unless the human rules the shared summary device (already used by the matched MTRL control, which is the arm this variant must beat) an acceptable instantiation.

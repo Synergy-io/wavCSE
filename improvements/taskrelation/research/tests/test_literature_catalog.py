@@ -40,12 +40,6 @@ class CatalogFixture(unittest.TestCase):
             "Primary source: https://example.org/paper\n",
             encoding="utf-8",
         )
-        self.studies_path = self.repo_root / "research" / "STUDIES.jsonl"
-        self.studies_path.write_text(
-            json.dumps({"study_id": "LT-0001", "cards": ["example-2024-paper"]})
-            + "\n",
-            encoding="utf-8",
-        )
         self.catalog_path = self.literature_dir / "catalog.jsonl"
         self.record = {
             "schema_version": 1,
@@ -74,7 +68,6 @@ class CatalogFixture(unittest.TestCase):
             self.catalog_path,
             repo_root=self.repo_root,
             literature_dir=self.literature_dir,
-            studies_path=self.studies_path,
             index_path=self.index_path,
         )
 
@@ -176,20 +169,6 @@ class CatalogValidationTests(CatalogFixture):
         with self.assertRaisesRegex(
             literature_catalog.CatalogError,
             r"unknown key\(s\): status",
-        ):
-            self.load()
-
-    def test_unknown_study_card_reference_is_rejected(self):
-        self.studies_path.write_text(
-            json.dumps({"study_id": "LT-0001", "cards": ["unknown-paper"]})
-            + "\n",
-            encoding="utf-8",
-        )
-        self.write_catalog([self.record])
-
-        with self.assertRaisesRegex(
-            literature_catalog.CatalogError,
-            "Study 'LT-0001' references unknown paper_id 'unknown-paper'",
         ):
             self.load()
 

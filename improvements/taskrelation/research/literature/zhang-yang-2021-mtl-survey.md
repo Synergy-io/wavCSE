@@ -37,11 +37,3 @@ The survey is general and does not solve F9. It supplies the binding category te
 ## Implementation difficulty
 
 None; taxonomy reference only.
-
-## Candidate Study ID
-
-`LT-0001` — anchor, not a mechanism candidate.
-
-## LT-0001 decision
-
-**RETAIN AS TAXONOMY AUTHORITY.** An eligible F9 method must learn an explicit relation object and cannot derive its category solely from balancing gradients or losses.

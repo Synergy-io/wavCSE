@@ -52,18 +52,3 @@ An encoder–decoder architecture with task-specific encoders *and* decoders; a 
 ## Implementation difficulty
 
 For our model: not implementable. Faithfully reproducing a self-auxiliary requires a task-specific encoder/decoder split that does not exist in a shared-trunk three-head design, and the clone’s loss is undefined across disjoint label spaces. Implementing the coefficients alone would reduce the method to task-loss weighting, which is explicitly outside the project’s taxonomy.
-
-## Candidate Study ID
-
-`LT-0002` — screened candidate (family A), recorded as a taxonomy and architecture failure.
-
-## LT-0002 assessment
-
-* **Gate 1 — explicit relation object: PARTIAL/PASS.** The directed coefficients `ω_{s→t}` *are* estimated from data (enumeration or bi-level loss) and do represent directed task relations. But they are not a relation structure in the model — they select which clones to train.
-* **Gate 2 — taxonomy: FAIL.** The method is a training-time optimisation/auxiliary-cloning strategy whose coefficients act as per-task loss weights; the project excludes loss weighting and optimisation methods from Task Relation Learning.
-* **Gate 3 — heterogeneous heads: FAIL.** Self-auxiliaries require another task’s labels to be predicted by this task’s task-specific module; with disjoint label spaces (12 / 1251 / 4) and a shared trunk this is undefined, and no published update rule remains.
-* **Gate 4 — fixed representation: PASS.** The frozen wavCSE embedding is untouched; the method only changes what is trained.
-* **Gate 5 — faithful implementability: FAIL.** Eq. (4) cannot be instantiated; a partially-implemented version would be a different method (task-loss weighting).
-* **Gate 6 — source verified: PASS (with the caveat that the source is a non-archival preprint).** Author list, equations and experiments checked against the arXiv full text.
-
-**Verdict: `FAIL — training-time auxiliary-cloning / loss-coefficient optimisation outside the Task Relation Learning taxonomy, and structurally inapplicable to disjoint label spaces with a shared trunk and heterogeneous heads.`**

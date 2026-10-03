@@ -37,11 +37,3 @@ The model addresses compulsory sharing and task-specific structure, not measured
 ## Implementation difficulty
 
 High for heterogeneous heads and deep shared parameters. More importantly, faithful implementation crosses the project’s decomposition boundary.
-
-## Candidate Study ID
-
-`LT-0001` — recent literature boundary check.
-
-## LT-0001 decision
-
-**EXCLUDE BY CATEGORY AND ASSUMPTION.** The paper learns an explicit relation matrix, but its contribution fundamentally relies on shared/specific parameter decomposition and does not target F9. It cannot be used to bypass the project’s decomposition boundary.

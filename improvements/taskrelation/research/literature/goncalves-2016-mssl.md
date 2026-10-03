@@ -52,23 +52,7 @@ The paper’s model is a shallow linear/GLM classifier; ours are deep heads of w
 
 ## Implementation difficulty
 
-Moderate. Requirements: a mean-head-summary matrix (already produced for the control), an FISTA `W` step with the `tr(W Ω Wᵀ)` coupling term instead of `tr(W Ω⁻¹ Wᵀ)`, an ADMM graphical-lasso solver for a `3 × 3` precision, and two hyperparameters (`λ₁` on `W`, `λ₂` on `Ω`; the paper uses stability selection to choose them). Cost is negligible at `m = 3`.
-
-## Candidate Study ID
-
-`LT-0002` — verified family-B candidate; proposed arm `TR-xxxx` (to be registered) with classical symmetric MTRL and the matched wavCSE baseline as the two controls under the shared protocol.
-
-## LT-0002 assessment
-
-1. **Explicit relation object — PASS.** A learned sparse task precision `Ω` with a partial-correlation interpretation.
-2. **Taxonomy — PASS.** Explicit Task Relation Learning in the Zhang & Yang §2.4 sense (precision/covariance relation learned from data). Not low-rank, not clustering, not decomposition, not loss weighting.
-3. **Heterogeneous-head compatibility — PASS.** The estimator operates on a `d × m` parameter matrix; the project’s existing mean-head-summary convention supplies exactly that, and it is the *same* adapter the control requires, so the variant does not change the input representation between arms. Disjoint datasets are native to the model. Caveat stated rather than hidden: the Gaussian-row premise is an approximation identical in kind to the control’s matrix-normal premise, and the summaries are rank-degenerate; MSSL does not remove that, it regularises around it.
-4. **Fixed-representation compatibility — PASS.** `Ω` is learned from head parameters only; the regularizer `tr(W Ω Wᵀ) − d log|Ω|` back-props into the heads and never into frozen wavCSE/WavLM embeddings.
-5. **Faithful implementability — PASS.** The published update rule (FISTA + ADMM graphical lasso, alternating) is implementable as written; hyperparameters come from the paper (or its natural defaults) via stability selection. Nothing is glued to an unrelated weighting scheme — the `1/n_k` loss scaling is part of the paper.
-6. **Primary-source verification — PASS.** Authors, venue, year and equations checked against the JMLR PDF (JMLR 17(33), 2016); the `p`-MSSL/r-MSSL split, Eq. (3), Eq. (8) and the ADMM steps are from the source.
-
-**Verdict: PASS — implementable as published.** Project note: the repo’s quarantined `PMR` (`models/pmr_model.py`, DEC-0004) is *not* this method — it learns a precision by gradient descent in a single combined loss, whereas published MSSL alternates FISTA with an ADMM graphical-lasso `Ω` step. A faithful MSSL arm is therefore new work; whether it un-quarantines the PMR line is a human decision, not a literature one.
-
+Moderate. Requirements: a mean-head-summary matrix (already produced for the control), an FISTA `W` step with the `tr(W Ω Wᵀ)` coupling term instead of `tr(W Ω⁻¹ Wᵀ)`, an ADMM graphical-lasso solver for a `3 × 3` precision, and two hyperparameters (`λ₁` on `W`, `λ₂` on `Ω`; the paper uses stability selection to choose them). Cost is negligible at `m = 3`. Project note: the repository's quarantined `PMR` (`models/pmr_model.py`, DEC-0004) is not this method — it learns a precision by gradient descent in a single combined loss, whereas published MSSL alternates FISTA with an ADMM graphical-lasso `Ω` step, so a faithful MSSL arm is new work.
 ---
 
 ## Transcription correction (2026-09-29)

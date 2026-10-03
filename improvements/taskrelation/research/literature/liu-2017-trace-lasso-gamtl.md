@@ -48,18 +48,3 @@ All tasks have one predictor vector of the same length `d` (all experiments are 
 ## Implementation difficulty
 
 Moderate (ADMM for both blocks, trace-norm/matrix soft-thresholding, two hyperparameters), but the implementation would deliver a clustering mechanism, not a directed-relation transfer mechanism, and would not be a family-A arm.
-
-## Candidate Study ID
-
-`LT-0002` — screened candidate (family A), recorded as a taxonomy failure.
-
-## LT-0002 assessment
-
-* **Gate 1 — explicit relation object: PASS.** A learned, signed, directed relation matrix `C` (no user-supplied relation).
-* **Gate 2 — taxonomy: FAIL.** The paper’s stated contribution is *adaptive group sparse* MTL — recovering task clusters/groups; the project excludes clustering/task-grouping from §2.4 and reserves the category for quantitative relation learning. The trace-Lasso penalty is a grouping device, not a task-relation parameterisation.
-* **Gate 3 — heterogeneous heads: FAIL in the published form.** Requires equal-length task parameter vectors (binary tasks); the class-mean summary would be needed *and* the objective would then be a grouping objective on summaries.
-* **Gate 4 — fixed representation: PASS.** Shallow, downstream-only; frozen embeddings untouched.
-* **Gate 5 — faithful implementability: PASS mechanically, FAIL purposefully.** The update rule is implementable as published, but what it implements is a task-grouping method — an arm of the wrong category.
-* **Gate 6 — source verified: PASS.** Venue, pages (2358–2364), DOI, equations and evidence checked against the official IJCAI PDF.
-
-**Verdict: `FAIL — the contribution is adaptive task grouping via a trace-Lasso penalty, i.e. the clustering/task-grouping category the project excludes; the signed directed relation matrix is mathematically AMTL’s object but the method is not a directed-relation transfer mechanism.`**

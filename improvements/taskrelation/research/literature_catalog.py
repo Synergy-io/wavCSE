@@ -42,7 +42,6 @@ _RESEARCH_DIR = Path(__file__).resolve().parent
 _DEFAULT_REPO_ROOT = _RESEARCH_DIR.parents[2]
 _DEFAULT_LITERATURE_DIR = _RESEARCH_DIR / "literature"
 _DEFAULT_CATALOG = _DEFAULT_LITERATURE_DIR / "catalog.jsonl"
-_DEFAULT_STUDIES = _RESEARCH_DIR / "STUDIES.jsonl"
 
 
 class CatalogError(ValueError):
@@ -480,44 +479,11 @@ def _validate_index(entries, index_path):
             )
 
 
-def _validate_study_references(entries, studies_path):
-    if studies_path is None:
-        return
-    studies_path = Path(studies_path)
-    known = {entry.paper_id for entry in entries}
-    try:
-        lines = studies_path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        raise CatalogError("cannot read Study registry {}: {}".format(studies_path, exc)) from exc
-    for line_number, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
-        try:
-            study = json.loads(line)
-        except ValueError as exc:
-            raise CatalogError(
-                "Study registry line {} is not valid JSON: {}".format(line_number, exc)
-            ) from exc
-        cards = study.get("cards", [])
-        if not isinstance(cards, list):
-            raise CatalogError(
-                "Study registry line {} cards must be a list".format(line_number)
-            )
-        for paper_id in cards:
-            if paper_id not in known:
-                raise CatalogError(
-                    "Study {!r} references unknown paper_id {!r}".format(
-                        study.get("study_id"), paper_id
-                    )
-                )
-
-
 def load_catalog(
     catalog_path=_DEFAULT_CATALOG,
     *,
     repo_root=_DEFAULT_REPO_ROOT,
     literature_dir=None,
-    studies_path=None,
     index_path=None,
     validate_references=True
 ):
@@ -529,11 +495,6 @@ def load_catalog(
         Path(literature_dir)
         if literature_dir is not None
         else catalog_path.parent
-    )
-    studies_path = (
-        Path(studies_path)
-        if studies_path is not None
-        else _DEFAULT_STUDIES if repo_root == _DEFAULT_REPO_ROOT else None
     )
     index_path = (
         Path(index_path)
@@ -549,7 +510,6 @@ def load_catalog(
             _validate_card(entry, repo_root, literature_dir)
         _validate_card_coverage(entries, literature_dir)
         _validate_index(entries, index_path)
-        _validate_study_references(entries, studies_path)
     return LiteratureCatalog(entries)
 
 

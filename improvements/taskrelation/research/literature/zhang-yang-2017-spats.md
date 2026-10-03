@@ -37,11 +37,3 @@ DG-0001 did not establish beneficial pair selectivity, and KS/SI/ER contain only
 ## Implementation difficulty
 
 Moderate, but irrelevant to the current evidence gate. It would require an Ω proximal update and an extra sparsity hyperparameter without a justified independent variable.
-
-## Candidate Study ID
-
-`LT-0001` — screened candidate; related backlog item `TR-0001` remains blocked.
-
-## LT-0001 decision
-
-**REJECT FOR F9.** Legitimate Task Relation Learning, but it addresses many-task pair selectivity rather than unequal optimization scale. Implementing it now would rediscover the pre-evidence sparse-method ordering that DEC-0005 removed.

@@ -45,18 +45,3 @@ Regression only (`y ∈ R`, squared loss, one shared feature space per task); co
 ## Implementation difficulty
 
 Moderate (alternating scheme with a primal-dual `A`-step and a CMG linear solve), but it cannot serve as a directed-relation arm: the relation object is undirected by construction, so there is nothing to compare against a *directed* variant of the control.
-
-## Candidate Study ID
-
-`LT-0002` — screened candidate (family A), recorded as an out-of-family near-miss (with the GAMTL name collision).
-
-## LT-0002 assessment
-
-* **Gate 1 — explicit relation object: FAIL for this family.** An explicit learned relation object exists (weighted adjacency `A`), and it is estimated from data — but it is **symmetric/undirected**, and the paper states this as its aim. No directed transfer graph, no asymmetric parameterisation.
-* **Gate 2 — taxonomy: PASS (as an undirected relation method).** Graph-structured task-relation learning; it is not low-rank, clustering (the graph is not a partition), decomposition, uncertainty or gradient surgery.
-* **Gate 3 — heterogeneous heads: FAIL.** Requires comparable, equal-length parameter vectors for the pairwise distances; regression outputs only.
-* **Gate 4 — fixed representation: PASS.** Downstream-only; frozen embeddings untouched.
-* **Gate 5 — faithful implementability: PASS mechanically.** Algorithms 1–3 are implementable; the method is simply not a directed-relation mechanism.
-* **Gate 6 — source verified: PASS.** Authors, equations, algorithms and evidence checked against the arXiv v1 PDF.
-
-**Verdict: `FAIL — the learned relation object is an explicitly undirected adjacency matrix; the paper states the undirected graph as its design goal and contrasts itself with directed graph MTL. It supplies no directed relation-learning mechanism.`** Recorded mainly to prevent the three-way GAMTL name collision from producing a false family-A candidate.

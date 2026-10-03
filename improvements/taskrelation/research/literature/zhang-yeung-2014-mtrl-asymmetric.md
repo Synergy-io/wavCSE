@@ -47,18 +47,3 @@ Shared input space and shared feature mapping (kernel); one real-valued or binar
 ## Implementation difficulty
 
 Not applicable as a family-A arm — its symmetric part is already implemented as the control; adding the asymmetric-setting machinery would mean re-learning a covariance vector for a target task, which is a different experiment (target-task incorporation), not a directed-relation variant.
-
-## Candidate Study ID
-
-`LT-0002` — screened candidate (family A), recorded as a keyword/attribution failure.
-
-## LT-0002 assessment
-
-* **Gate 1 — explicit relation object: FAIL.** The relation object is a symmetric covariance `Ω` (or a symmetrically augmented `Ω̃`); “asymmetric” denotes the target/source learning setting, not a directed relation. No directed transfer graph, no asymmetric precision/covariance parameterisation, and no learned direction.
-* **Gate 2 — taxonomy: PASS.** It is canonical §2.4 Task Relation Learning (matrix-variate prior, `tr(WΩ⁻¹Wᵀ)`).
-* **Gate 3 — heterogeneous heads: PASS (as the control).** Already solved in this project by mean-head parameter summaries; it is the matched in-category control for every variant arm.
-* **Gate 4 — fixed representation: PASS.** Applies to downstream parameters over frozen embeddings (the implemented control does exactly this).
-* **Gate 5 — faithful implementability: N/A for family A.** Implementable (and implemented) as the control, but it is not a directed-relation method, so it cannot serve as a family-A variant.
-* **Gate 6 — source verified: PASS.** Venue, volume, article number, DOI, equations and the footnoted UAI-2010 lineage all checked against the author copy and the ACM record.
-
-**Verdict: `FAIL — the relation object (Ω, and the augmented Ω̃ of the “asymmetric setting”) is symmetric by construction; the paper supplies a target/source learning setting, not a directed relation-learning mechanism.`** Its symmetric half is already the project’s in-category control, so it is retained as the matched control rather than as a variant.

@@ -41,18 +41,3 @@ Our tasks do not share a parameter matrix: head widths are 12 / 1251 / 4, and th
 ## Implementation difficulty
 
 High and, more decisively, ill-posed in our setting: the feature precision is not estimable from three tasks, and glasso on a `3 × 3` task precision alone collapses to the SPATS/MTRL line already covered.
-
-## Candidate Study ID
-
-`LT-0002` — screened family-B candidate; not advanced.
-
-## LT-0002 assessment
-
-1. **Explicit relation object — PASS.** Learned sparse task precision `Ω⁻¹` with a conditional-independence interpretation.
-2. **Taxonomy — PASS.** Explicit Task Relation Learning in the §2.4 sense (sparse precision relation object, distinct from SPATS’s sparse *covariance*). Its clustering special case is a special case, not the method.
-3. **Heterogeneous-head compatibility — FAIL.** The formal model needs one common feature dimension `p` for all tasks and a single `m × p` parameter matrix; disjoint data sets with heads 12 / 1251 / 4 do not provide it.
-4. **Fixed-representation compatibility — PASS in principle.** Only head parameters are regularised.
-5. **Faithful implementability — FAIL.** The published estimator jointly estimates a `p × p` feature precision, unidentifiable with three tasks, and relies on a fixed `εI` correction whose convergence the paper itself does not establish.
-6. **Primary-source verification — PASS.** Authors, venue, year, Eq. (2)/(6)/(9)–(11), the `λ_Ω = λ_Σ` lemma and the landmine/face numbers checked against the NIPS 2010 PDF.
-
-**Verdict: FAIL — the relation object is legitimate and explicit, but the published estimator requires a shared feature dimension and a jointly estimated feature covariance that are not identifiable with three disjoint heterogeneous-head tasks.**

@@ -46,18 +46,3 @@ All tasks live in a shared input space and pass through one (deep) network trunk
 ## Implementation difficulty
 
 High, and not faithful. Implementing the relation object `A` requires also implementing basis learning (`L`, `S`, `k` selection) and the auto-encoding term on hidden activations — i.e. building a different model rather than porting this method. There is no way to attach `A` to a three-head model whose representation is a single shared trunk: the ambiguous factorisation and the missing shared output space are intrinsic.
-
-## Candidate Study ID
-
-`LT-0002` — screened candidate (family A), recorded as a category failure.
-
-## LT-0002 assessment
-
-* **Gate 1 — explicit relation object: PARTIAL.** `A` is explicitly parameterised and learned, but it is a task-to-basis relation, not a task-task (or task-parameter) directed relation; there is no transfer graph over tasks.
-* **Gate 2 — taxonomy: FAIL.** Low-rank / shared-basis feature learning with an asymmetric weighting; the project excludes low-rank and decomposition methods and treats the asymmetric *weighting* of a shared basis as out of §2.4.
-* **Gate 3 — heterogeneous heads: FAIL.** Requires equal-width task outputs (one-vs-all) over a shared input space; the 12 / 1251 / 4-class heads on disjoint datasets cannot supply this.
-* **Gate 4 — fixed representation: PASS/PARTIAL.** The frozen wavCSE embedding is untouched, but the method is defined on a trainable representation, so its characteristic mechanism is vacuous when only the small trunk is trainable.
-* **Gate 5 — faithful implementability: FAIL.** A faithful implementation would require re-instating latent-basis learning and a shared output space — a new model, not this paper.
-* **Gate 6 — source verified: PASS.** Venue, authors, equations and evidence checked against the PMLR PDF.
-
-**Verdict: `FAIL — low-rank/shared-basis feature learning, not Task Relation Learning, and its equal-output-width, shared-input assumption does not survive our disjoint, heterogeneous-head setting.`**

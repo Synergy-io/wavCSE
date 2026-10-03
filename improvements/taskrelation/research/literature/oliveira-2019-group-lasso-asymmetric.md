@@ -51,18 +51,3 @@ A single shared covariate space partitioned into meaningful groups given by the 
 ## Implementation difficulty
 
 Moderate to high: FISTA + ADMM sub-steps inside an alternating loop, plus a choice of group structure and of three hyperparameters (`λ₁, λ₂, λ₃`). Under a single optimizer the pragmatic matched-pair form is the same as AMTL’s — periodic re-solve of `B^g` from the current per-task summaries — with the loss-weighted row-`ℓ₁` handled by the soft-thresholding step. **Documented deviation:** per-task vectors are class-mean head summaries *and* the feature groups must be invented rather than taken from the domain.
-
-## Candidate Study ID
-
-`LT-0002` — screened candidate (family A). If adopted, one `TR-xxxx` variant Study is pre-registered per DEC-0013 under the shared matched protocol.
-
-## LT-0002 assessment
-
-* **Gate 1 — explicit relation object: PASS.** Directed, learned per-group relationship matrices `B^g`; no user-supplied relation.
-* **Gate 2 — taxonomy: PASS.** Explicit parameter-reconstruction relation learning; the Group LASSO term is a sparsity prior on the task parameters, not a task-grouping or clustering mechanism (the grouping that exists is over *covariates*, given by the application), and there is no low-rank factorisation of `W`.
-* **Gate 3 — heterogeneous heads: PASS ONLY WITH STATED CHANGE.** Needs equal-length per-task vectors and a shared covariate partition; the stated change (class-mean head summary over the 2000 hidden units plus an imposed block partition) restores the form but the partition is not domain-given as in every experiment in the paper.
-* **Gate 4 — fixed representation: PASS.** Acts on downstream parameters only; frozen embeddings untouched.
-* **Gate 5 — faithful implementability: PASS.** Eqs. (1)–(5) and Algorithm 1 are implementable as published with the paper’s hyperparameter guidance; no foreign weighting is attached (the loss-scaled row `ℓ₁` is the paper’s own mechanism, inherited from AMTL).
-* **Gate 6 — source verified: PASS.** Venue, authors, equations and evidence checked against the official IJCAI PDF. The 2022 TKDD extension was not accessible and is not relied on.
-
-**Verdict: `PASS WITH DOCUMENTED DEVIATION`** — implementable and in-category, but it requires two deviations in our setting (summary-based task parameters and an invented feature-group partition). Per LT-0002 a documented deviation is not a faithful implementation. Relative to AMTL it adds a group dimension whose scientific value here is doubtful, since our groups would be arbitrary.

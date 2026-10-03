@@ -41,11 +41,3 @@ This is the closest conceptual match to F9 because it separates relation from re
 ## Implementation difficulty
 
 Prohibitive under the current protocol. It would require reformulating all tasks as aligned Gaussian multi-output regression or deriving and validating a novel deep-classification analogue.
-
-## Candidate Study ID
-
-`LT-0001` — closest conceptual candidate.
-
-## LT-0001 decision
-
-**REJECT FOR CURRENT IMPLEMENTATION; RETAIN AS DIAGNOSTIC PRINCIPLE.** It establishes that task relation and task noise must be separated, but does not provide a faithful mechanism for F9 in this heterogeneous classification setting. Before revisiting this direction, measure whether ER label/data noise rather than task semantics drives the scale signal.

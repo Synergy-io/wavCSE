@@ -37,11 +37,3 @@ KS, SI, and ER are heterogeneous multiclass classification tasks with different 
 ## Implementation difficulty
 
 Very high. A faithful implementation would replace the current downstream classifier with a multi-task generalized-t process or require a new classification approximation. Adding only its noise scalar to MTRL would be an original hybrid, not this published method.
-
-## Candidate Study ID
-
-`LT-0001` — screened candidate.
-
-## LT-0001 decision
-
-**REJECT AS IMPLEMENTATION CANDIDATE.** It is legitimate Task Relation Learning and supports Bayesian uncertainty over relations, but its stated mechanism does not directly address F9’s shared-gradient scale imbalance and is not faithfully portable to heterogeneous deep classification.

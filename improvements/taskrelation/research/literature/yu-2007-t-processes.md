@@ -37,18 +37,3 @@ There is no `m × m` relation object to implement — the paper’s mechanism is
 ## Implementation difficulty
 
 High (variational Bayes over latent functions) and, more importantly, not the right object: adapting it would mean inventing a task-relation mechanism the paper does not contain.
-
-## Candidate Study ID
-
-`LT-0002` — family-B robustness lead, verified and closed.
-
-## LT-0002 assessment
-
-1. **Explicit relation object — FAIL.** The shared prior over items is not a task-relation structure; `τ_ℓ` is a per-task scalar. No covariance/precision/graph/estimator over tasks is learned.
-2. **Taxonomy — FAIL.** Per-task reliability weighting is out of the §2.4 Task Relation Learning category (uncertainty/robustness weighting family).
-3. **Heterogeneous-head compatibility — FAIL.** Requires a shared item set and scalar latent functions; disjoint multiclass heads do not fit.
-4. **Fixed-representation compatibility — PASS in principle.** Nothing forces upstream retraining.
-5. **Faithful implementability — FAIL.** There is no relation update rule to implement as published; a port would be a new mechanism.
-6. **Primary-source verification — PASS.** Authors (Yu, Tresp, Yu — note Schwaighofer is *not* an author of this paper), venue (ICML 2007, pp. 1103–1110), Defs. 2.4/Props. 2.5–2.7, the VB updates (2)–(6) and the MovieLens/temperature results checked against the ICML PDF.
-
-**Verdict: FAIL — heavy-tailed robustness in this line is a per-task reliability weight attached to a shared hierarchical prior, not a task-relation object.** Documented negative for the “robust/heavy-tailed covariance estimation for task relations” lead: the paper is robust, but its robustness object is not a relation.

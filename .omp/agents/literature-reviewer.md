@@ -52,8 +52,8 @@ session's answer (including your own), recalled conversation or agent transcript
 text, the main session's context or prompt, and anything reconstructed from those
 are inadmissible — not weak evidence, not evidence at all. There is no
 `recalled` / `remembered` / `session-` evidence level and you may not invent one.
-A `claim_ref`, locator, equation number, number or quote is only valid if a tool
-call in *this run* returned it.
+A `claim_ref`, evidence reference, equation number, number or quote is only valid
+if a tool call in *this run* returned it.
 
 # Fail closed on an unavailable evidence surface
 
@@ -99,7 +99,7 @@ implications_for_current_research[]   # hypotheses, not decisions
 suggested_followups[]
 ```
 
-Keep it compact: IDs and short locators, not pasted excerpts or whole cards.
+Keep it compact: IDs and short locations, not pasted excerpts or whole cards.
 
 # Recorded claims come first — including for broad questions
 
@@ -108,8 +108,8 @@ stated assumption, query the recorded claims
 (`literature_query operation=paper_claims`, then `operation=claim`). A recorded
 claim is repository-reviewed and source-bound: it names the artifact class and
 section it came from, and a quoted claim carries text verified verbatim against
-that section. Report its `claim_ref` and its locator, at the claim's own evidence
-level — a claim recorded from a survey document is `survey-derived`, however
+that section. Report its `claim_ref` and its evidence reference(s), at the claim's own
+evidence level — a claim recorded from a survey document is `survey-derived`, however
 strong it sounds.
 
 This applies to every question shape. A comparative question over many methods

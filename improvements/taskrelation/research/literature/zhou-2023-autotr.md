@@ -52,18 +52,3 @@ Each task is one column of a single shared coefficient matrix `W ∈ R^{d×m}` o
 ## Implementation difficulty
 
 Moderate and closely comparable to AMTL: summaries → gradient step on `W` (including `λ₁‖W − WR‖²_F`) → periodic closed-form soft-thresholding update of `R`. The single difference from AMTL is that `R` is signed and solved in closed form rather than by a non-negative weighted LASSO, which makes AutoTR the *simpler* of the two to implement under one optimizer.
-
-## Candidate Study ID
-
-`LT-0002` — screened candidate (family A). If adopted, one `TR-xxxx` variant Study is pre-registered per DEC-0013 under the shared matched protocol.
-
-## LT-0002 assessment
-
-* **Gate 1 — explicit relation object: PASS.** `R` is a learned directed relation matrix (weighted adjacency over tasks), estimated jointly with the parameters. It is not a user-supplied relation.
-* **Gate 2 — taxonomy: PASS.** Explicit relation learning in the §2.4 sense — parameter reconstruction via a relation matrix — with no low-rank, clustering, decomposition, uncertainty or gradient-surgery component.
-* **Gate 3 — heterogeneous heads: PASS ONLY WITH STATED CHANGE.** The formal assumption needs one coefficient column per task; head widths 12 / 1251 / 4 break this. The stated change (class-mean head summary over the shared 2000-dim hidden layer) restores the required alignment but shifts the penalty’s effect onto the summary rather than the task models.
-* **Gate 4 — fixed representation: PASS.** No upstream retraining; the relation regularises downstream parameters over frozen embeddings.
-* **Gate 5 — faithful implementability: PASS.** Eqs. (2)–(3), (7)–(10) and Algorithms 1–2 are directly implementable; hyperparameters `λ₁`, `λ₂` are grid-searched in the paper and `s = 10⁹` is stated to be a pseudo-hyperparameter that needs only to be “large enough”.
-* **Gate 6 — source verified: PASS.** Venue, authors, equations and evidence checked against the accepted-version PDF and the published DOI record.
-
-**Verdict: `PASS WITH DOCUMENTED DEVIATION`** — a clean, closed-form-implementable signed directed relation matrix, but as in the AMTL card the published object (`W`’s per-task columns) does not exist in our architecture and must be replaced by the class-mean head summary. Per LT-0002 that documented deviation is not a faithful implementation.

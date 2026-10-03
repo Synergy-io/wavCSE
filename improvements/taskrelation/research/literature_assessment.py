@@ -6,9 +6,10 @@ investigation that asked a question about the paper::
     assessment(investigation_id, paper_id)
 
 This module owns the one structured machine-readable authority for that entity,
-``literature/assessments.jsonl``, replacing the several V1 shapes that carried
+``literature/assessments.jsonl``. It replaced the several V1 shapes that carried
 the same meaning (an ``LT-* result.json`` list, the ``STUDIES.jsonl`` ``cards``
-list, per-card verdict sections, the ``INDEX.md`` tables and analysis prose).
+list, per-card verdict sections and the ``INDEX.md`` tables); those are now
+historical evidence only, or removed, and are never a second authority.
 
 Two boundaries are deliberate:
 
@@ -23,8 +24,9 @@ rather than generalised for hypothetical future studies. ``role`` names the
 paper's function inside that investigation; ``verdict`` is that investigation's
 classification; ``gates`` records the eligibility gates where the investigation
 was gate-structured. ``reason_summary`` is a verbatim clause migrated from the
-legacy record and ``assessment_anchor`` points at the prose that carries the full
-rationale, so compact queries never need to open a card.
+legacy record and ``assessment_anchor`` points at the *investigation's own*
+analysis artifact — the surviving prose that carries the reasoning — because a
+PaperCard is paper-scoped and no longer holds any investigation verdict.
 
 Usage::
 
@@ -120,6 +122,23 @@ _GATE_KEYS = frozenset(("gate_id", "verdict"))
 _SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _LT_STUDY = re.compile(r"^LT-\d{4}$")
 
+# An anchored assessment points at a heading inside the investigation's analysis
+# artifact; the heading's slug is its identity. ``_slugify`` matches the plain
+# lowercase-hyphenated slugs the registry stores.
+_HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*$", re.M)
+_NON_SLUG = re.compile(r"[^a-z0-9]+")
+
+# The PaperCard sections this increment de-authorizes. Their presence on a card
+# means investigation verdict state is leaking back into paper-scoped prose.
+CARD_VERDICT_HEADING = re.compile(
+    r"^## (?:Candidate Study ID|LT-\d{4} (?:decision|assessment))\s*$", re.M
+)
+
+# A generated block in ``INDEX.md``; the renderer and the consistency check share
+# these markers so the view can be proven to derive from the registry.
+INDEX_ASSESSMENTS_BEGIN = "<!-- BEGIN GENERATED: assessments -->"
+INDEX_ASSESSMENTS_END = "<!-- END GENERATED: assessments -->"
+
 _RESEARCH_DIR = Path(__file__).resolve().parent
 _DEFAULT_REPO_ROOT = _RESEARCH_DIR.parents[2]
 _DEFAULT_LITERATURE_DIR = _RESEARCH_DIR / "literature"
@@ -171,13 +190,13 @@ class PaperAssessment:
 
     @property
     def detail_anchor(self):
-        """The card section slug the anchor points at."""
+        """The investigation analysis section slug the anchor points at."""
 
         return self.assessment_anchor.split("#", 1)[1]
 
     @property
     def detail_path(self):
-        """The repository-relative card the anchor points at."""
+        """The repository-relative investigation analysis artifact."""
 
         return self.assessment_anchor.split("#", 1)[0]
 
@@ -346,6 +365,139 @@ def load_assessments(
     )
 
 
+def render_assessment_tables(
+    registry=None,
+    *,
+    repo_root=_DEFAULT_REPO_ROOT,
+    literature_dir=None,
+    studies_path=None,
+    assessments_path=_DEFAULT_ASSESSMENTS,
+):
+    """Render the deterministic, human-readable assessment table for ``INDEX.md``.
+
+    This is a *derived view*: every cell comes from the canonical registry, so a
+    hand edit cannot make INDEX a second assessment authority.
+    """
+
+    if registry is None:
+        registry = load_assessments(
+            assessments_path,
+            repo_root=repo_root,
+            literature_dir=literature_dir,
+            studies_path=studies_path,
+        )
+    lines = [
+        "| Investigation | Paper | Role | Verdict |",
+        "| --- | --- | --- | --- |",
+    ]
+    for record in registry.records:
+        lines.append(
+            "| `{}` | [{}]({}.md) | `{}` | `{}` |".format(
+                record.investigation_id,
+                record.paper_id,
+                record.paper_id,
+                record.role,
+                record.verdict,
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _index_assessment_block(index_path):
+    """The body between the generated-assessment markers, or ``None``."""
+
+    try:
+        text = Path(index_path).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    begin = text.find(INDEX_ASSESSMENTS_BEGIN)
+    end = text.find(INDEX_ASSESSMENTS_END)
+    if begin == -1 or end == -1 or end < begin:
+        return None
+    return text[begin + len(INDEX_ASSESSMENTS_BEGIN) : end].strip("\n")
+
+
+def check_authority(
+    assessments_path=_DEFAULT_ASSESSMENTS,
+    *,
+    repo_root=_DEFAULT_REPO_ROOT,
+    literature_dir=None,
+    studies_path=None,
+    index_path=None,
+):
+    """Prove PaperAssessment has exactly one ACTIVE structured authority.
+
+    Loads and validates the canonical registry, then proves no *other* artifact
+    is still consumed as an assessment authority:
+
+    * every PaperCard is free of investigation verdict sections;
+    * no ``STUDIES.jsonl`` row duplicates PaperAssessment membership via ``cards``;
+    * ``INDEX.md``'s generated block, when present, matches the registry exactly.
+
+    Historical prose (a completed ``result.json``, the LT analysis narrative) is
+    allowed to mention old outcomes; it is not an authority unless code consumes
+    it as one, and nothing here does. Returns the loaded registry.
+    """
+
+    repo_root = Path(repo_root).resolve()
+    assessments_path = Path(assessments_path)
+    literature_dir = (
+        Path(literature_dir) if literature_dir is not None else assessments_path.parent
+    )
+    studies_path = (
+        Path(studies_path)
+        if studies_path is not None
+        else _DEFAULT_STUDIES
+        if repo_root == _DEFAULT_REPO_ROOT
+        else literature_dir.parent / "STUDIES.jsonl"
+    )
+    index = Path(index_path) if index_path is not None else literature_dir / "INDEX.md"
+    registry = load_assessments(
+        assessments_path,
+        repo_root=repo_root,
+        literature_dir=literature_dir,
+        studies_path=studies_path,
+    )
+
+    catalog = literature_catalog.load_catalog(
+        literature_dir / "catalog.jsonl", repo_root=repo_root, validate_references=False
+    )
+    for entry in catalog.entries:
+        card = repo_root / entry.card_path
+        if not card.is_file():
+            continue
+        match = CARD_VERDICT_HEADING.search(card.read_text(encoding="utf-8"))
+        if match:
+            raise AssessmentError(
+                "PaperCard {} still carries an investigation verdict section "
+                "{!r}".format(entry.card_path, match.group(0).strip()),
+                kind="CARD_STILL_A_VERDICT_AUTHORITY",
+                detail={"card": entry.card_path},
+            )
+
+    for line_number, line in enumerate(_read_lines(studies_path), start=1):
+        if not line.strip():
+            continue
+        raw = json.loads(line)
+        if isinstance(raw, dict) and "cards" in raw:
+            raise AssessmentError(
+                "Study registry line {} still carries a legacy 'cards' "
+                "PaperAssessment membership".format(line_number),
+                kind="STUDIES_ROW_STILL_A_MEMBERSHIP_AUTHORITY",
+                detail={"study_id": raw.get("study_id")},
+            )
+
+    block = _index_assessment_block(index)
+    if block is not None and block != render_assessment_tables(registry).strip("\n"):
+        raise AssessmentError(
+            "INDEX.md's generated assessment block disagrees with the registry; "
+            "regenerate it",
+            kind="INDEX_ASSESSMENT_DRIFT",
+            detail={"index": index.as_posix()},
+        )
+    return registry
+
+
 def _read_lines(path):
     try:
         return path.read_text(encoding="utf-8").splitlines()
@@ -459,7 +611,7 @@ def _validate_record(record, line_number, *, repo_root, papers, investigations):
     reason_summary = _require_string(record, "reason_summary", where)
 
     anchor = _require_string(record, "assessment_anchor", where)
-    _validate_anchor(anchor, where, paper_id, repo_root, papers)
+    _validate_anchor(anchor, where, investigation_id, repo_root, investigations)
 
     assessed_at = _require_string(record, "assessed_at", where)
     _validate_timestamp(assessed_at, where)
@@ -516,10 +668,43 @@ def _validate_gates(gates, where):
     return tuple(parsed)
 
 
-def _validate_anchor(anchor, where, paper_id, repo_root, papers):
+def _slugify(heading):
+    """The plain lowercase-hyphenated slug an analysis heading is addressed by."""
+
+    return _NON_SLUG.sub("-", heading.lower()).strip("-")
+
+
+def _heading_slugs(text):
+    """Every heading slug in a Markdown artifact."""
+
+    return {_slugify(match.group(1)) for match in _HEADING.finditer(text)}
+
+
+def _investigation_analysis_path(investigations, investigation_id):
+    """The repository-relative analysis artifact of one registered LT Study."""
+
+    study = investigations[investigation_id]
+    path = study.get("path")
+    if not isinstance(path, str) or not path.strip():
+        raise AssessmentError(
+            "literature Study {!r} has no usable path".format(investigation_id)
+        )
+    return (Path(path) / "analysis.md").as_posix()
+
+
+def _validate_anchor(anchor, where, investigation_id, repo_root, investigations):
+    """An assessment anchor names the investigation's own analysis reasoning.
+
+    A PaperCard is paper-scoped and carries no investigation verdict, so the
+    anchor must resolve to a heading in the investigating Study's ``analysis.md``;
+    it can never point at a card section this increment removes.
+    """
+
     if "#" not in anchor:
         raise AssessmentError(
-            "{}.assessment_anchor must be '<card path>#<section slug>'".format(where)
+            "{}.assessment_anchor must be '<analysis path>#<section slug>'".format(
+                where
+            )
         )
     path_part, _, slug = anchor.partition("#")
     if not _SLUG.match(slug):
@@ -528,21 +713,28 @@ def _validate_anchor(anchor, where, paper_id, repo_root, papers):
                 where
             )
         )
-    expected = papers[paper_id].card_path
-    if path_part != expected:
-        raise AssessmentError(
-            "{}.assessment_anchor must point at {!r} (the paper's canonical "
-            "card)".format(where, expected)
-        )
     candidate = Path(path_part)
     if candidate.is_absolute() or ".." in candidate.parts:
         raise AssessmentError(
             "{}.assessment_anchor path must be repository-relative".format(where)
         )
-    if not (repo_root / candidate).is_file():
+    expected = _investigation_analysis_path(investigations, investigation_id)
+    if path_part != expected:
+        raise AssessmentError(
+            "{}.assessment_anchor must point at {!r} (the investigation's own "
+            "analysis artifact)".format(where, expected)
+        )
+    artifact = repo_root / candidate
+    if not artifact.is_file():
         raise AssessmentError(
             "{}.assessment_anchor does not resolve to an existing artifact: "
             "{}".format(where, path_part)
+        )
+    if slug not in _heading_slugs(artifact.read_text(encoding="utf-8")):
+        raise AssessmentError(
+            "{}.assessment_anchor slug {!r} is not a heading in {}".format(
+                where, slug, path_part
+            )
         )
 
 
@@ -563,6 +755,12 @@ def _build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command")
     commands.add_parser("validate", help="validate the assessment registry")
+    commands.add_parser(
+        "check", help="prove assessments.jsonl is the sole active authority"
+    )
+    commands.add_parser(
+        "index-assessments", help="render the derived INDEX assessment table"
+    )
     commands.add_parser("list", help="list every assessment reference")
     paper = commands.add_parser("paper", help="list one paper's assessments")
     paper.add_argument("paper_id")
@@ -587,6 +785,14 @@ def main(argv=None):
                     len(registry.records)
                 )
             )
+        elif command == "check":
+            checked = check_authority()
+            print(
+                "literature assessments: sole active authority OK ({} "
+                "record(s))".format(len(checked.records))
+            )
+        elif command == "index-assessments":
+            sys.stdout.write(render_assessment_tables(registry))
         elif command == "list":
             print(
                 json.dumps(

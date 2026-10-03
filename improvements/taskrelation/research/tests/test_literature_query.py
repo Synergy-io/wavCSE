@@ -97,7 +97,6 @@ class QueryFixture(unittest.TestCase):
                 "stage": "source_verification",
                 "decision": "CANDIDATES_FOUND",
                 "path": "research/studies/LT-0002",
-                "cards": ["gamma-2024-method", "beta-2020-method"],
             },
             {
                 "study_id": "LT-0001",
@@ -117,7 +116,10 @@ class QueryFixture(unittest.TestCase):
             folder = self.studies_dir / study_id
             folder.mkdir()
             for name in ("PLAN.md", "NOTE.md", "analysis.md"):
-                (folder / name).write_text("# {} {}\n".format(study_id, name), encoding="utf-8")
+                (folder / name).write_text(
+                    "# {} {}\n\n## Assessment\n\nbody\n".format(study_id, name),
+                    encoding="utf-8",
+                )
         (self.studies_dir / "LT-0001" / "result.json").write_text(
             json.dumps(
                 {
@@ -148,7 +150,7 @@ class QueryFixture(unittest.TestCase):
                 "gates": [],
                 "verdict": "exclude_taxonomy",
                 "reason_summary": "Boundary case excluded by taxonomy.",
-                "assessment_anchor": "research/literature/beta-2020-method.md#lt-0001-decision",
+                "assessment_anchor": "research/studies/LT-0001/analysis.md#assessment",
                 "assessed_at": "2026-01-01T00:00:00+00:00",
             },
             {
@@ -159,7 +161,7 @@ class QueryFixture(unittest.TestCase):
                 "gates": [],
                 "verdict": "fail",
                 "reason_summary": "Screened and closed.",
-                "assessment_anchor": "research/literature/beta-2020-method.md#lt-0002-assessment",
+                "assessment_anchor": "research/studies/LT-0002/analysis.md#assessment",
                 "assessed_at": "2026-01-02T00:00:00+00:00",
             },
             {
@@ -170,7 +172,7 @@ class QueryFixture(unittest.TestCase):
                 "gates": [],
                 "verdict": "pass",
                 "reason_summary": "Clean pass.",
-                "assessment_anchor": "research/literature/gamma-2024-method.md#lt-0002-assessment",
+                "assessment_anchor": "research/studies/LT-0002/analysis.md#assessment",
                 "assessed_at": "2026-01-02T00:00:00+00:00",
             },
         ]
@@ -275,7 +277,7 @@ class LiteratureStudyRelationshipTests(QueryFixture):
         self.assertEqual(second.assessment.investigation_id, "LT-0002")
         self.assertEqual(second.assessment.verdict, "fail")
         self.assertEqual(second.assessment.role, "family_b_estimator")
-        self.assertEqual(second.assessment.detail_anchor, "lt-0002-assessment")
+        self.assertEqual(second.assessment.detail_anchor, "assessment")
         self.assertEqual(second.study.decision, "CANDIDATES_FOUND")
 
     def test_relationship_queries_never_open_a_card(self):
@@ -292,6 +294,31 @@ class LiteratureStudyRelationshipTests(QueryFixture):
         self.assertEqual(
             [relationship.paper.paper_id for relationship in relationships],
             ["beta-2020-method", "gamma-2024-method"],
+        )
+
+    def test_lt_0001_completed_result_json_is_not_an_assessment_authority(self):
+        # The completed result.json is historical evidence; relationship queries
+        # must derive their membership from assessments.jsonl alone.
+        query = self.open_query()
+        before = [r.paper.paper_id for r in query.papers_for_study("LT-0001")]
+        self.assertEqual(before, ["beta-2020-method"])
+
+        (self.studies_dir / "LT-0001" / "result.json").write_text(
+            json.dumps(
+                {
+                    "study_id": "LT-0001",
+                    "primary_sources_reviewed": [
+                        {"key": "ghost", "role": "x", "url": "https://x", "decision": "retain"},
+                        {"key": "gamma", "role": "y", "url": "https://y", "decision": "retain"},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        reopened = self.open_query()
+        self.assertEqual(
+            [r.paper.paper_id for r in reopened.papers_for_study("LT-0001")], before
         )
 
     def test_study_to_papers_returns_deterministic_relationship_order(self):
@@ -357,7 +384,7 @@ class LiteratureStudyRelationshipTests(QueryFixture):
                     "gates": [],
                     "verdict": "fail",
                     "reason_summary": "duplicate",
-                    "assessment_anchor": "research/literature/gamma-2024-method.md#lt-0002-assessment",
+                    "assessment_anchor": "research/studies/LT-0002/analysis.md#assessment",
                     "assessed_at": "2026-01-02T00:00:00+00:00",
                 }
             )
@@ -544,7 +571,7 @@ class RealRepositoryQueryTests(unittest.TestCase):
         self.assertEqual(mssl[0].assessment.investigation_id, "LT-0002")
         self.assertEqual(mssl[0].assessment.verdict, "pass")
         self.assertEqual(mssl[0].assessment.role, "family_b_estimator")
-        self.assertEqual(mssl[0].assessment.detail_anchor, "lt-0002-assessment")
+        self.assertEqual(mssl[0].assessment.detail_anchor, "2-family-b-one-clean-candidate")
 
     def test_real_assessment_operation_returns_the_canonical_record(self):
         record = self.query.get_assessment("LT-0002", "goncalves-2016-mssl")
@@ -557,9 +584,10 @@ class RealRepositoryQueryTests(unittest.TestCase):
         )
         self.assertEqual(
             record.assessment_anchor,
-            "improvements/taskrelation/research/literature/goncalves-2016-mssl.md"
-            "#lt-0002-assessment",
+            "improvements/taskrelation/research/studies/LT-0002/analysis.md"
+            "#2-family-b-one-clean-candidate",
         )
+        self.assertNotIn("/literature/", record.detail_path)
 
 
 if __name__ == "__main__":

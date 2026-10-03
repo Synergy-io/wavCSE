@@ -32,23 +32,7 @@ Linear regression per task (classification described as a straightforward extens
 
 ## Differences from our setting
 
-Our relations are among **per-task classifier heads of different widths**, not columns of one shared `d × m` weight matrix. FETR’s nonlinear extension is a *single shared* `p × m` layer on a shared neural map, which contradicts our per-task heterogeneous heads. Worse, the `d × d` feature precision must be estimated from `m` columns: with `m = 3` tasks it is radically under-determined (`d ≈ 2000 ≫ m`). The bounded constraint guarantees the estimate is *finite*, not that it is *identifiable*; the paper’s own ill-posedness argument (`n = 1 < max(d/m, m/d)`) applies with full force to a `2000 × 2000` feature precision. Fixing `Ω₁ = I` to escape this removes the paper’s defining joint feature-and-relation mechanism.
-
+Our relations are among **per-task classifier heads of different widths**, not columns of one shared `d × m` weight matrix. FETR’s nonlinear extension is a *single shared* `p × m` layer on a shared neural map, which contradicts our per-task heterogeneous heads. Worse, the `d × d` feature precision must be estimated from `m` columns: with `m = 3` tasks it is radically under-determined (`d ≈ 2000 ≫ m`). The bounded constraint guarantees the estimate is *finite*, not that it is *identifiable*; the paper’s own ill-posedness argument (`n = 1 < max(d/m, m/d)`) applies with full force to a `2000 × 2000` feature precision. Fixing `Ω₁ = I` to escape this removes the paper’s defining joint feature-and-relation mechanism. The paper's ill-posedness analysis is the cleanest published statement of why unconstrained covariance estimation of this kind degenerates.
 ## Implementation difficulty
 
 Moderate for the relation block itself (SVD + hard-thresholding on a `3 × 3` precision is trivial), but the published method also requires the feature-covariance machinery, which is not implementable meaningfully with three tasks. Adopting only the bounded task-precision step would be a hybrid.
-
-## Candidate Study ID
-
-`LT-0002` — screened family-B candidate; not advanced.
-
-## LT-0002 assessment
-
-1. **Explicit relation object — PASS.** Learned task precision `Ω₂`, with a conditional-independence interpretation.
-2. **Taxonomy — PASS (as a whole).** Explicit Task Relation Learning in the §2.4 sense; the feature precision is feature-structure learning, but the relation object is the task precision, not a low-rank/clustering/decomposition object.
-3. **Heterogeneous-head compatibility — FAIL.** The formal model requires one shared `d × m` parameter matrix (or a single shared head layer in the nonlinear extension); it does not survive disjoint data sets with head widths 12 / 1251 / 4.
-4. **Fixed-representation compatibility — PASS in principle.** The nonlinear extension freezes/hosts the representation; nothing forces upstream retraining.
-5. **Faithful implementability — FAIL.** The published method jointly estimates a `d × d` feature precision that is unidentifiable with `m = 3` tasks; the bounded variant makes the subproblem finite but not meaningful. Implementing only the bounded `Ω₂` step is a deviation from the published mechanism.
-6. **Primary-source verification — PASS.** Authors, venue (UAI 2020, PMLR 115:777–787), and the ill-posedness argument (Section 3), the bounded formulation (Eq. 3–4) and the block algorithms (Algorithms 1–2) checked against the PMLR PDF.
-
-**Verdict: FAIL — the published method’s joint feature-and-task covariance is unidentifiable with three tasks, and its parameterisation requires a shared `d × m` head incompatible with our heterogeneous per-task heads.** Its ill-posedness analysis is nevertheless the cleanest published statement of why unconstrained covariance estimation of this kind degenerates, which is directly relevant to our observed `Ω` saturation.
