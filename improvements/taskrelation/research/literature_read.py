@@ -48,6 +48,7 @@ _STUDY_ARTIFACT_ATTRS = {
 }
 _STUDY_ARTIFACT_KINDS = ("analysis", "note", "plan", "result")
 SURVEY_ARTIFACT = "survey"
+SYNTHESIS_ARTIFACT = "synthesis"
 _SURVEY_DOCUMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*\.md$")
 
 _RESEARCH_DIR = Path(__file__).resolve().parent
@@ -238,6 +239,37 @@ class LiteratureReader:
             text=text,
         )
 
+    def read_synthesis(self, synthesis_id, max_chars=DEFAULT_MAX_CHARS):
+        """Return bounded text of one registered synthesis, addressed by identity.
+
+        Unlike :meth:`read_survey` (which takes a literal filename), this resolves
+        a stable ``synthesis_id`` through the registry before touching bytes, so
+        the caller never needs the filesystem layout. The evidence level is
+        ``survey-derived``: a synthesis document is a derived cross-source narrative,
+        never primary evidence.
+        """
+
+        max_chars = _validate_max_chars(max_chars)
+        try:
+            record = self._query.get_synthesis(synthesis_id)
+        except Exception as exc:
+            raise LiteratureReadError(
+                str(exc),
+                kind=UNKNOWN_REFERENCE,
+                detail={"synthesis_id": synthesis_id},
+            ) from exc
+        path = self._resolve_inside_repo(record.path, "synthesis path", record.synthesis_id)
+        text, truncated = _read_bounded(path, max_chars, record.synthesis_id)
+        return ArtifactContent(
+            source_kind=SYNTHESIS_ARTIFACT,
+            evidence_level="survey-derived",
+            reference=record.synthesis_id,
+            path=self._relative(path),
+            characters=len(text),
+            truncated=truncated,
+            text=text,
+        )
+
     def read_primary(self, paper_id, max_chars=DEFAULT_MAX_CHARS, *, role=None,
                      page=None, page_end=None):
         """Return extracted text from the checksum-verified primary artifact.
@@ -359,6 +391,11 @@ def _build_parser():
     survey = commands.add_parser("survey", help="read one literature-survey document")
     survey.add_argument("document")
     survey.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
+    synthesis = commands.add_parser(
+        "synthesis", help="read one registered synthesis by stable identity"
+    )
+    synthesis.add_argument("synthesis_id")
+    synthesis.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     return parser
 
 
@@ -372,6 +409,8 @@ def main(argv=None):
             result = reader.read_study(args.study_id, args.artifact, args.max_chars)
         elif args.command == "survey":
             result = reader.read_survey(args.document, args.max_chars)
+        elif args.command == "synthesis":
+            result = reader.read_synthesis(args.synthesis_id, args.max_chars)
         else:
             result = reader.read_primary(
                 args.paper_id,

@@ -341,6 +341,48 @@ check(
 		.details.kind === "INVALID_REFERENCE",
 );
 
+// 14b. synthesis: registry metadata without loading Markdown prose
+const synthesisList = await call("literature_query", {
+	operation: "synthesis_list",
+	status: "historical",
+});
+const syntheses = (parse(synthesisList).syntheses as Record<string, unknown>[]) ?? [];
+check(
+	"synthesis_list enumerates registered syntheses with kind, status and provenance",
+	syntheses.length === 8 &&
+		syntheses.every(
+			(s) =>
+				typeof s.synthesis_id === "string" &&
+				typeof s.kind === "string" &&
+				s.status === "historical" &&
+				typeof s.path === "string" &&
+				Array.isArray(s.derives_from) &&
+				!("text" in s),
+		),
+	syntheses.map((s) => s.synthesis_id),
+);
+
+const oneSynthesis = await call("literature_query", {
+	operation: "synthesis",
+	synthesisId: "post-tr0007-synthesis",
+});
+const synth = parse(oneSynthesis).synthesis as Record<string, unknown>;
+check(
+	"synthesis returns one synthesis's metadata and resolvable provenance",
+	synth.synthesis_id === "post-tr0007-synthesis" &&
+		synth.kind === "synthesis" &&
+		synth.status === "active" &&
+		(synth.derives_from as string[]).includes("investigation:TR-0007"),
+	synth,
+);
+check(
+	"an unknown synthesis is a structured refusal",
+	(await call("literature_query", {
+		operation: "synthesis",
+		synthesisId: "no-such-synthesis",
+	})).details.ok === false,
+);
+
 // 15. bounded read: derived survey document
 const survey = await call("literature_read", {
 	source: "survey",
@@ -357,6 +399,25 @@ check(
 	"read refuses a survey path-like reference",
 	(await call("literature_read", { source: "survey", document: "../../DECISIONS.md" }))
 		.details.ok === false,
+);
+
+const synthesisRead = await call("literature_read", {
+	source: "synthesis",
+	synthesisId: "mssl-sparsity-analysis",
+	maxChars: 200,
+});
+check(
+	"read returns a registered synthesis by identity as survey-derived evidence",
+	parse(synthesisRead).source_kind === "synthesis" &&
+		parse(synthesisRead).reference === "mssl-sparsity-analysis" &&
+		parse(synthesisRead).evidence_level === "survey-derived" &&
+		parse(synthesisRead).truncated === true,
+	parse(synthesisRead),
+);
+check(
+	"read refuses an unknown synthesis identity",
+	(await call("literature_read", { source: "synthesis", synthesisId: "no-such-synthesis" }))
+		.details.kind === "UNKNOWN_REFERENCE",
 );
 
 // 16. outside the repository the adapter refuses rather than guessing

@@ -22,7 +22,16 @@ python -m improvements.taskrelation.research.literature_query resolve <paper-id-
 python -m improvements.taskrelation.research.literature_query identify --doi 10.1145/3580305.3599261
 python -m improvements.taskrelation.research.literature_query paper-studies <paper-id-or-alias>
 python -m improvements.taskrelation.research.literature_query study-papers LT-0001
+python -m improvements.taskrelation.research.literature_query syntheses [--kind --status]
+python -m improvements.taskrelation.research.literature_query synthesis <synthesis-id>
 ```
+
+The derived cross-source/theoretical synthesis layer under `../literature_survey/`
+has its own registry — `../literature_survey/registry.jsonl`, validated by
+`python -m improvements.taskrelation.research.literature_synthesis check`. It
+carries only identity, kind, lifecycle status and provenance for each survey
+document; the narrative reasoning stays in the Markdown. This index is a derived
+human view of the card layer and does not track synthesis status.
 
 Results contain compact paper metadata, canonical card paths, Study metadata
 and Study-scoped assessment records. A structured per-paper assessment is

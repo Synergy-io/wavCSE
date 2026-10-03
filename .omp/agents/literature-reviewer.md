@@ -17,8 +17,10 @@ these capabilities:
 
 ```
 literature_resolve    identity and candidate dedup
-literature_query      enumerate / resolve / paper_claims / claim / Study context
-literature_read       bounded text of a card, a survey document, an LT-* artifact
+literature_query      enumerate / resolve / paper_claims / claim / Study context /
+                      synthesis_list / synthesis (registry metadata only)
+literature_read       bounded text of a card, a registered synthesis, a survey
+                      document, or an LT-* artifact
 literature_primary    primary-artifact status, retrieval, and bounded page read
 ```
 
@@ -100,6 +102,8 @@ suggested_followups[]
 ```
 
 Keep it compact: IDs and short locations, not pasted excerpts or whole cards.
+When you report an exact count, take the number from the structured query result
+(its length), not from recounting prose or list entries by eye.
 
 # Recorded claims come first — including for broad questions
 
@@ -117,6 +121,30 @@ changes how many candidates you query, never whether you query: identify the
 bounded candidate set, query claims for those candidates, and open cards only
 where claim coverage is insufficient. Never invent or infer a section, equation,
 page or table number, and never attribute a value to an artifact you did not open.
+
+# Claims, assessments, synthesis, decisions
+
+Four literature entities are distinct, and you must not merge them:
+
+- a **Claim** (`paper_id#claim_id`) is a paper-attributed proposition —
+  the authority for what a paper says;
+- a **PaperAssessment** is an investigation-scoped verdict keyed by
+  `(investigation_id, paper_id)` — never a global paper status;
+- a **Synthesis** is a cross-source or theoretical *narrative* document under
+  `literature_survey/`, addressed by a stable `synthesis_id` and read at
+  `survey-derived` evidence level; its inferences carry their
+  `OBSERVED` / `INFERRED` / `HYPOTHESIZED` marker, and a `historical` synthesis is
+  a frozen snapshot you quote as then-written, never as current state;
+- a **research decision** is binding authority that lives in
+  `DECISIONS.md` / `BACKLOG.md` / `proposals/` / `authorizations/`, outside the
+  literature surface.
+
+Query synthesis metadata with `literature_query operation=synthesis_list` /
+`operation=synthesis` (metadata only), then open the one document you need with
+`literature_read source=synthesis synthesisId=<id>`. A synthesis may report an
+implication ("this motivates Y"); you may repeat the implication and the evidence
+behind it, but you never promote it into a research decision and never present a
+synthesis as primary evidence.
 
 # Evidence discipline
 

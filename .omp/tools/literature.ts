@@ -70,22 +70,28 @@ export interface QueryParams {
 		| "study"
 		| "assessment"
 		| "paper_claims"
-		| "claim";
+		| "claim"
+		| "synthesis_list"
+		| "synthesis";
 	paperId?: string;
 	studyId?: string;
 	claimId?: string;
 	claimType?: string;
+	synthesisId?: string;
+	kind?: string;
+	status?: string;
 	year?: number;
 	author?: string;
 	venue?: string;
 }
 
 export interface ReadParams {
-	source: "card" | "study" | "survey";
+	source: "card" | "study" | "survey" | "synthesis";
 	paperId?: string;
 	studyId?: string;
 	artifact?: "analysis" | "note" | "plan" | "result";
 	document?: string;
+	synthesisId?: string;
 	maxChars?: number;
 }
 
@@ -134,6 +140,16 @@ function queryArgv(params: QueryParams): string[] | undefined {
 			return params.paperId && params.claimId
 				? ["literature_claims", "get", params.paperId, params.claimId]
 				: undefined;
+		case "synthesis_list": {
+			const list = ["literature_query", "syntheses"];
+			if (params.kind) list.push("--kind", params.kind);
+			if (params.status) list.push("--status", params.status);
+			return list;
+		}
+		case "synthesis":
+			return params.synthesisId
+				? [...argv, "synthesis", params.synthesisId]
+				: undefined;
 		default:
 			return undefined;
 	}
@@ -148,6 +164,9 @@ function readArgv(params: ReadParams): string[] | undefined {
 	} else if (params.source === "survey") {
 		if (!params.document) return undefined;
 		argv.push("survey", params.document);
+	} else if (params.source === "synthesis") {
+		if (!params.synthesisId) return undefined;
+		argv.push("synthesis", params.synthesisId);
 	} else {
 		if (!params.studyId || !params.artifact) return undefined;
 		argv.push("study", params.studyId, params.artifact);
@@ -238,7 +257,9 @@ const factory: CustomToolFactory = (pi) => {
 				"Enumerate retained papers and read investigation-scoped literature state as " +
 				"compact records with card and artifact pointers. Each paper assessment is " +
 				"canonical, keyed by (investigation, paper) and answers how that investigation " +
-				"assessed the paper; it is never a global paper status.",
+				"assessed the paper; it is never a global paper status. synthesis_list and " +
+				"synthesis return the derived cross-source / theoretical synthesis layer " +
+				"(identity, kind, status, path, provenance) without loading its prose.",
 			parameters: z.object({
 				operation: z
 					.enum([
@@ -250,13 +271,16 @@ const factory: CustomToolFactory = (pi) => {
 						"assessment",
 						"paper_claims",
 						"claim",
+						"synthesis_list",
+						"synthesis",
 					])
 					.describe(
 						"which bounded read-only query to run; assessment returns one " +
 							"canonical (investigation, paper) PaperAssessment record; paper_claims " +
 							"and claim return recorded source-bound literature claims (paper_claims: " +
 							"all claims for a paper, optionally filtered by claimType; claim: one " +
-							"exact claim)",
+							"exact claim); synthesis_list enumerates registered syntheses " +
+							"(optionally filtered by kind/status); synthesis returns one by id",
 					),
 				paperId: z
 					.string()
@@ -275,6 +299,15 @@ const factory: CustomToolFactory = (pi) => {
 					.string()
 					.optional()
 					.describe("optional paper_claims filter, e.g. relation-object or method-objective"),
+				synthesisId: z.string().optional().describe("required by synthesis"),
+				kind: z
+					.string()
+					.optional()
+					.describe("optional synthesis_list filter, e.g. prediction or theory"),
+				status: z
+					.string()
+					.optional()
+					.describe("optional synthesis_list filter: active or historical"),
 				year: z.number().int().optional(),
 				author: z.string().optional(),
 				venue: z.string().optional(),
@@ -292,7 +325,9 @@ const factory: CustomToolFactory = (pi) => {
 									? "studyId and paperId"
 									: p.operation === "paper_claims"
 										? "paperId"
-										: "paperId or studyId";
+										: p.operation === "synthesis"
+											? "synthesisId"
+											: "paperId or studyId";
 					return invalid(needed, `literature_query operation=${p.operation}`);
 				}
 				return invoke(argv, rest);
@@ -303,16 +338,20 @@ const factory: CustomToolFactory = (pi) => {
 			label: "Read Literature Artifact",
 			description:
 				"Read one bounded retained-literature artifact: a paper's canonical card, a " +
-				"registered LT Study artifact (analysis, note, plan, result), or a derived " +
-				"literature-survey document. Returns text plus its evidence level " +
+				"registered LT Study artifact (analysis, note, plan, result), a derived " +
+				"literature-survey document, or a registered synthesis by stable identity. " +
+				"Returns text plus its evidence level " +
 				"(card-derived, Study-derived or survey-derived) and a truncation flag. " +
+				"Prefer source=synthesis with a synthesisId from literature_query " +
+				"operation=synthesis_list; source=survey takes the raw filename. " +
 				"Arbitrary filesystem paths are refused by design.",
 			parameters: z.object({
 				source: z
-					.enum(["card", "study", "survey"])
+					.enum(["card", "study", "survey", "synthesis"])
 					.describe(
 						"card = per-paper derived knowledge; study = registered LT artifact; " +
-							"survey = derived literature/theory synthesis document",
+							"survey = derived literature/theory document by filename; " +
+							"synthesis = the same documents addressed by stable synthesis_id",
 					),
 				paperId: z.string().optional().describe("required when source is card"),
 				studyId: z.string().optional().describe("required when source is study"),
@@ -324,6 +363,10 @@ const factory: CustomToolFactory = (pi) => {
 					.string()
 					.optional()
 					.describe("required when source is survey; a direct literature_survey/*.md filename"),
+				synthesisId: z
+					.string()
+					.optional()
+					.describe("required when source is synthesis; a synthesis_id from the registry"),
 				maxChars: z.number().int().min(1).max(100000).optional(),
 			}),
 			async execute(_toolCallId: string, params: unknown, ...rest: unknown[]) {
@@ -335,7 +378,9 @@ const factory: CustomToolFactory = (pi) => {
 							? "studyId and artifact"
 							: p.source === "survey"
 								? "document"
-								: "paperId";
+								: p.source === "synthesis"
+									? "synthesisId"
+									: "paperId";
 					return invalid(needed, `literature_read source=${p.source}`);
 				}
 				return invoke(argv, rest);

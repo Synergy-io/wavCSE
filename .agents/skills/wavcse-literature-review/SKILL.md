@@ -41,7 +41,8 @@ required capability set is explicit:
 
 ```
 literature_resolve
-literature_query      (including operation=paper_claims and operation=claim)
+literature_query      (including operation=paper_claims, operation=claim,
+                       operation=synthesis_list and operation=synthesis)
 literature_read
 literature_primary
 ```
@@ -108,11 +109,27 @@ caveat. An unsupported synthesis is a fabrication with a disclaimer.
    one, or reconstructed from prose is a fabrication, even when it looks
    plausible and even when the claim it describes really exists.
 
-6. **Open cards and surveys only where claim coverage is insufficient.** Cards,
-   `literature_survey/` documents and `LT-*` Study artifacts are the fallback for
-   what claims do not yet record — not the default path. Name which artifact you
-   opened and at which section. A Study's verdict describes that Study's own
-   question; it is never a general judgement about the paper.
+6. **Open cards, syntheses and surveys only where claim coverage is insufficient.**
+   Cards, `literature_survey/` documents and `LT-*` Study artifacts are the
+   fallback for what claims do not yet record — not the default path. A
+   `literature_survey/` document is a *synthesis*: address it by its stable
+   identity, not by guessing a filename path:
+
+   ```
+   literature_query operation=synthesis_list [kind=<kind>] [status=<status>]
+   literature_query operation=synthesis      synthesisId=<id>
+   literature_read  source=synthesis         synthesisId=<id> [maxChars=<n>]
+   ```
+
+   `synthesis_list` / `synthesis` return metadata only (identity, `kind`,
+   `status`, `path`, `derives_from`) and never load the prose; open the document
+   itself only for the one you actually need, and carry its `OBSERVED` /
+   `INFERRED` / `HYPOTHESIZED` markers. A `historical` synthesis is a frozen
+   snapshot (an imported note or a pre-registered prediction): quote it as what
+   was written then, never as the current state, and prefer the `active`
+   reconciliation document when the question is "what do we know now". Name
+   which artifact you opened and at which section. A Study's verdict describes
+   that Study's own question; it is never a general judgement about the paper.
 
 7. **Use the primary artifact when the question demands it.** A card is a
    derived summary; when the answer turns on an exact equation, a reported
@@ -172,6 +189,30 @@ level, and you may not invent one. Never present card-derived or survey-derived
 knowledge as though you had inspected the PDF. When primary evidence was
 unavailable, say so explicitly — that is a finding, not a failure.
 
+## Claims, assessments, synthesis and decisions are different things
+
+Four entities share the literature vocabulary; keep them distinct in what you
+report:
+
+- **Claim** (`paper_id#claim_id`) — a paper-attributed proposition, recorded
+  from a specific artifact class and section. It is the authority for *what a
+  paper says*; report it at its own `source_level`.
+- **PaperAssessment** — an investigation-scoped verdict on a paper, keyed by
+  `(investigation_id, paper_id)`. It answers "how did `LT-0002` assess this paper
+  for its own question", never "is this paper good".
+- **Synthesis** — a cross-source or theoretical *narrative* document under
+  `literature_survey/`. It is the author's reasoning that connects claims, theory
+  and empirical results; it is derived, not primary, and its inferences carry
+  their `OBSERVED` / `INFERRED` / `HYPOTHESIZED` marker.
+- **Research decision** — a binding choice (roadmap, experiment authorization,
+  backlog commitment). It lives in `DECISIONS.md` / `BACKLOG.md` /
+  `proposals/` / `authorizations/`, **outside** the literature surface.
+
+A synthesis may say "this evidence motivates Y"; that is an implication, not an
+authorization, and it never promotes itself into a research decision. Report the
+implication and the evidence behind it, and route the decision back to the main
+research session.
+
 ## Provenance rules
 
 - Keep `paper_id` on every paper-specific conclusion.
@@ -186,6 +227,12 @@ unavailable, say so explicitly — that is a finding, not a failure.
   not a source for that number.
 - Never cite a `claim_ref` you did not receive from `operation=paper_claims` or
   `operation=claim` in this run.
+- **Report exact counts from the structured result, not from memory.** When you
+  state how many assessments, claims or relations a query returned, derive the
+  number from the returned structure (its length) and repeat it from that value —
+  do not recount prose or a list by eye and do not carry a count forward from an
+  earlier step. A count that disagrees with the tool result is a fabrication even
+  when the underlying records are real.
 - Attribute a paper's reported numbers to the paper. They are not our results.
 
 ## Authority — what this skill does not do

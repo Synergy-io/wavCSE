@@ -44,6 +44,7 @@ from typing import Mapping, Optional, Tuple
 
 from improvements.taskrelation.research import literature_assessment
 from improvements.taskrelation.research import literature_catalog
+from improvements.taskrelation.research import literature_synthesis
 
 
 _RESEARCH_DIR = Path(__file__).resolve().parent
@@ -51,6 +52,7 @@ _DEFAULT_REPO_ROOT = _RESEARCH_DIR.parents[2]
 _DEFAULT_CATALOG = _RESEARCH_DIR / "literature" / "catalog.jsonl"
 _DEFAULT_ASSESSMENTS = _RESEARCH_DIR / "literature" / "assessments.jsonl"
 _DEFAULT_STUDIES = _RESEARCH_DIR / "STUDIES.jsonl"
+_DEFAULT_SYNTHESES = _RESEARCH_DIR / "literature_survey" / "registry.jsonl"
 _ARTIFACT_NAMES = ("PLAN.md", "NOTE.md", "analysis.md", "result.json")
 _CANDIDATE_FIELDS = ("paper_id", "title", "doi", "arxiv", "source_url")
 
@@ -145,7 +147,8 @@ class LiteratureQuery:
         repo_root=_DEFAULT_REPO_ROOT,
         catalog_path=None,
         studies_path=None,
-        assessments_path=None
+        assessments_path=None,
+        syntheses_path=None,
     ):
         self._repo_root = Path(repo_root).resolve()
         self._catalog_path = self._input_path(
@@ -173,6 +176,19 @@ class LiteratureQuery:
                 studies_path=self._studies_path,
             )
         except literature_assessment.AssessmentError as exc:
+            raise LiteratureQueryError(str(exc)) from exc
+        self._syntheses_path = self._input_path(
+            syntheses_path if syntheses_path is not None else _DEFAULT_SYNTHESES
+        )
+        try:
+            # Schema-only here: the query layer returns compact synthesis metadata
+            # without loading Markdown prose or re-resolving every reference.
+            self._syntheses = literature_synthesis.load_syntheses(
+                self._syntheses_path,
+                repo_root=self._repo_root,
+                validate_references=False,
+            )
+        except literature_synthesis.SynthesisError as exc:
             raise LiteratureQueryError(str(exc)) from exc
         relationships = self._load_relationships()
         self._relationships_by_paper = self._group_relationships(
@@ -323,6 +339,26 @@ class LiteratureQuery:
         try:
             return self._assessments.get_assessment(investigation_id, paper_id)
         except literature_assessment.AssessmentError as exc:
+            raise LiteratureQueryError(str(exc)) from exc
+
+    def list_syntheses(self, *, kind=None, status=None):
+        """Return compact synthesis metadata in synthesis_id order.
+
+        Reads the registry only: answering *what syntheses exist, of what kind and
+        status, deriving from what, and where to read one* never loads Markdown.
+        """
+
+        try:
+            return self._syntheses.list(kind=kind, status=status)
+        except literature_synthesis.SynthesisError as exc:
+            raise LiteratureQueryError(str(exc)) from exc
+
+    def get_synthesis(self, synthesis_id):
+        """Return one synthesis's metadata (identity, kind, status, path, provenance)."""
+
+        try:
+            return self._syntheses.get(synthesis_id)
+        except literature_synthesis.SynthesisError as exc:
             raise LiteratureQueryError(str(exc)) from exc
 
     @staticmethod
@@ -543,6 +579,10 @@ def _assessment_dict(assessment):
     }
 
 
+def _synthesis_dict(record):
+    return record.as_dict()
+
+
 def _relationship_dict(relationship):
     return {
         "paper": _paper_dict(relationship.paper),
@@ -590,6 +630,11 @@ def _build_parser():
     identify.add_argument("--doi")
     identify.add_argument("--arxiv")
     identify.add_argument("--source-url")
+    syntheses = commands.add_parser("syntheses", help="list registered syntheses")
+    syntheses.add_argument("--kind", choices=literature_synthesis.KINDS)
+    syntheses.add_argument("--status", choices=literature_synthesis.STATUSES)
+    synthesis = commands.add_parser("synthesis", help="return one registered synthesis")
+    synthesis.add_argument("synthesis_id")
     return parser
 
 
@@ -635,6 +680,17 @@ def main(argv=None):
                     args.investigation_id, args.paper_id
                 ).as_dict()
             }
+        elif args.command == "syntheses":
+            document = {
+                "syntheses": [
+                    _synthesis_dict(record)
+                    for record in query.list_syntheses(
+                        kind=args.kind, status=args.status
+                    )
+                ]
+            }
+        elif args.command == "synthesis":
+            document = {"synthesis": _synthesis_dict(query.get_synthesis(args.synthesis_id))}
         else:
             relationships = query.papers_for_study(args.study_id)
             study = query.get_study(args.study_id)
