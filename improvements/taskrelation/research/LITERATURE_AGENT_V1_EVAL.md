@@ -629,3 +629,101 @@ only repository-backed evidence, and both used only `card-derived` /
 `Study-derived` levels. So condition C holds for the *capability* and holds in
 *behaviour* for these two runs — and the content channel is now closed by an
 authority boundary rather than by instruction.
+
+# V5 (2026-10-03) — primary-evidence vertical slice (INC-004B.1)
+
+The first evaluation in which the Literature Agent answered from **primary**
+evidence. It exercises the INC-004B.1 path end to end: registration → manifest →
+checksum-verified local copy → bounded, page-provenanced read → primary synthesis.
+
+**Code state.** Commit `e49eb8fabd14f56a6642528ec43a94ac100446a0`
+("Add local-first primary registration and page-provenanced reading"), author
+Kevin Sanjula `<kevinxsanjula@gmail.com>`. The worktree carries another
+workstream's uncommitted files (`infra/*`, `improvements/compute/*`, `AGENTS.md`,
+`Makefile`, `.agents/policies/autonomy.md`, `wavcse-research-runner/SKILL.md`,
+untracked `.github/`, `docs/`, `mcp.json`, `weekly/*.pptx`, `build_slides.py`);
+the literature evidence surface itself is clean —
+`git status --porcelain -- .omp .agents/skills/wavcse-literature-review
+improvements/taskrelation/research scripts/agents` reports only two untracked
+`weekly/` presentation assets, no tracked modification — so the agent ran against
+exactly the committed state.
+
+**Retained artifact.** `goncalves-2016-mssl`, role `source`,
+sha256 `34521f28bbc43ec1b100d09e7befd2b8c26f34527e695bf2f1148fae0dbc7bc3`,
+size 1269319, `source_url` `https://arxiv.org/abs/1409.0272` — the **arXiv
+preprint** (arXiv:1409.0272v2, 2014), not the JMLR 17(33) version the card cites.
+The manifest row is git-tracked; the retained bytes live in the disposable local
+cache.
+
+**Invocation** (V3 protocol):
+
+```bash
+cd <repo-root>
+timeout 660 omp -p --auto-approve --session-dir=/tmp/lit-agent-eval/inc004b1 --max-time=600 "<prompt>"
+```
+
+Prompt delegates the p-MSSL Omega question verbatim to `literature-reviewer`
+through the `task` tool. Agent `literature-reviewer`, model role `@slow`.
+
+## Preflight (transcript-proven)
+
+| Field | Value |
+| --- | --- |
+| Child transcript | `PMSSLOmegaInvestigation.jsonl` |
+| Granted | `literature_resolve, literature_query, literature_read, literature_primary, yield` |
+| Verdict | **VALID** (`mcp__deja_deja` absent; 0 `deja` mentions anywhere in the transcript) |
+
+## Tool use
+
+| # | Call | Purpose |
+| --- | --- | --- |
+| 1 | `literature_resolve title="Multi-task Sparse Structure Learning"` | identity |
+| 2 | `literature_query operation=list` | enumerate |
+| 3 | `literature_query operation=paper_claims paperId=goncalves-2016-mssl` | recorded claims first |
+| 4 | `literature_primary operation=status` | retention |
+| 5 | `literature_read source=card` | card context |
+| 6 | `literature_primary operation=read page=1..4` | **primary**, bounded |
+| 7 | `literature_primary operation=read page=4..7` | **primary**, bounded |
+| 8 | `literature_primary operation=read page=7..10` | **primary**, bounded |
+| 9–10 | `literature_read source=survey document=MSSL_SPARSITY_ANALYSIS.md` ×2 | survey context |
+| 11 | `yield` | result |
+
+Primary status: `retained=true, cache_state=valid`, sha
+`34521f28…dbc7bc3`. Locators returned and cited: `primary:pages:1-4`, `4-7`,
+`7-10`; equation claims cited at `primary:page:6` (Eq. 4/5/7) and
+`primary:page:7` (Eq. 9/10/12). `claim_ref`s cited: 4
+(`#barrier-placement-and-1-over-d-absorbable`, `#omega-step-is-graphical-lasso`,
+`#l1-penalty-is-off-diagonal`, `#published-lambda2-classification-grid`), all
+present in `literature/claims.jsonl`, none invented (checked mechanically).
+
+## Answer (primary, version-aware)
+
+`evidence_status: available`. The retained preprint's p-MSSL Omega objective is
+barrier `-(K/2) log|Omega|` (K = number of tasks, with a `1/2`), coupling
+`Tr(W Omega W^T)` with visible coefficient 1, ℓ1 `lambda ||Omega||_1`, and **no
+`1/d` scaling anywhere** (no `S=(1/d)W^T W`, no `lambda/d`) — reported at
+`primary`, with the extraction warning and a dropped superscript named as
+limitations. The JMLR-numbered equations the repository records (card Eq. 4b
+`-d log|Omega|`; Eq. 8 `-log|Omega| + (lambda_2/d)||Omega||_1`, `S=(1/d)W^T W`)
+are reported at `card-derived`/`survey-derived` and placed in
+`missing_primary_evidence`, because the JMLR PDF is not retained.
+
+## The `-d log|Omega|` vs `-log|Omega|` question (§17)
+
+**Not resolved against the JMLR version, and the preprint does not corroborate
+the card's claim.** The retained preprint shows a *third* barrier form,
+`-(K/2) log|Omega|`, that matches neither recorded JMLR form; the agent reports
+that no algebraic rescaling bridges it (the `1/2` and the `K`-vs-`d` symbol
+differ). The agent does resolve the *recorded* (card/survey) disagreement as an
+algebraic rescaling — Eq. 8 = Eq. 4b ÷ d, with `1/d` absorbable into `lambda_2` —
+and correctly attributes the survey §4.1 conflation ("Eq. 4b / Eq. 8 carries
+`-log|Omega|`") as a transcription slip rather than a paper inconsistency. This is
+a correct use of primary evidence: it separates what the retained artifact shows
+from what the repository *claims* the missing artifact shows.
+
+## Provenance and authority
+
+Every primary statement carries the artifact sha and page locator; card/survey
+statements carry their own level; the version gap leads the synthesis. The agent
+did not fabricate any JMLR equation, did not open implementation code, wrote
+nothing, and asked for no credentials. Unsupported attributions: none found.
