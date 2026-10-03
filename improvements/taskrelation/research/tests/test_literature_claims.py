@@ -12,10 +12,12 @@ must not be expressible here.
 """
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 
@@ -66,8 +68,24 @@ def record(**overrides):
     return base
 
 
-def load(records):
-    """Validate `records` through the real loader via a temporary file."""
+def retained_row(paper_id, role):
+    """The real manifest row for a retained artifact, or None."""
+
+    path = LITERATURE_DIR / "primary_manifest.jsonl"
+    for line in path.read_text(encoding="utf-8").splitlines():
+        row = json.loads(line)
+        if row["paper_id"] == paper_id and row["role"] == role:
+            return row
+    return None
+
+
+def load(records, cache_root=None):
+    """Validate `records` through the real loader via a temporary file.
+
+    `cache_root` points the disposable primary cache elsewhere, so a test can
+    exercise the state where a retained artifact is declared in Git but its bytes
+    are not present locally.
+    """
 
     handle = tempfile.NamedTemporaryFile(
         "w", suffix=".jsonl", delete=False, encoding="utf-8"
@@ -76,18 +94,25 @@ def load(records):
         for item in records:
             handle.write(json.dumps(item, ensure_ascii=False) + "\n")
     try:
-        return claims.load_claims(
-            Path(handle.name), repo_root=REPO_ROOT, literature_dir=LITERATURE_DIR
-        )
+        if cache_root is None:
+            return claims.load_claims(
+                Path(handle.name), repo_root=REPO_ROOT, literature_dir=LITERATURE_DIR
+            )
+        with unittest.mock.patch.dict(
+            os.environ, {"WAVCSE_PRIMARY_CACHE": str(cache_root)}
+        ):
+            return claims.load_claims(
+                Path(handle.name), repo_root=REPO_ROOT, literature_dir=LITERATURE_DIR
+            )
     finally:
         Path(handle.name).unlink()
 
 
-def rejected(records):
+def rejected(records, cache_root=None):
     """Return the ClaimError raised for `records`, or fail the test."""
 
     try:
-        load(records)
+        load(records, cache_root=cache_root)
     except claims.ClaimError as exc:
         return exc
     raise AssertionError("expected the claim registry to reject these records")
@@ -100,21 +125,27 @@ class RegistryContentTests(unittest.TestCase):
     def test_seeded_registry_loads_with_deterministic_exact_references(self):
         refs = self.registry.claim_ids()
 
-        self.assertEqual(len(refs), 17)
+        self.assertEqual(len(refs), 18)
         self.assertEqual(list(refs), sorted(refs))
         self.assertEqual(len(set(refs)), len(refs))
         self.assertIn(
             "goncalves-2016-mssl#published-lambda2-classification-grid", refs
         )
 
-    def test_every_record_names_an_artifact_class_and_a_section(self):
+    def test_every_record_names_an_artifact_class_and_a_location(self):
         for claim in self.registry.records:
             with self.subTest(claim=claim.claim_ref):
                 self.assertIn(claim.source_level, claims.SOURCE_LEVELS)
                 self.assertIn(claim.verification, claims.VERIFICATION_LEVELS)
                 self.assertIn(claim.claim_type, claims.CLAIM_TYPES)
                 self.assertEqual(claim.locator["kind"], claim.source_level)
-                self.assertTrue(claim.locator["anchor"])
+                if claim.locator["kind"] == "primary":
+                    # A primary locator is version- and digest-bound, not anchored.
+                    self.assertTrue(claim.locator["role"])
+                    self.assertRegex(claim.locator["sha256"], "^[0-9a-f]{64}$")
+                    self.assertTrue(claim.locator["page"])
+                else:
+                    self.assertTrue(claim.locator["anchor"])
                 self.assertEqual(claim.status, "active")
 
     def test_get_claim_is_exact_and_never_fuzzy(self):
@@ -138,8 +169,8 @@ class RegistryContentTests(unittest.TestCase):
             "goncalves-2016-mssl", "method-objective"
         )
 
-        self.assertEqual(len(all_claims), 7)
-        self.assertEqual(len(objectives), 3)
+        self.assertEqual(len(all_claims), 8)
+        self.assertEqual(len(objectives), 4)
         self.assertTrue(all(c.claim_type == "method-objective" for c in objectives))
 
         with self.assertRaises(claims.ClaimError) as caught:
@@ -149,6 +180,33 @@ class RegistryContentTests(unittest.TestCase):
         with self.assertRaises(claims.ClaimError) as caught:
             self.registry.claims_for_paper("goncalves-2016-mssl", "not-a-type")
         self.assertEqual(caught.exception.kind, "INVALID_REFERENCE")
+
+    def test_the_primary_claims_separate_the_two_retained_versions(self):
+        """The published and preprint formulations are bound to different artifacts."""
+
+        published_formulations = (
+            "barrier-placement-and-1-over-d-absorbable",
+            "omega-step-is-graphical-lasso",
+        )
+        digests = {}
+        for claim_id in published_formulations:
+            claim = self.registry.get_claim("goncalves-2016-mssl", claim_id)
+            with self.subTest(claim=claim_id):
+                self.assertEqual(claim.source_level, "primary")
+                self.assertEqual(claim.verification, "primary_verified")
+                self.assertEqual(claim.locator["role"], "published")
+                digests[claim_id] = claim.locator["sha256"]
+
+        preprint = self.registry.get_claim(
+            "goncalves-2016-mssl", "preprint-barrier-is-task-scaled"
+        )
+        self.assertEqual(preprint.source_level, "primary")
+        self.assertEqual(preprint.verification, "primary_verified")
+        self.assertEqual(preprint.locator["role"], "preprint")
+        self.assertEqual(preprint.claim_type, "method-objective")
+        # Neither version's evidence may be reused as the other's.
+        for claim_id in published_formulations:
+            self.assertNotEqual(digests[claim_id], preprint.locator["sha256"])
 
     def test_the_grid_is_recorded_against_the_survey_not_the_card(self):
         """The TR-0007 attribution failure, asserted as a positive fact."""
@@ -317,21 +375,284 @@ class VerificationLevelTests(unittest.TestCase):
 
         self.assertEqual(error.kind, "UNSUPPORTED_SOURCE")
 
-    def test_a_retained_primary_still_cannot_be_read_as_a_claim_locator(self):
-        # goncalves-2016-mssl now has a retained primary artifact, so the refusal
-        # moves off "unsupported source" onto locator readability: the claim layer
-        # can name the evidence level but has no primary-locator reader yet, so
-        # strengthening a card claim to primary_verified is not yet expressible.
+    def test_a_primary_claim_binds_to_version_digest_and_page(self):
+        row = retained_row("goncalves-2016-mssl", "preprint")
+        if row is None:
+            self.skipTest("goncalves-2016-mssl preprint is not retained")
+
+        loaded = load([
+            record(
+                paper_id="goncalves-2016-mssl",
+                claim_id="primary-bound",
+                source_level="primary",
+                verification="primary_verified",
+                locator={
+                    "kind": "primary",
+                    "role": "preprint",
+                    "sha256": row["sha256"],
+                    "page": "6",
+                },
+            )
+        ])
+
+        claim = loaded.records[0]
+        self.assertEqual(claim.verification, "primary_verified")
+        self.assertEqual(claim.locator["role"], "preprint")
+        self.assertEqual(claim.locator["sha256"], row["sha256"])
+
+    def test_a_primary_locator_must_name_a_version_role(self):
+        for role in ("source", "", "camera-ready"):
+            with self.subTest(role=role):
+                error = rejected([
+                    record(
+                        source_level="primary",
+                        verification="primary_verified",
+                        locator={
+                            "kind": "primary",
+                            "role": role,
+                            "sha256": "a" * 64,
+                            "page": "1",
+                        },
+                    )
+                ])
+                self.assertEqual(error.kind, "CLAIM_INVALID")
+
+    def test_a_primary_locator_cannot_name_a_different_digest(self):
+        row = retained_row("goncalves-2016-mssl", "preprint")
+        if row is None:
+            self.skipTest("goncalves-2016-mssl preprint is not retained")
+
         error = rejected([
             record(
                 paper_id="goncalves-2016-mssl",
                 source_level="primary",
-                verification="derived_existing_record",
-                locator={"kind": "primary", "page": "6"},
+                verification="primary_verified",
+                locator={
+                    "kind": "primary",
+                    "role": "preprint",
+                    "sha256": "b" * 64,
+                    "page": "6",
+                },
             )
         ])
 
-        self.assertEqual(error.kind, "LOCATOR_NOT_READABLE")
+        self.assertEqual(error.kind, "ARTIFACT_MISMATCH")
+        self.assertEqual(error.detail["retained_sha256"], row["sha256"])
+
+    def test_a_primary_locator_cannot_name_an_unretained_version(self):
+        # A paper may retain the preprint while the published version is absent:
+        # the locator must then be refused, not silently bound to the preprint.
+        with tempfile.TemporaryDirectory(prefix="claims-literature-") as tmp:
+            literature_dir = Path(tmp) / "literature"
+            literature_dir.mkdir()
+            (literature_dir / "catalog.jsonl").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "paper_id": "alpha-2024-method",
+                        "card_path": "research/literature/alpha-2024-method.md",
+                        "title": "Alpha Method",
+                        "year": 2024,
+                        "authors": ["A. Author"],
+                        "venue": "Venue",
+                        "external_ids": {},
+                        "source_urls": ["https://example.org/alpha-2024-method.pdf"],
+                        "aliases": [],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (literature_dir / "primary_manifest.jsonl").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "paper_id": "alpha-2024-method",
+                        "role": "preprint",
+                        "object_key": "papers/alpha-2024-method/preprint.pdf",
+                        "sha256": "a" * 64,
+                        "size_bytes": 1,
+                        "media_type": "application/pdf",
+                        "source_url": "https://example.org/alpha-2024-method.pdf",
+                        "retained_at": "2026-10-01T00:00:00+00:00",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            claims_path = Path(tmp) / "claims.jsonl"
+            claims_path.write_text(
+                json.dumps(
+                    record(
+                        paper_id="alpha-2024-method",
+                        source_level="primary",
+                        verification="primary_verified",
+                        locator={
+                            "kind": "primary",
+                            "role": "published",
+                            "sha256": "a" * 64,
+                            "page": "1",
+                        },
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(claims.ClaimError) as caught:
+                claims.load_claims(
+                    claims_path, repo_root=REPO_ROOT, literature_dir=literature_dir
+                )
+
+        self.assertEqual(caught.exception.kind, "LOCATOR_NOT_READABLE")
+        self.assertEqual(caught.exception.detail["role"], "published")
+
+    def test_a_primary_locator_may_bind_an_inclusive_page_range(self):
+        row = retained_row("goncalves-2016-mssl", "published")
+        if row is None:
+            self.skipTest("goncalves-2016-mssl published version is not retained")
+
+        loaded = load([
+            record(
+                paper_id="goncalves-2016-mssl",
+                claim_id="primary-range",
+                source_level="primary",
+                verification="primary_verified",
+                locator={
+                    "kind": "primary",
+                    "role": "published",
+                    "sha256": row["sha256"],
+                    "page": "8",
+                    "page_end": "9",
+                },
+            )
+        ])
+
+        self.assertEqual(loaded.records[0].locator["page_end"], "9")
+
+    def test_a_primary_locator_rejects_an_inverted_page_range(self):
+        row = retained_row("goncalves-2016-mssl", "preprint")
+        if row is None:
+            self.skipTest("goncalves-2016-mssl preprint is not retained")
+
+        error = rejected([
+            record(
+                source_level="primary",
+                verification="primary_verified",
+                locator={
+                    "kind": "primary",
+                    "role": "preprint",
+                    "sha256": row["sha256"],
+                    "page": "9",
+                    "page_end": "8",
+                },
+            )
+        ])
+
+        self.assertEqual(error.kind, "CLAIM_INVALID")
+
+    def test_a_primary_locator_requires_page_role_and_digest(self):
+        complete = {
+            "kind": "primary",
+            "role": "preprint",
+            "sha256": "a" * 64,
+            "page": "6",
+        }
+        for missing in ("role", "sha256", "page"):
+            with self.subTest(missing=missing):
+                locator = dict(complete)
+                del locator[missing]
+                error = rejected([
+                    record(
+                        source_level="primary",
+                        verification="primary_verified",
+                        locator=locator,
+                    )
+                ])
+                self.assertEqual(error.kind, "CLAIM_INVALID")
+
+    def test_a_quoted_primary_locator_needs_the_local_artifact(self):
+        row = retained_row("goncalves-2016-mssl", "preprint")
+        if row is None:
+            self.skipTest("goncalves-2016-mssl preprint is not retained")
+
+        quoted = record(
+            paper_id="goncalves-2016-mssl",
+            claim_id="primary-quote",
+            assertion_kind="quote",
+            quote="anything",
+            source_level="primary",
+            verification="primary_verified",
+            locator={
+                "kind": "primary",
+                "role": "preprint",
+                "sha256": row["sha256"],
+                "page": "6",
+            },
+        )
+        with tempfile.TemporaryDirectory(prefix="empty-primary-cache-") as cache:
+            error = rejected([quoted], cache_root=cache)
+
+        self.assertEqual(error.kind, "PRIMARY_ARTIFACT_NOT_LOCAL")
+
+    def test_strengthening_a_proposition_to_primary_verified_keeps_its_identity(self):
+        row = retained_row("goncalves-2016-mssl", "preprint")
+        if row is None:
+            self.skipTest("goncalves-2016-mssl preprint is not retained")
+
+        card_sourced = load([
+            record(claim_id="same-proposition", source_level="card",
+                   locator={"kind": "card", "anchor": "Optimization method"})
+        ]).records[0]
+        strengthened = load([
+            record(
+                claim_id="same-proposition",
+                source_level="primary",
+                verification="primary_verified",
+                locator={
+                    "kind": "primary",
+                    "role": "preprint",
+                    "sha256": row["sha256"],
+                    "page": "6",
+                },
+            )
+        ]).records[0]
+
+        self.assertEqual(card_sourced.claim_ref, strengthened.claim_ref)
+        self.assertEqual(card_sourced.source_level, "card")
+        self.assertEqual(strengthened.source_level, "primary")
+
+    def test_version_disagreements_remain_distinct_claims(self):
+        preprint = retained_row("goncalves-2016-mssl", "preprint")
+        published = retained_row("goncalves-2016-mssl", "published")
+        if preprint is None or published is None:
+            self.skipTest("both goncalves-2016-mssl versions must be retained")
+
+        loaded = load([
+            record(
+                claim_id="aaa-preprint-proposition",
+                source_level="primary",
+                verification="primary_verified",
+                locator={"kind": "primary", "role": "preprint",
+                         "sha256": preprint["sha256"], "page": "6"},
+            ),
+            record(
+                claim_id="zzz-published-proposition",
+                source_level="primary",
+                verification="primary_verified",
+                locator={"kind": "primary", "role": "published",
+                         "sha256": published["sha256"], "page": "8"},
+            ),
+        ])
+
+        self.assertEqual(len(loaded.records), 2)
+        self.assertEqual(
+            {claim.locator["role"] for claim in loaded.records},
+            {"preprint", "published"},
+        )
+        self.assertNotEqual(
+            loaded.records[0].locator["sha256"], loaded.records[1].locator["sha256"]
+        )
 
     def test_a_primary_verified_record_requires_a_primary_source_level(self):
         error = rejected([record(verification="primary_verified")])
@@ -469,7 +790,7 @@ class ModuleBoundaryTests(unittest.TestCase):
 
         listed = run_cli("list")
         self.assertEqual(listed.returncode, 0, listed.stderr)
-        self.assertEqual(len(json.loads(listed.stdout)["claim_refs"]), 17)
+        self.assertEqual(len(json.loads(listed.stdout)["claim_refs"]), 18)
 
         paper = run_cli("paper", "goncalves-2016-mssl", "--claim-type", "relation-object")
         self.assertEqual(paper.returncode, 0, paper.stderr)

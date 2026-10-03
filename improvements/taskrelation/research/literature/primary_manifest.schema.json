@@ -26,8 +26,8 @@
       "description": "canonical literature card slug; the only artifact identity"
     },
     "role": {
-      "const": "source",
-      "description": "artifact role; the extension and media type follow from it"
+      "enum": ["source", "preprint", "published"],
+      "description": "artifact role/version; the extension and media type follow from it. `preprint` and `published` name a concrete version of the work; `source` is the unversioned single-artifact role"
     },
     "object_key": {
       "type": "string",

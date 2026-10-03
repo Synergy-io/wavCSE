@@ -18,10 +18,14 @@ Scope rules:
   configuration (a restricted grid, a frozen λ, a declared deviation) is research
   state and stays in ``DECISIONS.md`` / Study artifacts, owned by the main
   research agent;
-* ``primary_verified`` is legal only when the paper actually has a retained
-  primary artifact; and because a claim locator is resolved through the bounded
-  reader, which has no primary-locator reader yet, it is still unavailable rather
-  than merely discouraged (``LOCATOR_NOT_READABLE``) even once one is retained.
+* ``primary_verified`` is legal only when the paper actually retains a primary
+  artifact, and a primary locator is bound to an explicit artifact version
+  (``preprint``/``published``) **and** to that artifact's SHA-256, so a claim can
+  never drift onto different bytes. A claim that quotes the primary artifact is
+  additionally read through the same bounded reader the Literature Agent uses and
+  checked verbatim against the extracted page; a paraphrase is validated against
+  the manifest binding alone, so the registry stays deterministic without the
+  disposable local cache.
 
 Authority: this module is read-only. Claim records are created under human/operator
 review and validated here; the Literature Agent never writes them.
@@ -43,6 +47,7 @@ from pathlib import Path
 
 from improvements.taskrelation.research import literature_catalog
 from improvements.taskrelation.research import literature_primary
+from improvements.taskrelation.research import literature_primary_text
 from improvements.taskrelation.research import literature_read
 
 
@@ -81,6 +86,26 @@ LOCATOR_KINDS = (
     LOCATOR_PRIMARY,
     LOCATOR_UNAVAILABLE,
 )
+
+# A primary locator names a retained artifact version and its digest. The text of
+# a quoted primary locator is read through the bounded reader; when the disposable
+# local copy is not present the quote cannot be verified and is refused rather
+# than accepted unchecked.
+PRIMARY_ARTIFACT_NOT_LOCAL = "PRIMARY_ARTIFACT_NOT_LOCAL"
+ARTIFACT_MISMATCH = "ARTIFACT_MISMATCH"
+# Primary-locator keys: where to look, in which retained version of the work, and
+# which exact bytes that version is.
+_PRIMARY_LOCATOR_KEYS = (
+    "role",
+    "sha256",
+    "page",
+    "page_end",
+    "section",
+    "equation",
+    "figure",
+    "table",
+)
+_PRIMARY_LOCATOR_REQUIRED = ("role", "sha256", "page")
 
 _ALLOWED_KEYS = {
     "schema_version",
@@ -246,7 +271,8 @@ def load_claims(
         validate_references=False,
     )
     paper_ids = {entry.paper_id for entry in catalog.entries}
-    retained = _retained_paper_ids(repo_root, literature_dir, paper_ids)
+    manifest = _manifest_index(repo_root, literature_dir, paper_ids)
+    retained = {paper_id for paper_id, _role in manifest}
     reader = reader if reader is not None else literature_read.LiteratureReader(
         repo_root=repo_root,
         primary=literature_primary.LiteraturePrimary(
@@ -268,7 +294,12 @@ def load_claims(
                 "claims line {} is not valid JSON: {}".format(line_number, exc)
             ) from exc
         record = _validate_record(
-            raw, line_number, paper_ids=paper_ids, retained=retained, reader=reader
+            raw,
+            line_number,
+            paper_ids=paper_ids,
+            retained=retained,
+            manifest=manifest,
+            reader=reader,
         )
         key = (record.paper_id, record.claim_id)
         if key in seen:
@@ -297,8 +328,13 @@ def _read_lines(path):
         ) from exc
 
 
-def _retained_paper_ids(repo_root, literature_dir, paper_ids):
-    """Papers whose primary artifact this repository actually retains."""
+def _manifest_index(repo_root, literature_dir, paper_ids):
+    """Map ``(paper_id, role)`` to the retained-artifact manifest row.
+
+    Retention is a Git-declared fact: the row names the artifact version and its
+    digest, which is what a claim binds to. The bytes themselves live in the
+    disposable local cache and are verified when the artifact is read.
+    """
 
     try:
         primary = literature_primary.LiteraturePrimary(
@@ -311,7 +347,9 @@ def _retained_paper_ids(repo_root, literature_dir, paper_ids):
             "cannot read the primary manifest: {}".format(exc)
         ) from exc
     return {
-        row.paper_id for row in primary.manifest_rows() if row.paper_id in paper_ids
+        (row.paper_id, row.role): row
+        for row in primary.manifest_rows()
+        if row.paper_id in paper_ids
     }
 
 
@@ -322,7 +360,7 @@ def _require_string(record, key, where):
     return value
 
 
-def _validate_record(record, line_number, *, paper_ids, retained, reader):
+def _validate_record(record, line_number, *, paper_ids, retained, manifest, reader):
     where = "claims line {}".format(line_number)
     if not isinstance(record, dict):
         raise ClaimError("{} must be a JSON object".format(where))
@@ -409,7 +447,12 @@ def _validate_record(record, line_number, *, paper_ids, retained, reader):
         )
 
     section_text, locator = _validate_locator(
-        record["locator"], where, paper_id=paper_id, source_level=source_level,
+        record["locator"],
+        where,
+        paper_id=paper_id,
+        source_level=source_level,
+        assertion_kind=assertion_kind,
+        manifest=manifest,
         reader=reader,
     )
 
@@ -467,7 +510,8 @@ def _validate_record(record, line_number, *, paper_ids, retained, reader):
     )
 
 
-def _validate_locator(locator, where, *, paper_id, source_level, reader):
+def _validate_locator(locator, where, *, paper_id, source_level, assertion_kind,
+                      manifest, reader):
     if not isinstance(locator, dict):
         raise ClaimError("{}.locator must be an object".format(where))
     kind = locator.get("kind")
@@ -514,14 +558,10 @@ def _validate_locator(locator, where, *, paper_id, source_level, reader):
             )
         _require_string(locator, "anchor", where + ".locator")
     else:  # primary
-        allowed = {"kind", "page", "section", "equation", "figure", "table"}
-        present = sorted(set(locator) - {"kind"})
-        if not present:
-            raise ClaimError(
-                "{}.locator needs at least one of page/section/equation/figure/"
-                "table".format(where)
-            )
-        for key in present:
+        allowed = {"kind"} | set(_PRIMARY_LOCATOR_KEYS)
+        for key in _PRIMARY_LOCATOR_REQUIRED:
+            _require_string(locator, key, where + ".locator")
+        for key in sorted(set(locator) - {"kind"}):
             if key not in allowed:
                 raise ClaimError(
                     "{}.locator has unexpected key {!r} for a primary locator".format(
@@ -538,6 +578,19 @@ def _validate_locator(locator, where, *, paper_id, source_level, reader):
             )
         )
 
+    if kind == LOCATOR_PRIMARY:
+        return (
+            _primary_locator_text(
+                locator,
+                where,
+                paper_id=paper_id,
+                manifest=manifest,
+                assertion_kind=assertion_kind,
+                reader=reader,
+            ),
+            {key: locator[key] for key in sorted(locator)},
+        )
+
     text = _locator_text(dict(locator), reader, where, paper_id)
     anchor = locator["anchor"]
     section = _section_text(text, anchor)
@@ -550,6 +603,98 @@ def _validate_locator(locator, where, *, paper_id, source_level, reader):
             detail={"anchor": anchor},
         )
     return section, {key: locator[key] for key in sorted(locator)}
+
+
+def _primary_locator_text(locator, where, *, paper_id, manifest, assertion_kind,
+                          reader):
+    """Validate a primary locator against the manifest, and read it if quoted.
+
+    The binding is (version role, digest): the locator must name a version role
+    this repository retains for the paper, and the exact digest of that retained
+    artifact, so a claim can never drift onto different bytes or a different
+    version. A verbatim quote is additionally read through the bounded reader the
+    Literature Agent uses and checked against the extracted page; a paraphrase is
+    validated against the binding alone, which keeps the registry deterministic
+    without the disposable local cache.
+    """
+
+    role = locator["role"]
+    if role not in literature_primary.VERSION_ROLES:
+        raise ClaimError(
+            "{}.locator.role must name a concrete version ({})".format(
+                where, ", ".join(literature_primary.VERSION_ROLES)
+            ),
+            kind="CLAIM_INVALID",
+            detail={"role": role},
+        )
+    entry = manifest.get((paper_id, role))
+    if entry is None:
+        raise ClaimError(
+            "{}.locator names {!r} {!r}, which this repository does not retain".format(
+                where, paper_id, role
+            ),
+            kind="LOCATOR_NOT_READABLE",
+            detail={"paper_id": paper_id, "role": role},
+        )
+    if locator["sha256"] != entry.sha256:
+        raise ClaimError(
+            "{}.locator.sha256 is not the digest of the retained {!r} artifact for "
+            "{!r}".format(where, role, paper_id),
+            kind=ARTIFACT_MISMATCH,
+            detail={
+                "paper_id": paper_id,
+                "role": role,
+                "retained_sha256": entry.sha256,
+            },
+        )
+    page = _positive_page(locator["page"], where)
+    page_end = None
+    if "page_end" in locator:
+        page_end = _positive_page(locator["page_end"], where)
+        if page_end < page:
+            raise ClaimError(
+                "{}.locator.page_end must not precede page".format(where),
+                kind="CLAIM_INVALID",
+            )
+    if assertion_kind != "quote":
+        return ""
+    try:
+        content = reader.read_primary(
+            paper_id,
+            literature_read.MAX_CHARS_CEILING,
+            role=role,
+            page=page,
+            page_end=page_end,
+        )
+    except (
+        literature_primary.PrimaryError,
+        literature_primary_text.PrimaryTextError,
+        literature_read.LiteratureReadError,
+    ) as exc:
+        detail = dict(getattr(exc, "detail", {}) or {})
+        if getattr(exc, "kind", None) == literature_primary.STORAGE_NOT_CONFIGURED:
+            raise ClaimError(
+                "{}.locator names {!r} {!r}, whose bytes are not in the local primary "
+                "cache; a quoted primary locator cannot be verified without "
+                "them".format(where, paper_id, role),
+                kind=PRIMARY_ARTIFACT_NOT_LOCAL,
+                detail=detail,
+            ) from exc
+        raise ClaimError(
+            "{}.locator cannot be read: {}".format(where, exc),
+            kind="LOCATOR_NOT_READABLE",
+            detail=detail,
+        ) from exc
+    return content.text
+
+
+def _positive_page(value, where):
+    if not isinstance(value, str) or not value.isdigit() or int(value) < 1:
+        raise ClaimError(
+            "{}.locator.page must be a 1-based page number as a string".format(where),
+            kind="CLAIM_INVALID",
+        )
+    return int(value)
 
 
 def _section_text(text, anchor):
@@ -594,13 +739,6 @@ def _locator_text(locator, reader, where, paper_id):
     if locator["kind"] == LOCATOR_UNAVAILABLE:
         raise ClaimError(
             "{} cannot resolve text for an unavailable locator".format(where)
-        )
-    if locator["kind"] == LOCATOR_PRIMARY:
-        raise ClaimError(
-            "{} cannot read a primary locator: no primary artifact is retained".format(
-                where
-            ),
-            kind="LOCATOR_NOT_READABLE",
         )
     try:
         if locator["kind"] == LOCATOR_CARD:

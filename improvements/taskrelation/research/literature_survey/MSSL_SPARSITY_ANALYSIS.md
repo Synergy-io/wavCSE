@@ -219,6 +219,15 @@ covariance has a vanishing determinant). Therefore:
 (arm README, “The relation object”). It is a statement about the *barrier*, not about
 information.
 
+> **Correction (2026-10-03)** `OBSERVED`. The parenthetical citation above reads
+> “(JMLR Eq. 4b / Eq. 8, p. 9) carries `−log|Ω|`”. With the published JMLR artifact now
+> retained and read (role `published`, sha256 `5dcca4cf…3d1ce2b`), Eq. (4b) on physical
+> PDF page 8 carries `−d log|Ω|` with data term `λ₀ tr(WΩWᵀ)`; the `−log|Ω|` form with
+> `(λ₂/d)‖Ω‖₁` and `S = (1/d)WᵀW` is Eq. (8) on page 9, which is Eq. (4b) divided by `d`.
+> The barrier argument of this section is unaffected — both forms carry the log-det barrier
+> — but the citation should read “Eq. (4b) (`−d log|Ω|`) / Eq. (8) (`−log|Ω|`)”. The
+> original sentence is preserved above rather than rewritten.
+
 ### 4.2 The barrier does not manufacture pair-selectivity  `INFERRED`
 
 A reparameterisation is information-preserving (§1.2). If the data second moment `R̃`

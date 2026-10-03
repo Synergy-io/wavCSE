@@ -21,7 +21,8 @@ PDF_SHA256 = hashlib.sha256(PDF_BYTES).hexdigest()
 OTHER_SHA256 = hashlib.sha256(b"other bytes").hexdigest()
 
 
-def paper_record(paper_id, title, url):
+def paper_record(paper_id, title, url, extra_url=None):
+    urls = [url] if extra_url is None else [url, extra_url]
     return {
         "schema_version": 1,
         "paper_id": paper_id,
@@ -31,7 +32,7 @@ def paper_record(paper_id, title, url):
         "authors": ["A. Author"],
         "venue": "Venue",
         "external_ids": {},
-        "source_urls": [url],
+        "source_urls": urls,
         "aliases": [],
     }
 
@@ -268,7 +269,7 @@ class ManifestValidationTests(PrimaryFixture):
     def test_unsupported_role_and_unknown_key_are_rejected(self):
         self.write_manifest([manifest_row("alpha-2024-method", role="supplement")])
         with self.assertRaisesRegex(
-            lp.PrimaryManifestError, "role must be one of: source"
+            lp.PrimaryManifestError, "role must be one of: preprint, published, source"
         ):
             self.open_primary()
 
@@ -452,6 +453,122 @@ class PrimaryRetrievalTests(PrimaryFixture):
         for needle in ("secret", "access_key", "session_token", "aws_"):
             with self.subTest(needle=needle):
                 self.assertNotIn(needle, serialized)
+
+
+class MultiArtifactTests(PrimaryFixture):
+    """One paper identity may retain several materially different artifacts."""
+
+    PUBLISHED_BYTES = b"%PDF-1.5 published artifact\n"
+    PUBLISHED_SHA256 = hashlib.sha256(PUBLISHED_BYTES).hexdigest()
+    PREPRINT_URL = "https://example.org/alpha-2024-method.pdf"
+    PUBLISHED_URL = "https://example.org/alpha-2024-method-published.pdf"
+
+    def setUp(self):
+        super().setUp()
+        self.papers["alpha-2024-method"] = paper_record(
+            "alpha-2024-method",
+            "Alpha Method",
+            self.PREPRINT_URL,
+            extra_url=self.PUBLISHED_URL,
+        )
+        self.write_catalog()
+        self.preprint_file = self.source_file("preprint.pdf", PDF_BYTES)
+        self.published_file = self.source_file("published.pdf", self.PUBLISHED_BYTES)
+
+    def register_both(self, text_extractor=None):
+        primary = self.open_primary(text_extractor=text_extractor)
+        primary.register(
+            "alpha-2024-method", self.preprint_file,
+            source_url=self.PREPRINT_URL, role="preprint",
+        )
+        primary.register(
+            "alpha-2024-method", self.published_file,
+            source_url=self.PUBLISHED_URL, role="published",
+        )
+        return primary
+
+    def test_two_versions_are_independently_addressable_with_distinct_digests(self):
+        primary = self.register_both()
+
+        preprint = primary.get("alpha-2024-method", "preprint")
+        published = primary.get("alpha-2024-method", "published")
+
+        self.assertEqual(preprint.sha256, PDF_SHA256)
+        self.assertEqual(published.sha256, self.PUBLISHED_SHA256)
+        self.assertNotEqual(preprint.sha256, published.sha256)
+        self.assertNotEqual(preprint.path, published.path)
+
+    def test_registering_the_published_version_preserves_the_preprint(self):
+        primary = self.register_both()
+
+        rows = {(row.paper_id, row.role): row for row in primary.manifest_rows()}
+
+        self.assertEqual(
+            set(rows),
+            {("alpha-2024-method", "preprint"), ("alpha-2024-method", "published")},
+        )
+        self.assertEqual(rows[("alpha-2024-method", "preprint")].sha256, PDF_SHA256)
+        self.assertEqual(rows[("alpha-2024-method", "published")].sha256, self.PUBLISHED_SHA256)
+
+    def test_default_selection_refuses_to_choose_between_versions(self):
+        primary = self.register_both()
+
+        with self.assertRaises(lp.PrimaryError) as caught:
+            primary.get("alpha-2024-method")
+
+        self.assertEqual(caught.exception.kind, lp.AMBIGUOUS_ARTIFACT)
+        self.assertEqual(caught.exception.detail["roles"], ["preprint", "published"])
+        self.assertEqual(self.fetches, [])
+
+    def test_status_enumerates_every_version_without_picking_one(self):
+        primary = self.register_both()
+
+        status = primary.status("alpha-2024-method").as_dict()
+
+        self.assertTrue(status["retained"])
+        self.assertIsNone(status["sha256"])
+        self.assertEqual(
+            [artifact["role"] for artifact in status["artifacts"]],
+            ["preprint", "published"],
+        )
+        self.assertEqual(status["artifacts"][0]["sha256"], PDF_SHA256)
+        self.assertEqual(status["artifacts"][0]["cache_state"], "valid")
+
+    def test_explicit_role_status_describes_that_exact_version(self):
+        primary = self.register_both()
+
+        status = primary.status("alpha-2024-method", "published")
+
+        self.assertEqual(status.role, "published")
+        self.assertEqual(status.sha256, self.PUBLISHED_SHA256)
+
+    def test_read_reports_which_version_it_read(self):
+        primary = self.register_both(text_extractor=lambda path: stub_document())
+
+        view = primary.read("alpha-2024-method", "published", page=2).as_dict()
+
+        self.assertEqual(view["role"], "published")
+        self.assertEqual(view["sha256"], self.PUBLISHED_SHA256)
+        self.assertEqual(view["locator"], "primary:page:2")
+
+    def test_unknown_role_is_a_precise_non_retrieval_state(self):
+        primary = self.register_both()
+
+        with self.assertRaises(lp.PrimaryError) as caught:
+            primary.get("alpha-2024-method", "camera-ready")
+
+        self.assertEqual(caught.exception.kind, lp.UNKNOWN_ROLE)
+
+    def test_a_single_artifact_paper_still_resolves_without_a_role(self):
+        primary = self.open_primary()
+        primary.register(
+            "beta-2020-method", self.source_file(), role="source",
+            source_url="https://example.org/beta-2020-method.pdf",
+        )
+
+        self.assertEqual(
+            primary.get("beta-2020-method").sha256, PDF_SHA256
+        )
 
 
 class RegistrationTests(PrimaryFixture):
@@ -672,50 +789,80 @@ class RealRepositoryPrimaryTests(unittest.TestCase):
 
         self.assertEqual(self.primary.validate(), len(rows))
         for row in rows:
-            with self.subTest(paper_id=row.paper_id):
+            with self.subTest(paper_id=row.paper_id, role=row.role):
                 self.assertRegex(row.sha256, "^[0-9a-f]{64}$")
                 self.assertEqual(row.media_type, "application/pdf")
-                self.assertEqual(row.object_key, "papers/{}/source.pdf".format(row.paper_id))
+                self.assertEqual(
+                    row.object_key,
+                    "papers/{}/{}.pdf".format(row.paper_id, row.role),
+                )
 
     def test_every_known_paper_yields_a_precise_state_never_unverified_bytes(self):
         from improvements.taskrelation.research import literature_query
 
-        retained = {row.paper_id: row for row in self.primary.manifest_rows()}
+        retained = {
+            (row.paper_id, row.role): row for row in self.primary.manifest_rows()
+        }
+        retained_papers = {paper_id for paper_id, _role in retained}
         query = literature_query.LiteratureQuery(repo_root=REPO_ROOT)
         for paper in query.list_papers():
             with self.subTest(paper_id=paper.paper_id):
-                if paper.paper_id not in retained:
+                if paper.paper_id not in retained_papers:
                     with self.assertRaises(lp.PrimaryError) as caught:
                         self.primary.get(paper.paper_id)
                     self.assertEqual(caught.exception.kind, lp.PRIMARY_NOT_AVAILABLE)
                     continue
-                try:
-                    artifact = self.primary.get(paper.paper_id)
-                except lp.PrimaryError as exc:
-                    self.assertIn(
-                        exc.kind,
-                        (
-                            lp.STORAGE_NOT_CONFIGURED,
-                            lp.INTEGRITY_MISMATCH,
-                            lp.CREDENTIALS_UNAVAILABLE,
-                            lp.REMOTE_RETRIEVAL_FAILED,
-                        ),
-                    )
-                else:
-                    self.assertEqual(artifact.sha256, retained[paper.paper_id].sha256)
+                for (paper_id, role), row in sorted(retained.items()):
+                    if paper_id != paper.paper_id:
+                        continue
+                    try:
+                        artifact = self.primary.get(paper.paper_id, role)
+                    except lp.PrimaryError as exc:
+                        self.assertIn(
+                            exc.kind,
+                            (
+                                lp.STORAGE_NOT_CONFIGURED,
+                                lp.INTEGRITY_MISMATCH,
+                                lp.CREDENTIALS_UNAVAILABLE,
+                                lp.REMOTE_RETRIEVAL_FAILED,
+                                lp.AMBIGUOUS_ARTIFACT,
+                            ),
+                        )
+                    else:
+                        self.assertEqual(artifact.sha256, row.sha256)
+
+    def test_a_retained_paper_with_several_versions_never_guesses(self):
+        rows = self.primary.manifest_rows()
+        by_paper = {}
+        for row in rows:
+            by_paper.setdefault(row.paper_id, []).append(row.role)
+        multi = {paper: sorted(roles) for paper, roles in by_paper.items() if len(roles) > 1}
+        if not multi:
+            self.skipTest("no paper retains more than one primary artifact")
+        for paper_id, roles in sorted(multi.items()):
+            with self.subTest(paper_id=paper_id):
+                with self.assertRaises(lp.PrimaryError) as caught:
+                    self.primary.get(paper_id)
+                self.assertEqual(caught.exception.kind, lp.AMBIGUOUS_ARTIFACT)
+                self.assertEqual(caught.exception.detail["roles"], roles)
 
     def test_retained_primary_read_is_bounded_and_checksum_bound(self):
-        retained = {row.paper_id: row for row in self.primary.manifest_rows()}
-        row = retained.get("goncalves-2016-mssl")
-        if row is None:
+        rows = {row.role: row for row in self.primary.manifest_rows()
+                if row.paper_id == "goncalves-2016-mssl"}
+        if not rows:
             self.skipTest("goncalves-2016-mssl is not retained")
+        role = sorted(rows)[0]
+        row = rows[role]
         try:
-            result = self.primary.read("goncalves-2016-mssl", page=6, max_chars=500)
+            result = self.primary.read(
+                "goncalves-2016-mssl", role, page=6, max_chars=500
+            )
         except (lp.PrimaryError, lt.PrimaryTextError) as exc:
             self.skipTest("primary cache or extractor unavailable: {}".format(exc.kind))
 
         document = result.as_dict()
         self.assertEqual(document["evidence_level"], "primary")
+        self.assertEqual(document["role"], role)
         self.assertEqual(document["sha256"], row.sha256)
         self.assertEqual(document["locator"], "primary:page:6")
         self.assertEqual(document["page"], 6)

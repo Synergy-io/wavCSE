@@ -7,7 +7,11 @@ boundary):
 * **Git** owns the manifest: which ``paper_id`` has a retained primary artifact,
   its SHA-256, media type, byte size, provenance URL and object key. The row is
   the identity/provenance record and is written from the verified artifact, never
-  authored by hand.
+  authored by hand. One ``paper_id`` (an intellectual work) may retain several
+  rows, distinguished by **role** — ``preprint`` and ``published`` name a concrete
+  version; ``source`` is the unversioned single-artifact role. A request that does
+  not name a role is only legal when the paper retains exactly one artifact, so a
+  preprint and a published version can never be conflated silently.
 * **The retained bytes** live in the local store the policy resolves
   (``WAVCSE_PRIMARY_CACHE``). The manifest checksum is the identity, so those
   bytes are trusted only while they still match it. A durable remote store (S3,
@@ -58,6 +62,11 @@ STORAGE_NOT_CONFIGURED = "STORAGE_NOT_CONFIGURED"
 CREDENTIALS_UNAVAILABLE = "CREDENTIALS_UNAVAILABLE"
 REMOTE_RETRIEVAL_FAILED = "REMOTE_RETRIEVAL_FAILED"
 INTEGRITY_MISMATCH = "INTEGRITY_MISMATCH"
+# `paper_id` is the identity of the intellectual work; the artifact role names
+# which concrete representation is meant. When several are retained, no single
+# one may be selected silently.
+AMBIGUOUS_ARTIFACT = "AMBIGUOUS_ARTIFACT"
+UNKNOWN_ROLE = "UNKNOWN_ROLE"
 
 # Registration taxonomy: operator-side failures, kept distinct from retrieval.
 SOURCE_NOT_FOUND = "SOURCE_NOT_FOUND"
@@ -67,7 +76,17 @@ REGISTRATION_CONFLICT = "REGISTRATION_CONFLICT"
 
 # Role -> (file suffix, canonical media type). The object key depends on the
 # paper and its role only, so metadata changes never move stored artifacts.
-_ROLE_SPEC = {"source": ("pdf", "application/pdf")}
+#
+# `source` is the unversioned role: the single artifact of a paper whose version
+# is not distinguished. `preprint`/`published` name a concrete version and are
+# the only roles a claim may cite, because a version-explicit binding is what
+# keeps two materially different artifacts for one work from being conflated.
+_ROLE_SPEC = {
+    "source": ("pdf", "application/pdf"),
+    "preprint": ("pdf", "application/pdf"),
+    "published": ("pdf", "application/pdf"),
+}
+VERSION_ROLES = ("preprint", "published")
 _DEFAULT_ROLE = "source"
 _DEFAULT_CACHE_DIRNAME = "literature-primary"
 _CACHE_ROOT_ENV = "WAVCSE_PRIMARY_CACHE"
@@ -206,6 +225,16 @@ def _require_paper_id(paper_id):
     return paper_id
 
 
+def _known_role(role):
+    """Validate a caller-supplied role, reporting it as a retrieval failure."""
+
+    try:
+        _role_spec(role)
+    except PrimaryManifestError as exc:
+        raise PrimaryError(str(exc), kind=UNKNOWN_ROLE, detail={"role": role}) from exc
+    return role
+
+
 @dataclass(frozen=True)
 class PrimaryManifestEntry:
     """Storage metadata for one retained artifact; identity stays in the catalog."""
@@ -235,12 +264,23 @@ class PrimaryManifestEntry:
 
 @dataclass(frozen=True)
 class PrimaryStatus:
-    """Read-only description of retention and cache state for one paper."""
+    """Read-only description of retention and cache state for one paper.
+
+    ``artifacts`` is the full, role-sorted inventory: a paper identity may retain
+    several materially different primary representations (a preprint and the
+    published version), and a caller must be able to see them all before choosing
+    one. The single-artifact fields describe one resolved artifact, and are only
+    populated when the request names a role or the paper retains exactly one —
+    when several are retained and none was named, they stay ``None`` rather than
+    guessing a version.
+    """
 
     paper_id: str
     retained: bool
-    cache_state: str
     retrieval: str
+    artifacts: tuple = ()
+    role: Optional[str] = None
+    cache_state: Optional[str] = None
     object_key: Optional[str] = None
     sha256: Optional[str] = None
     media_type: Optional[str] = None
@@ -251,8 +291,10 @@ class PrimaryStatus:
         return {
             "paper_id": self.paper_id,
             "retained": self.retained,
-            "cache_state": self.cache_state,
             "retrieval": self.retrieval,
+            "artifacts": [dict(artifact) for artifact in self.artifacts],
+            "role": self.role,
+            "cache_state": self.cache_state,
             "object_key": self.object_key,
             "sha256": self.sha256,
             "media_type": self.media_type,
@@ -380,33 +422,75 @@ class LiteraturePrimary:
 
         return len(self._entries)
 
-    def status(self, paper_id):
-        """Describe retention and cache state without mutating anything."""
+    def status(self, paper_id, role=None):
+        """Describe retention and cache state without mutating anything.
+
+        With no `role`, a paper that retains exactly one artifact resolves to it;
+        a paper that retains several reports the full inventory and no single
+        artifact, so no version is chosen silently.
+        """
 
         paper_id = self._known_paper_id(paper_id)
-        entry = self._entries.get((paper_id, _DEFAULT_ROLE))
-        cache = self.cache_path(paper_id)
+        rows = self._rows_for(paper_id)
+        artifacts = tuple(self._describe(entry) for entry in rows)
+        retrieval = "configured" if self._fetcher is not None else "not_configured"
+        if role is not None:
+            _known_role(role)
+        resolved = None
+        if role is not None:
+            resolved = next((entry for entry in rows if entry.role == role), None)
+        elif len(rows) == 1:
+            resolved = rows[0]
+        if resolved is None and not (role is None and rows):
+            # Nothing to describe, or an unretained role: report the derived key
+            # the request addresses, so the caller still sees a precise state.
+            effective = role if role is not None else _DEFAULT_ROLE
+            cache = self.cache_path(paper_id, effective)
+            return PrimaryStatus(
+                paper_id=paper_id,
+                retained=bool(rows),
+                retrieval=retrieval,
+                artifacts=artifacts,
+                role=effective,
+                cache_state="absent",
+                object_key=self.policy.object_key(paper_id, effective),
+                cache_path=str(cache),
+            )
+        if resolved is None:
+            return PrimaryStatus(
+                paper_id=paper_id,
+                retained=True,
+                retrieval=retrieval,
+                artifacts=artifacts,
+            )
+        cache = self.cache_path(paper_id, resolved.role)
         return PrimaryStatus(
             paper_id=paper_id,
-            retained=entry is not None,
-            cache_state=self._cache_state(cache, entry),
-            retrieval="configured" if self._fetcher is not None else "not_configured",
-            object_key=entry.object_key if entry else self.policy.object_key(paper_id),
-            sha256=entry.sha256 if entry else None,
-            media_type=entry.media_type if entry else None,
-            source_url=entry.source_url if entry else None,
+            retained=True,
+            retrieval=retrieval,
+            artifacts=artifacts,
+            role=resolved.role,
+            cache_state=self._cache_state(cache, resolved),
+            object_key=resolved.object_key,
+            sha256=resolved.sha256,
+            media_type=resolved.media_type,
+            source_url=resolved.source_url,
             cache_path=str(cache),
         )
 
-    def get(self, paper_id, role=_DEFAULT_ROLE):
+    def get(self, paper_id, role=None):
         """Return verified primary bytes for ``paper_id``.
 
+        ``role`` selects the concrete artifact version. Omitting it is only legal
+        when the paper retains exactly one artifact; when several are retained the
+        request fails as ``AMBIGUOUS_ARTIFACT`` rather than picking a version.
         Raises :class:`PrimaryError` with a deterministic ``kind`` when the
         artifact is unavailable, storage is unconfigured, the transfer fails, or
         integrity cannot be established. Never returns unverified bytes.
         """
 
         paper_id = self._known_paper_id(paper_id)
+        role = self._resolve_role(paper_id, role)
         entry = self._entries.get((paper_id, role))
         if entry is None:
             raise PrimaryError(
@@ -444,11 +528,13 @@ class LiteraturePrimary:
         self._fetch_to_cache(self._fetcher, entry, cache)
         return self._artifact(entry, cache, "remote")
 
-    def read(self, paper_id, *, page=None, page_end=None, max_chars=None):
+    def read(self, paper_id, role=None, *, page=None, page_end=None, max_chars=None):
         """Return a bounded, page-provenanced text view of the verified artifact.
 
-        Retrieval failures propagate as :class:`PrimaryError` (so a caller branches
-        on the same deterministic kinds); derivation failures raise
+        ``role`` names the artifact version to read; like :meth:`get` it is
+        required when the paper retains more than one. Retrieval failures
+        propagate as :class:`PrimaryError` (so a caller branches on the same
+        deterministic kinds); derivation failures raise
         :class:`literature_primary_text.PrimaryTextError`. Text is extracted on
         demand from the checksum-verified copy, so ``sha256`` always names the exact
         artifact version the text came from. Printed page labels are *not* used as
@@ -456,7 +542,8 @@ class LiteraturePrimary:
         """
 
         paper_id = self._known_paper_id(paper_id)
-        artifact = self.get(paper_id)
+        role = self._resolve_role(paper_id, role)
+        artifact = self.get(paper_id, role)
         document = self._extract_document(artifact.path)
         if document.page_count < 1:
             raise literature_primary_text.PrimaryTextError(
@@ -663,6 +750,46 @@ class LiteraturePrimary:
                 detail={"paper_id": paper_id},
             ) from exc
         return entry.paper_id
+
+    def _rows_for(self, paper_id):
+        """Every retained artifact for one paper, in deterministic role order."""
+
+        return [self._entries[key] for key in sorted(self._entries)
+                if key[0] == paper_id]
+
+    def _describe(self, entry):
+        """Per-artifact inventory record: identity and cache state, no version guess."""
+
+        cache = self.cache_path(entry.paper_id, entry.role)
+        return {
+            "role": entry.role,
+            "retained": True,
+            "cache_state": self._cache_state(cache, entry),
+            "object_key": entry.object_key,
+            "sha256": entry.sha256,
+            "size_bytes": entry.size_bytes,
+            "media_type": entry.media_type,
+            "source_url": entry.source_url,
+            "cache_path": str(cache),
+        }
+
+    def _resolve_role(self, paper_id, role):
+        """Resolve a role selector, refusing to pick a version when one is ambiguous."""
+
+        if role is not None:
+            return _known_role(role)
+        roles = sorted(r for (p, r) in self._entries if p == paper_id)
+        if len(roles) == 1:
+            return roles[0]
+        if not roles:
+            return _DEFAULT_ROLE
+        raise PrimaryError(
+            "{!r} retains {} primary artifacts; name the role to use".format(
+                paper_id, len(roles)
+            ),
+            kind=AMBIGUOUS_ARTIFACT,
+            detail={"paper_id": paper_id, "roles": roles},
+        )
 
     def _cache_state(self, cache, entry):
         if entry is None or not cache.is_file():
@@ -884,12 +1011,15 @@ def _build_parser():
     commands.add_parser("validate", help="validate the retained-artifact manifest")
     status = commands.add_parser("status", help="describe retention and cache state")
     status.add_argument("paper_id")
+    status.add_argument("--role", default=None)
     get = commands.add_parser("get", help="resolve a verified local primary artifact")
     get.add_argument("paper_id")
+    get.add_argument("--role", default=None)
     read = commands.add_parser(
         "read", help="read a bounded, page-provenanced view of the verified artifact"
     )
     read.add_argument("paper_id")
+    read.add_argument("--role", default=None)
     read.add_argument("--page", type=int, default=None)
     read.add_argument("--page-end", type=int, default=None)
     read.add_argument(
@@ -918,10 +1048,15 @@ def main(argv=None):
                 "primary manifest: OK ({} retained artifact(s))".format(primary.validate())
             )
         elif command == "status":
-            print(json.dumps(primary.status(args.paper_id).as_dict(), sort_keys=True))
+            print(
+                json.dumps(
+                    primary.status(args.paper_id, args.role).as_dict(), sort_keys=True
+                )
+            )
         elif command == "read":
             result = primary.read(
                 args.paper_id,
+                args.role,
                 page=args.page,
                 page_end=args.page_end,
                 max_chars=args.max_chars,
@@ -938,7 +1073,7 @@ def main(argv=None):
             print(json.dumps(entry.as_dict(), ensure_ascii=False, sort_keys=True))
         else:
             print(
-                json.dumps(primary.get(args.paper_id).as_dict(), sort_keys=True)
+                json.dumps(primary.get(args.paper_id, args.role).as_dict(), sort_keys=True)
             )
         return 0
     except PrimaryError as exc:

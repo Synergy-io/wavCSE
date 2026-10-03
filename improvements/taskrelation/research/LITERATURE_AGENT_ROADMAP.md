@@ -307,7 +307,8 @@ the increment numbers are not mistaken for the build order.
 | — | **Literature Agent vertical slice (read-only V1)** | this increment, inserted before INC-004B |
 | INC-004B | Connect primary-artifact storage to `infra/` | **deferred** |
 | INC-004B.1 | Local-first retained primary: registration + bounded page read | done (one-paper vertical slice; remote storage still deferred) |
-| INC-005 | Literature claim records | **partially built** — provenance, locators and verbatim quotes enforced; topic/stance links and Study links deferred |
+| INC-004C | Multi-version primary artifacts + primary claim locators | done (local storage only; INC-004B unaffected) |
+| INC-005 | Literature claim records | **partially built** — provenance, locators (card/survey/Study) and verbatim quotes enforced; primary locators added by INC-004C; topic/stance links and Study links deferred |
 | INC-006 | Cards/syntheses provenance | later |
 | INC-007 | Literature-review skill | later |
 | INC-008 | Bounded Literature Review Agent | later |
@@ -708,6 +709,80 @@ formulation recorded in the card, which is itself a result: verifying the card's
 S3/`infra`, bulk ingestion, web/DOI acquisition, OCR, a document database, claim
 mutation, and all-paper migration. This increment deliberately did not satisfy
 INC-004B's exit criteria.
+
+## INC-004C — Multi-version primary artifacts and primary claim locators
+
+**Status:** `done` (2026-10-03). This increment is separate from INC-004B (remote
+durable storage), which stays deferred; the durable S3 store is not implemented
+here and the storage abstraction is unchanged.
+
+**Goal**
+
+Make one `paper_id` able to retain several materially different primary
+artifacts without ever conflating them, and let the claim layer validate a
+locator against the exact artifact version it names.
+
+**What was built**
+
+- `literature_primary.py`: the artifact `role` now carries the version
+  (`preprint`, `published`), with `source` kept as the unversioned role for a
+  paper whose single artifact is not version-distinguished. `get`, `read` and
+  `status` take an optional role; `status` returns a role-sorted inventory of
+  every retained artifact plus the resolved one, and a request that names no role
+  fails as `AMBIGUOUS_ARTIFACT` when several are retained rather than picking one.
+  A caller-supplied role that is not a known role is `UNKNOWN_ROLE`.
+- `literature_read.py`: `read_primary` delegates to `LiteraturePrimary.read`, so a
+  primary read carries `artifact_role`, `sha256`, `source_url` and a page locator
+  and exposes no filesystem path. The separate extractor injection was removed.
+- `literature_claims.py`: a `primary` locator names `role` + `sha256` + `page`
+  (optional `page_end`) and is validated against the manifest: the role must be a
+  version role this repository retains for the paper, and the digest must equal
+  the retained artifact's digest (`ARTIFACT_MISMATCH` otherwise), so a claim can
+  never drift onto different bytes or a different version. A quoted primary
+  locator is read through the same bounded reader the agent uses and checked
+  verbatim; when the disposable local copy is absent the quote is refused
+  (`PRIMARY_ARTIFACT_NOT_LOCAL`) rather than accepted unchecked. A paraphrase is
+  validated against the manifest binding alone, so the registry stays
+  deterministically validatable from Git without the local cache.
+- `.omp/tools/literature.ts`: `literature_primary` gained a `role` selector; the
+  model still asks only for `paperId` + `role` + page/range, never a path.
+
+**New invariants introduced**
+
+- Retention is a Git-declared fact about `(paper_id, role, sha256)`; the bytes are
+  locally trusted only while they match the declared digest.
+- No version is ever selected silently: one artifact resolves, several require an
+  explicit role.
+- A claim's primary locator is bound to a version role and a digest, so the two
+  versions of one work cannot be merged or borrowed from each other.
+- `primary_verified` still requires a retained artifact; it now additionally
+  requires an explicit version and a matching digest.
+
+**Retained artifacts for `goncalves-2016-mssl`**
+
+| role | source | sha256 | size |
+| --- | --- | --- | --- |
+| `preprint` | `https://arxiv.org/abs/1409.0272` (arXiv:1409.0272v2) | `34521f28bbc43ec1b100d09e7befd2b8c26f34527e695bf2f1148fae0dbc7bc3` | 1 269 319 |
+| `published` | `https://jmlr.org/papers/volume17/15-215/15-215.pdf` | `5dcca4cf3cc70a0eecf99757628c0dab165e8f499c69ed96ea77a86cd3d1ce2b` | 2 528 442 |
+
+The preprint row was migrated from the older unversioned `source` role (same
+bytes, same digest); the published row was registered from the official JMLR URL
+on 2026-10-03, both URLs already recorded in the catalog. The two rows are
+independently addressable and the preprint is preserved unchanged.
+
+**Operational decision recorded here**
+
+Local retained storage is sufficient for the current literature workflow. The
+durable remote store remains a future architecture option (INC-004B) and is not
+required before using the Literature Agent. The local store is **not** globally
+durable: a fresh machine may need the artifact restored locally before a
+primary-quoted claim can be validated. The transfer seam
+(`LiteraturePrimary(fetcher=…)`) is unchanged and still unwired.
+
+**Deferred (unchanged)**
+
+S3/`infra`, bulk ingestion, generic discovery, OCR or equation recognition, a
+document database, and any widening of the four-tool model surface.
 
 ## INC-005 — Introduce literature claim records for active questions
 

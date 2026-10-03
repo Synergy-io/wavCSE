@@ -69,7 +69,13 @@ class LiteratureReadError(Exception):
 
 @dataclass(frozen=True)
 class ArtifactContent:
-    """Bounded text plus the evidence provenance a synthesis must cite."""
+    """Bounded text plus the evidence provenance a synthesis must cite.
+
+    The ``artifact_role``/``sha256``/``source_url``/``locator`` fields are populated
+    only for primary evidence: a card, Study artifact or survey document has no
+    artifact digest, while a primary read is bound to the exact retained version
+    it was extracted from.
+    """
 
     source_kind: str
     evidence_level: str
@@ -80,6 +86,14 @@ class ArtifactContent:
     text: str
     paper_id: str = ""
     study_id: str = ""
+    artifact_role: str = ""
+    sha256: str = ""
+    source_url: str = ""
+    locator: str = ""
+    warnings: tuple = ()
+    page: int = 0
+    page_end: int = 0
+    page_count: int = 0
 
     def as_dict(self):
         return {
@@ -91,6 +105,14 @@ class ArtifactContent:
             "truncated": self.truncated,
             "paper_id": self.paper_id,
             "study_id": self.study_id,
+            "artifact_role": self.artifact_role,
+            "sha256": self.sha256,
+            "source_url": self.source_url,
+            "locator": self.locator,
+            "warnings": list(self.warnings),
+            "page": self.page,
+            "page_end": self.page_end,
+            "page_count": self.page_count,
             "text": self.text,
         }
 
@@ -112,19 +134,13 @@ def _validate_max_chars(max_chars):
 class LiteratureReader:
     """Resolve approved references to bounded text; refuse anything else."""
 
-    def __init__(self, repo_root=None, *, query=None, primary=None,
-                 primary_extractor=None):
+    def __init__(self, repo_root=None, *, query=None, primary=None):
         self.repo_root = Path(repo_root).resolve() if repo_root else _REPO_ROOT
         self._query = query if query is not None else literature_query.LiteratureQuery(
             repo_root=self.repo_root
         )
         self._primary = primary if primary is not None else literature_primary.LiteraturePrimary(
             repo_root=self.repo_root
-        )
-        self._extractor = (
-            primary_extractor
-            if primary_extractor is not None
-            else literature_primary_text.extract_text
         )
 
     # -- canonical literature knowledge -------------------------------------
@@ -222,8 +238,16 @@ class LiteratureReader:
             text=text,
         )
 
-    def read_primary(self, paper_id, max_chars=DEFAULT_MAX_CHARS):
+    def read_primary(self, paper_id, max_chars=DEFAULT_MAX_CHARS, *, role=None,
+                     page=None, page_end=None):
         """Return extracted text from the checksum-verified primary artifact.
+
+        ``role`` names the artifact version (required when the paper retains more
+        than one); ``page``/``page_end`` are 1-based physical PDF page indices, and
+        omitting them reads from the first page. Extraction is delegated to the
+        same ``literature_primary`` read the agent uses, so the returned provenance
+        (``sha256``, ``source_url``, ``artifact_role``, ``locator``) names the exact
+        artifact the text came from and no filesystem path is exposed.
 
         Retrieval failures propagate as :class:`literature_primary.PrimaryError`
         so the caller branches on the same deterministic kinds; a corrupt or
@@ -231,37 +255,28 @@ class LiteratureReader:
         """
 
         max_chars = _validate_max_chars(max_chars)
-        artifact = self._primary.get(paper_id)
-        text = self._extract(artifact.path)
-        truncated = len(text) > max_chars
+        view = self._primary.read(
+            paper_id, role, page=page, page_end=page_end, max_chars=max_chars
+        )
+        text = "\n\n".join(text for _page, text in view.pages)
         return ArtifactContent(
             source_kind="primary",
             evidence_level="primary",
-            reference=artifact.paper_id,
-            path=self._relative(artifact.path),
-            characters=min(len(text), max_chars),
-            truncated=truncated,
-            text=text[:max_chars],
-            paper_id=artifact.paper_id,
+            reference=view.paper_id,
+            path="",
+            characters=len(text),
+            truncated=view.truncated,
+            text=text,
+            paper_id=view.paper_id,
+            artifact_role=view.role,
+            sha256=view.sha256,
+            source_url=view.source_url,
+            locator=view.locator,
+            warnings=tuple(view.warnings),
+            page=view.page,
+            page_end=view.page_end,
+            page_count=view.page_count,
         )
-
-    def _extract(self, path):
-        if self._extractor is None:
-            raise LiteratureReadError(
-                "no primary-text extractor is configured; primary retrieval "
-                "succeeded but text extraction is not wired here",
-                kind=ARTIFACT_NOT_AVAILABLE,
-            )
-        try:
-            return self._extractor(path)
-        except LiteratureReadError:
-            raise
-        except Exception as exc:
-            raise LiteratureReadError(
-                "primary text extraction failed",
-                kind=ARTIFACT_NOT_AVAILABLE,
-                detail={"error_type": type(exc).__name__},
-            ) from exc
 
     # -- resolution helpers --------------------------------------------------
 
@@ -337,6 +352,9 @@ def _build_parser():
     study.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     primary = commands.add_parser("primary", help="read the verified primary artifact")
     primary.add_argument("paper_id")
+    primary.add_argument("--role", default=None)
+    primary.add_argument("--page", type=int, default=None)
+    primary.add_argument("--page-end", type=int, default=None)
     primary.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     survey = commands.add_parser("survey", help="read one literature-survey document")
     survey.add_argument("document")
@@ -355,13 +373,22 @@ def main(argv=None):
         elif args.command == "survey":
             result = reader.read_survey(args.document, args.max_chars)
         else:
-            result = reader.read_primary(args.paper_id, args.max_chars)
+            result = reader.read_primary(
+                args.paper_id,
+                args.max_chars,
+                role=args.role,
+                page=args.page,
+                page_end=args.page_end,
+            )
         print(json.dumps(result.as_dict(), ensure_ascii=False, sort_keys=True))
         return 0
     except LiteratureReadError as exc:
         print(json.dumps(exc.as_dict(), sort_keys=True), file=sys.stderr)
         return 1
     except literature_primary.PrimaryError as exc:
+        print(json.dumps(exc.as_dict(), sort_keys=True), file=sys.stderr)
+        return 1
+    except literature_primary_text.PrimaryTextError as exc:
         print(json.dumps(exc.as_dict(), sort_keys=True), file=sys.stderr)
         return 1
     except literature_catalog.CatalogError as exc:

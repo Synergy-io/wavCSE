@@ -27,14 +27,44 @@ class FakeQuery:
 
 
 class FakePrimary:
-    def __init__(self, artifact=None, error=None):
+    """Stand-in for ``LiteraturePrimary``; `read` mirrors the real page-bounded API."""
+
+    def __init__(self, artifact=None, error=None, text=None):
         self.artifact = artifact
         self.error = error
+        self.text = text
 
-    def get(self, paper_id):
+    def _raise_if_failing(self):
         if self.error is not None:
             raise self.error
+
+    def get(self, paper_id, role=None):
+        self._raise_if_failing()
         return self.artifact
+
+    def read(self, paper_id, role=None, *, page=None, page_end=None, max_chars=None):
+        self._raise_if_failing()
+        return self.text
+
+
+def stub_primary_text(pages=((1, "primary evidence\n"),)):
+    return literature_primary.PrimaryText(
+        paper_id="alpha",
+        role="preprint",
+        sha256="a" * 64,
+        source_url="https://example.org/a",
+        source="cache",
+        page=pages[0][0],
+        page_end=pages[-1][0],
+        page_count=max(page for page, _text in pages),
+        locator="primary:page:{}".format(pages[0][0]),
+        extractor="stub",
+        extractor_version="0",
+        warnings=("a stub warning",),
+        pages=tuple(pages),
+        characters=sum(len(text) for _page, text in pages),
+        truncated=False,
+    )
 
 
 class BoundedReadTests(unittest.TestCase):
@@ -93,7 +123,7 @@ class BoundedReadTests(unittest.TestCase):
             result_path="research/studies/LT-0001/result.json",
         )
 
-    def reader(self, query=None, primary=None, extractor=None):
+    def reader(self, query=None, primary=None):
         return literature_read.LiteratureReader(
             repo_root=self.repo_root,
             query=query or self.query,
@@ -102,7 +132,6 @@ class BoundedReadTests(unittest.TestCase):
                     "not retained", kind=literature_primary.PRIMARY_NOT_AVAILABLE
                 )
             ),
-            primary_extractor=extractor,
         )
 
     def test_card_read_returns_card_derived_evidence(self):
@@ -180,49 +209,38 @@ class BoundedReadTests(unittest.TestCase):
         )
 
     def test_integrity_failure_is_preserved_and_never_extracted(self):
-        calls = []
         primary = FakePrimary(
             error=literature_primary.PrimaryError(
                 "corrupt", kind=literature_primary.INTEGRITY_MISMATCH
             )
         )
 
-        with self.assertRaises(literature_primary.PrimaryError):
-            self.reader(
-                primary=primary, extractor=lambda path: calls.append(path) or "bad"
-            ).read_primary("alpha")
+        with self.assertRaises(literature_primary.PrimaryError) as caught:
+            self.reader(primary=primary).read_primary("alpha")
 
-        self.assertEqual(calls, [])
+        self.assertEqual(caught.exception.kind, literature_primary.INTEGRITY_MISMATCH)
 
-    def test_available_primary_is_extracted_only_after_verified_get(self):
-        pdf = self.repo_root.parent / "cache" / "alpha" / "source.pdf"
-        pdf.parent.mkdir(parents=True)
-        pdf.write_bytes(b"%PDF verified")
-        artifact = literature_primary.PrimaryArtifact(
-            paper_id="alpha",
-            role="source",
-            sha256="0" * 64,
-            size_bytes=13,
-            media_type="application/pdf",
-            source_url="https://example.org/a",
-            object_key="papers/alpha/source.pdf",
-            path=pdf,
-            source="cache",
-        )
-        calls = []
+    def test_primary_read_carries_the_artifact_version_and_locator(self):
+        primary = FakePrimary(text=stub_primary_text())
 
-        def extract(path):
-            calls.append(path)
-            return "page 1\nprimary evidence\n"
+        result = self.reader(primary=primary).read_primary("alpha", role="preprint", page=1)
 
-        result = self.reader(
-            primary=FakePrimary(artifact=artifact), extractor=extract
-        ).read_primary("alpha")
-
-        self.assertEqual(calls, [pdf])
         self.assertEqual(result.source_kind, "primary")
         self.assertEqual(result.evidence_level, "primary")
+        self.assertEqual(result.artifact_role, "preprint")
+        self.assertEqual(result.sha256, "a" * 64)
+        self.assertEqual(result.locator, "primary:page:1")
+        self.assertEqual(result.page, 1)
+        self.assertEqual(result.warnings, ("a stub warning",))
         self.assertIn("primary evidence", result.text)
+
+    def test_primary_read_exposes_no_filesystem_path(self):
+        primary = FakePrimary(text=stub_primary_text())
+
+        document = self.reader(primary=primary).read_primary("alpha", role="preprint").as_dict()
+
+        self.assertNotIn(str(self.repo_root), json.dumps(document))
+        self.assertEqual(document["path"], "")
 
     def test_max_chars_has_a_strict_upper_bound(self):
         for value in (0, -1, 100001, "100"):

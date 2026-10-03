@@ -205,31 +205,49 @@ check(
 	unretained.content[0].text,
 );
 
-// 11. primary: retention status and a bounded, page-provenanced read
+// 11. primary: per-version retention status and a bounded, page-provenanced read
 const status = await call("literature_primary", {
 	paperId: "goncalves-2016-mssl",
 	operation: "status",
 });
 const statusDoc = parse(status);
+const artifacts = (statusDoc.artifacts as Record<string, unknown>[]) ?? [];
+const preprint = artifacts.find((artifact) => artifact.role === "preprint");
 check(
-	"primary status reports retention without credentials",
-	statusDoc.retained === true && typeof statusDoc.sha256 === "string",
+	"primary status enumerates every retained version without guessing one",
+	statusDoc.retained === true &&
+		artifacts.length >= 2 &&
+		artifacts.every((artifact) => typeof artifact.sha256 === "string") &&
+		statusDoc.sha256 === null,
 	statusDoc,
+);
+
+const ambiguousPrimary = await call("literature_primary", {
+	paperId: "goncalves-2016-mssl",
+	operation: "get",
+});
+check(
+	"primary refuses to choose between versions when none is named",
+	ambiguousPrimary.details.ok === false &&
+		ambiguousPrimary.details.kind === "AMBIGUOUS_ARTIFACT",
+	ambiguousPrimary.details,
 );
 
 const read = await call("literature_primary", {
 	paperId: "goncalves-2016-mssl",
 	operation: "read",
+	role: "preprint",
 	page: 6,
 	maxChars: 400,
 });
 const readDoc = parse(read);
 check(
-	"primary read is page- and sha-addressed, or reports a precise reason",
+	"primary read names the artifact version, page and sha, or reports a precise reason",
 	read.details.ok === true
 		? readDoc.evidence_level === "primary" &&
 			readDoc.locator === "primary:page:6" &&
-			readDoc.sha256 === statusDoc.sha256 &&
+			readDoc.role === "preprint" &&
+			readDoc.sha256 === preprint?.sha256 &&
 			readDoc.page === 6 &&
 			!JSON.stringify(readDoc).includes("cache_path")
 		: ["STORAGE_NOT_CONFIGURED", "EXTRACTOR_UNAVAILABLE", "INTEGRITY_MISMATCH"].includes(
@@ -262,12 +280,16 @@ const objectives = await call("literature_query", {
 });
 const objectiveClaims = (parse(objectives).claims as Record<string, unknown>[]) ?? [];
 check(
-	"paper_claims filters by claim type and keeps locators",
-	objectiveClaims.length === 3 &&
+	"paper_claims filters by claim type and keeps each claim's own locator",
+	objectiveClaims.length === 4 &&
 		objectiveClaims.every(
 			(claim) =>
 				claim.claim_type === "method-objective" &&
-				typeof (claim.locator as Record<string, unknown>).anchor === "string",
+				typeof claim.locator === "object" &&
+				typeof (claim.locator as Record<string, unknown>).kind === "string" &&
+				((claim.locator as Record<string, unknown>).kind === "primary"
+					? typeof (claim.locator as Record<string, unknown>).role === "string"
+					: typeof (claim.locator as Record<string, unknown>).anchor === "string"),
 		),
 	objectiveClaims.map((c) => c.claim_ref),
 );

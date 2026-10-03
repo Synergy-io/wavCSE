@@ -237,7 +237,17 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertIn('"read"', self.code)
         self.assertIn("--page", self.code)
         self.assertIn("--page-end", self.code)
+        self.assertIn("--role", self.code)
         self.assertNotIn('"register"', self.code)
+
+    def test_adapter_selects_a_primary_version_by_role_never_by_path(self):
+        blocks = declared_parameters(self.code)
+        declared = set().union(*blocks) if blocks else set()
+
+        self.assertIn("role", declared)
+        for forbidden in ("path", "key", "bucket", "url", "credential"):
+            with self.subTest(param=forbidden):
+                self.assertNotIn(forbidden, declared)
 
     def test_agent_declares_no_file_access_and_claim_first_provenance(self):
         lowered = "\n".join(parse_frontmatter(AGENT_PATH)[1]).lower()
@@ -360,12 +370,13 @@ class BoundedReadCliTests(unittest.TestCase):
     def test_primary_read_is_page_and_sha_addressed_when_cached(self):
         status = run_module("literature_primary", "status", "goncalves-2016-mssl")
         state = json.loads(status.stdout)
-        if not state["retained"] or state["cache_state"] != "valid":
-            self.skipTest("goncalves-2016-mssl has no verified local copy")
+        artifacts = {artifact["role"]: artifact for artifact in state["artifacts"]}
+        if "preprint" not in artifacts or artifacts["preprint"]["cache_state"] != "valid":
+            self.skipTest("goncalves-2016-mssl preprint has no verified local copy")
 
         result = run_module(
             "literature_primary", "read", "goncalves-2016-mssl",
-            "--page", "6", "--max-chars", "400",
+            "--role", "preprint", "--page", "6", "--max-chars", "400",
         )
         if result.returncode != 0:
             self.assertEqual(json.loads(result.stderr)["kind"], "EXTRACTOR_UNAVAILABLE")
@@ -374,10 +385,22 @@ class BoundedReadCliTests(unittest.TestCase):
         page = json.loads(result.stdout)
         self.assertEqual(page["evidence_level"], "primary")
         self.assertEqual(page["locator"], "primary:page:6")
-        self.assertEqual(page["sha256"], state["sha256"])
+        self.assertEqual(page["role"], "preprint")
+        self.assertEqual(page["sha256"], artifacts["preprint"]["sha256"])
         self.assertEqual(page["page"], 6)
         self.assertNotIn("cache_path", json.dumps(page))
         self.assertNotIn("secret", json.dumps(page).lower())
+
+    def test_primary_refuses_to_choose_between_retained_versions(self):
+        status = run_module("literature_primary", "status", "goncalves-2016-mssl")
+        state = json.loads(status.stdout)
+        if len(state["artifacts"]) < 2:
+            self.skipTest("goncalves-2016-mssl retains fewer than two versions")
+
+        result = run_module("literature_primary", "get", "goncalves-2016-mssl")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stderr)["kind"], "AMBIGUOUS_ARTIFACT")
 
 
 

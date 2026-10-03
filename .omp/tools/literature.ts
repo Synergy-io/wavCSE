@@ -91,6 +91,7 @@ export interface ReadParams {
 export interface PrimaryParams {
 	paperId: string;
 	operation?: "status" | "get" | "read";
+	role?: string;
 	page?: number;
 	pageEnd?: number;
 	maxChars?: number;
@@ -327,23 +328,35 @@ const factory: CustomToolFactory = (pi) => {
 			label: "Primary Paper Evidence",
 			description:
 				"Work with a retained primary artifact (the original PDF) by paper_id. " +
-				"operation=status reports whether it is retained, operation=get resolves a " +
-				"checksum-verified local copy, and operation=read returns a bounded text view " +
-				"of the verified artifact with page provenance (a 1-based physical PDF page " +
-				"index, or an inclusive page range) and the artifact's SHA-256. Reports precise " +
-				"states such as PRIMARY_NOT_AVAILABLE or STORAGE_NOT_CONFIGURED. It never asks " +
-				"for credentials, a bucket, an object key or a filesystem path, cannot register " +
-				"an artifact, and cannot fetch from the internet. Extracted text is a derived " +
-				"view, not the evidence: the PDF bytes remain primary, and imperfectly extracted " +
-				"equations must be reported as uncertain, never reconstructed.",
+				"operation=status reports which artifacts are retained (a paper may retain " +
+				"several versions, e.g. a preprint and the published version), operation=get " +
+				"resolves a checksum-verified local copy, and operation=read returns a bounded " +
+				"text view of the verified artifact with page provenance (a 1-based physical " +
+				"PDF page index, or an inclusive page range), the artifact's role and its " +
+				"SHA-256. Pass role to choose a version: it is required when more than one is " +
+				"retained, and never guessed, so a preprint and the published version cannot " +
+				"be conflated. Reports precise states such as PRIMARY_NOT_AVAILABLE, " +
+				"AMBIGUOUS_ARTIFACT or STORAGE_NOT_CONFIGURED. It never asks for credentials, " +
+				"a bucket, an object key or a filesystem path, cannot register an artifact, " +
+				"and cannot fetch from the internet. Extracted text is a derived view, not the " +
+				"evidence: the PDF bytes remain primary, and imperfectly extracted equations " +
+				"must be reported as uncertain, never reconstructed.",
 			parameters: z.object({
 				paperId: z.string().describe("canonical paper_id"),
 				operation: z
 					.enum(["status", "get", "read"])
 					.optional()
 					.describe(
-						"status = retention/cache state; get = resolve the verified local copy; " +
-							"read = bounded, page-provenanced text of the verified artifact (default: status)",
+						"status = retention/cache state for every retained version; get = resolve " +
+							"the verified local copy; read = bounded, page-provenanced text of the " +
+							"verified artifact (default: status)",
+					),
+				role: z
+					.string()
+					.optional()
+					.describe(
+						"artifact version/role, e.g. preprint or published; required when the " +
+							"paper retains more than one artifact, never guessed",
 					),
 				page: z
 					.number()
@@ -366,14 +379,15 @@ const factory: CustomToolFactory = (pi) => {
 			async execute(_toolCallId: string, params: unknown, ...rest: unknown[]) {
 				const p = params as PrimaryParams;
 				const operation = p.operation ?? "status";
+				const role = p.role ? ["--role", p.role] : [];
 				if (operation === "read") {
-					const argv = ["literature_primary", "read", p.paperId];
+					const argv = ["literature_primary", "read", p.paperId, ...role];
 					if (p.page !== undefined) argv.push("--page", String(p.page));
 					if (p.pageEnd !== undefined) argv.push("--page-end", String(p.pageEnd));
 					if (p.maxChars !== undefined) argv.push("--max-chars", String(p.maxChars));
 					return invoke(argv, rest);
 				}
-				return invoke(["literature_primary", operation, p.paperId], rest);
+				return invoke(["literature_primary", operation, p.paperId, ...role], rest);
 			},
 		},
 	];

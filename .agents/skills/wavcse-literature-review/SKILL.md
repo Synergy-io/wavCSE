@@ -117,19 +117,24 @@ caveat. An unsupported synthesis is a fabrication with a disclaimer.
 7. **Use the primary artifact when the question demands it.** A card is a
    derived summary; when the answer turns on an exact equation, a reported
    number, or a stated assumption, the primary source is the authority. Resolve
-   retention and identity first (`literature_primary operation=status`), then
-   read a bounded view (`literature_primary operation=read`, with `page=N`, or
-   `page`/`pageEnd` for an inclusive range). The read names the artifact's
-   `sha256`, its `source_url` and a `locator` (`primary:page:N` or
-   `primary:pages:A-B`). `page` is a **1-based physical PDF page index**, not a
-   printed page label, so cite the locator, never an inferred printed page
-   number. The read output is a derived *view*: the PDF bytes are the evidence,
-   and the read reports its extractor and any extraction warnings — equations
-   that extract imperfectly must be reported as uncertain and never normalised
-   into an equation the extraction did not show. Treat `source_url` and version
-   as part of the identity: a preprint and the published version are different
-   artifacts, and a claim recorded against one is not verified by the other. If
-   the primary artifact is not available locally (`PRIMARY_NOT_AVAILABLE`,
+   retention and identity first (`literature_primary operation=status`, which
+   lists every retained version), then read a bounded view
+   (`literature_primary operation=read`, with `role` when the paper retains more
+   than one artifact, plus `page=N`, or `page`/`pageEnd` for an inclusive range).
+   The read names the artifact's `role`, `sha256`, its `source_url` and a
+   `locator` (`primary:page:N` or `primary:pages:A-B`). `page` is a **1-based
+   physical PDF page index**, not a printed page label, so cite the locator,
+   never an inferred printed page number. The read output is a derived *view*:
+   the PDF bytes are the evidence, and the read reports its extractor and any
+   extraction warnings — equations that extract imperfectly must be reported as
+   uncertain and never normalised into an equation the extraction did not show.
+   Treat `role` + `source_url` as part of the identity: a preprint and the
+   published version are different artifacts with different digests, a claim
+   recorded against one is not verified by the other, and the tool never chooses
+   a version for you. When the assertion is about a specific version, read that
+   version; when the versions make different propositions, report both and say
+   which artifact each statement came from rather than merging them. If the
+   primary artifact is not available locally (`PRIMARY_NOT_AVAILABLE`,
    `STORAGE_NOT_CONFIGURED`), say so and downgrade the claim's evidence level
    rather than implying you verified it.
 
