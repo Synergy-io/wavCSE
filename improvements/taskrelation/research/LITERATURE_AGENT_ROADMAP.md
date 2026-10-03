@@ -314,7 +314,8 @@ the increment numbers are not mistaken for the build order.
 | INC-008 | Bounded Literature Review Agent | later |
 | INC-009 | Exercise real questions, measure query behaviour | later |
 | INC-010 | Broader research query index | later |
-| INC-011 | User-supplied primary-artifact ingestion (acquisition path A) | done (operator-side; structured discovery, web acquisition, paper hunter and desktop→remote transport are INC-012..015, designed only) |
+| INC-011 | User-supplied primary-artifact ingestion (acquisition path A) | done (operator-side) |
+| INC-012 | Structured scholarly discovery (acquisition path B, discovery half) | done (metadata-only; deterministic web acquisition, paper hunter and desktop→remote transport are INC-013..015, not built) |
 
 Roadmap INC-002 was not built to restore numbering, and must not be. Query-time
 joins in `literature_query` already derive Study-scoped assessments from their
@@ -1215,12 +1216,118 @@ mutation, no model-facing widening. `register(replace=True)` exists but ingestio
 never exposes it: overwrite/correction and quarantine of a mistakenly admitted
 artifact are deferred with the acquisition paths below.
 
+## INC-012 — Structured scholarly discovery
+
+**Status:** `done` (2026-10-03). Metadata discovery only: it produces candidate
+papers and candidate artifact locations and reaches no artifact bytes.
+
+**Goal**
+
+Turn a scholarly identity or search input into normalized candidate Papers and
+candidate artifact locations, so the Literature Agent can decide what is
+relevant, whether it is already retained, and what location acquisition (INC-013)
+should later be asked to fetch — without any provider payload leaking into its
+reasoning and without creating a second Paper identity system.
+
+**What was built**
+
+`improvements/taskrelation/research/literature_discovery/` — a package, not
+another flat module, because it holds four provider adapters plus a shared HTTP
+policy and a normalized model:
+
+- `model.py` — the normalized representation (`CandidatePaper`,
+  `CandidateArtifactLocation`, `DiscoveredCandidate`, `IdentityVerdict`,
+  `DiscoveryFailure`, `DiscoveryResult`) and the failure taxonomy.
+- `http.py` — deterministic, bounded metadata HTTP: HTTPS-only, response-size
+  bound, timeout, capped redirects that refuse a scheme downgrade, a small
+  retry/backoff policy honoring `Retry-After`, per-provider minimum intervals,
+  and a bounded in-memory TTL cache. Transport is injectable, so the whole policy
+  is tested with fixtures and no network.
+- `providers.py` — four adapters behind one contract: **Crossref** (DOI, search,
+  references), **arXiv** (arXiv identity, search), **Semantic Scholar** (DOI/arXiv
+  identity, search, references, citations; optional API key), **OpenReview**
+  (venue-structured search and identity). Provider response shapes never escape
+  the adapter; provider strings are inert data.
+- `core.py` — `StructuredDiscovery` orchestration: `discover`, `search`,
+  `references`, `citations`, `provider_status`, with identity classification and
+  bounded, progressive-disclosure results.
+- `__main__.py` — the deterministic JSON CLI the model-facing tool invokes.
+
+**Providers selected, and why not more**
+
+The four are distinct scholarly functions and each has a stable metadata API;
+none is included merely to raise the count. PMLR and ACL Anthology are *not*
+adapters: neither exposes a stable metadata query API (PMLR none; ACL Anthology a
+bulk XML dump), so their pages remain candidate artifact *locations* reported by
+the providers above and belong to the INC-013 acquisition source policy.
+
+**Identity boundary**
+
+Discovery never creates a Paper. Every candidate is classified against the
+existing catalog through `literature_query.identify_candidate` — the same
+`known` / `new` / `ambiguous` vocabulary and exact-identity rules — and a
+provider that returns a record disagreeing with the requested identifier is
+`IDENTITY_CONFLICT` and fails closed rather than being merged. Approximate search
+may produce candidates, but a candidate never becomes canonical identity here.
+
+**Discovery vs acquisition**
+
+A `CandidateArtifactLocation` is unvalidated discovery evidence with no digest;
+it is never a `PrimaryArtifact`. INC-012 performs no artifact fetch, writes no
+`primary_manifest` or `acquisitions.jsonl` row, and calls
+`LiteraturePrimary.register` nowhere.
+
+**Networking / security policy**
+
+HTTPS only; response-size bound (2 MiB) and timeout (15 s); up to three
+HTTPS-only redirects; retries with backoff for 429/5xx; per-provider minimum
+intervals; structured handling of 429/401/403/404/malformed bodies. Optional
+credentials (Semantic Scholar key, contact address for the polite pool) are read
+from the environment at runtime, sent in a header, never placed in a URL, never
+cached, never logged, and never written to research state. Provider text is
+untrusted data and is never evaluated.
+
+**State / caching**
+
+No new ledger and no database: discovery is stateless with a bounded in-memory
+TTL cache. Nothing discovered is written to `catalog.jsonl`; a discovered
+`CandidatePaper` is not a canonical Paper.
+
+**Model-facing surface**
+
+A new read-only tool, `literature_discover`, added to `.omp/tools/literature.ts`
+and granted to the `literature-reviewer` agent. A new tool was chosen over
+extending `literature_query` because discovery is outbound network I/O over
+untrusted external metadata, a different authority and risk profile from a
+bounded read over canonical research state. It can write nothing, not even the
+primary cache.
+
+**Tests/verification**
+
+`tests/test_literature_discovery.py` (26 cases, fixtures only, no live service):
+normalization for a DOI and an arXiv id; bounded search; known/new/ambiguous
+identity against the real catalog; provider disagreement failing closed; a
+candidate artifact location that is never a `PrimaryArtifact`; `RATE_LIMITED`,
+`PROVIDER_UNAVAILABLE`, `MALFORMED_PROVIDER_RESPONSE`, `NOT_FOUND`,
+`INVALID_QUERY` and `DISCOVERY_EXHAUSTED`; injection-like strings staying inert;
+no credential reaching output, URLs or persisted state; no PDF fetch; no
+`primary_manifest`/`acquisitions.jsonl` mutation; cache reuse; non-HTTPS redirect
+refusal. Agent-asset tests were extended for the fifth tool and for the discovery
+package's no-write boundary. A read-only live smoke (below) confirms the real
+providers.
+
+**Live smoke (read-only, no artifacts retained)**
+
+Against real providers: `discover --doi 10.24963/ijcai.2017/328` returned known
+identity `liu-2017-trace-lasso-gamtl` via Crossref and Semantic Scholar;
+`discover --arxiv 1707.08114` returned known `zhang-yang-2021-mtl-survey`;
+`references`/`citations` expansion returned bounded candidates; `search` returned
+candidates with Crossref/Semantic Scholar/arXiv rate limits appearing as
+structured `RATE_LIMITED` failures. No PDF was fetched and no research state
+changed.
+
 ### Planned acquisition increments (designed, not implemented)
 
-- **INC-012 — Structured scholarly discovery.** Resolve a DOI/Crossref, arXiv,
-  OpenReview or Semantic Scholar record (and proceedings/repository pages) into a
-  candidate `(identity, artifact locations)`; identity still resolves through the
-  catalog, and a new Paper identity is a separate, explicit concern.
 - **INC-013 — Deterministic public-artifact acquisition.** A source policy, HTTP
   retrieval with redirects, content/size validation, identity/version
   verification, bounded retries/backoff, rate limiting, caching and provenance —

@@ -10,6 +10,9 @@
  *                           source-bound literature claims)
  *   literature_read     -> improvements.taskrelation.research.literature_read
  *   literature_primary  -> improvements.taskrelation.research.literature_primary
+ *   literature_discover -> improvements.taskrelation.research.literature_discovery
+ *                          (metadata-only structured discovery: candidates and
+ *                           unvalidated artifact locations, never artifact bytes)
  *
  * Authority: these tools READ canonical research state. The only write any of
  * them can perform is the disposable primary cache owned by literature_primary.
@@ -104,6 +107,30 @@ export interface PrimaryParams {
 	maxChars?: number;
 }
 
+/**
+ * Structured discovery inputs. `operation` selects one discovery action; the
+ * tool returns normalized candidate papers and *unvalidated* candidate artifact
+ * locations, never artifact bytes and never a `PrimaryArtifact`.
+ */
+export interface DiscoverParams {
+	operation:
+		| "doi"
+		| "arxiv"
+		| "title"
+		| "search"
+		| "references"
+		| "citations"
+		| "providers";
+	doi?: string;
+	arxiv?: string;
+	title?: string;
+	authors?: string[];
+	query?: string;
+	paperId?: string;
+	year?: number;
+	limit?: number;
+}
+
 /** Build the deterministic CLI argv for a validated query request. */
 function queryArgv(params: QueryParams): string[] | undefined {
 	const argv = ["literature_query"];
@@ -173,6 +200,45 @@ function readArgv(params: ReadParams): string[] | undefined {
 	}
 	if (params.maxChars !== undefined) argv.push("--max-chars", String(params.maxChars));
 	return argv;
+}
+
+/** Build the deterministic CLI argv for a validated discovery request. */
+function discoverArgv(params: DiscoverParams): string[] | undefined {
+	const base = ["literature_discovery"];
+	const limit = params.limit !== undefined ? ["--limit", String(params.limit)] : [];
+	switch (params.operation) {
+		case "providers":
+			return [...base, "providers"];
+		case "doi":
+			return params.doi ? [...base, "discover", "--doi", params.doi, ...limit] : undefined;
+		case "arxiv":
+			return params.arxiv
+				? [...base, "discover", "--arxiv", params.arxiv, ...limit]
+				: undefined;
+		case "title": {
+			if (!params.title) return undefined;
+			const argv = [...base, "discover", "--title", params.title];
+			for (const author of params.authors ?? []) argv.push("--author", author);
+			if (params.year !== undefined) argv.push("--year", String(params.year));
+			return [...argv, ...limit];
+		}
+		case "search": {
+			if (!params.query) return undefined;
+			const argv = [...base, "search", params.query];
+			if (params.year !== undefined) argv.push("--year", String(params.year));
+			return [...argv, ...limit];
+		}
+		case "references":
+			return params.paperId
+				? [...base, "references", params.paperId, ...limit]
+				: undefined;
+		case "citations":
+			return params.paperId
+				? [...base, "citations", params.paperId, ...limit]
+				: undefined;
+		default:
+			return undefined;
+	}
 }
 
 const factory: CustomToolFactory = (pi) => {
@@ -451,6 +517,75 @@ const factory: CustomToolFactory = (pi) => {
 					return invoke(argv, rest);
 				}
 				return invoke(["literature_primary", operation, p.paperId, ...role], rest);
+			},
+		},
+		{
+			name: "literature_discover",
+			label: "Discover Scholarly Records",
+			description:
+				"Structured scholarly discovery: resolve a DOI or arXiv identifier, look up a " +
+				"near-exact title, run a bounded scholarly search, or expand a retained paper's " +
+				"references/citations where a provider supports it. Returns normalized candidate " +
+				"papers with a catalog identity verdict (known / new / ambiguous) and *unvalidated* " +
+				"candidate artifact locations. It is metadata only: it never downloads an artifact, " +
+				"never creates or mutates a Paper, and a candidate URL is not a retained primary " +
+				"artifact. Provider failures (rate limiting, an outage, a missing record) come back " +
+				"as structured failures in the result, not as errors. Use it to find candidates, " +
+				"then literature_resolve to confirm identity and literature_primary to read a " +
+				"retained artifact.",
+			parameters: z.object({
+				operation: z
+					.enum(["doi", "arxiv", "title", "search", "references", "citations", "providers"])
+					.describe(
+						"doi/arxiv = resolve an exact identifier; title = near-exact title lookup " +
+							"(with optional authors/year); search = bounded scholarly query; " +
+							"references/citations = expand a retained paper_id; providers = provider " +
+							"availability and capabilities",
+					),
+				doi: z.string().optional().describe("required by operation=doi"),
+				arxiv: z.string().optional().describe("required by operation=arxiv"),
+				title: z.string().optional().describe("required by operation=title"),
+				authors: z
+					.array(z.string())
+					.optional()
+					.describe("optional narrowing for operation=title"),
+				query: z.string().optional().describe("required by operation=search"),
+				paperId: z
+					.string()
+					.optional()
+					.describe("required by operation=references or operation=citations"),
+				year: z
+					.number()
+					.int()
+					.optional()
+					.describe("optional year filter for title/search"),
+				limit: z
+					.number()
+					.int()
+					.min(1)
+					.max(25)
+					.optional()
+					.describe("bounded result count (default 10)"),
+			}),
+			async execute(_toolCallId: string, params: unknown, ...rest: unknown[]) {
+				const p = params as DiscoverParams;
+				const argv = discoverArgv(p);
+				if (!argv) {
+					const needed =
+						p.operation === "doi"
+							? "doi"
+							: p.operation === "arxiv"
+								? "arxiv"
+								: p.operation === "title"
+									? "title"
+									: p.operation === "search"
+										? "query"
+										: p.operation === "references" || p.operation === "citations"
+											? "paperId"
+											: "operation";
+					return invalid(needed, `literature_discover operation=${p.operation}`);
+				}
+				return invoke(argv, rest);
 			},
 		},
 	];

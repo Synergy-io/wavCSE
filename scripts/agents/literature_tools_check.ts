@@ -59,6 +59,12 @@ const host = {
 			schema.optional = () => schema;
 			return schema;
 		},
+		array: () => {
+			const schema: Record<string, unknown> = {};
+			schema.describe = () => schema;
+			schema.optional = () => schema;
+			return schema;
+		},
 		object: (shape: Record<string, unknown>) => shape,
 	},
 	async exec(command: string, args: string[], options?: { cwd?: string }) {
@@ -94,12 +100,42 @@ async function call(name: string, params: unknown): Promise<ToolResult> {
 }
 
 check(
-	"exposes exactly the four semantic capabilities",
-	tools.length === 4 &&
-		["literature_resolve", "literature_query", "literature_read", "literature_primary"].every(
-			(name) => byName.has(name),
-		),
+	"exposes exactly the five semantic capabilities",
+	tools.length === 5 &&
+		[
+			"literature_resolve",
+			"literature_query",
+			"literature_read",
+			"literature_primary",
+			"literature_discover",
+		].every((name) => byName.has(name)),
 	tools.map((t) => t.name),
+);
+
+// discovery: providers report capabilities without any network call
+const providers = await call("literature_discover", { operation: "providers" });
+const providerList = (parse(providers).providers as Record<string, unknown>[]) ?? [];
+check(
+	"discover reports provider availability and capabilities",
+	providers.details.kind === "PROVIDERS" &&
+		providerList.length >= 4 &&
+		providerList.every(
+			(p) => typeof p.provider === "string" && Array.isArray(p.capabilities),
+		),
+	providerList.map((p) => p.provider),
+);
+
+// discovery: a malformed identifier is a structured refusal, not a network call
+const badDoi = await call("literature_discover", { operation: "doi", doi: "not-a-doi" });
+check(
+	"discover refuses a malformed identifier with a structured kind",
+	badDoi.details.ok === false && badDoi.details.kind === "INVALID_QUERY",
+	badDoi.details,
+);
+check(
+	"discover requires its operation's parameter",
+	(await call("literature_discover", { operation: "search" })).details.kind ===
+		"INVALID_REFERENCE",
 );
 
 // 1. identity dedup: known

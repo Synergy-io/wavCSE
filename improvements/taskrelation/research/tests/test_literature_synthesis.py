@@ -376,7 +376,9 @@ class AuthorityBoundaryTests(unittest.TestCase):
         # proof that synthesis documents are not consumed as PaperAssessment.
         literature_assessment.check_authority()
 
-    def test_literature_agent_tool_grant_is_unchanged(self):
+    def test_literature_agent_tool_grant_matches_the_approved_surface(self):
+        # INC-012 added `literature_discover` (metadata-only structured discovery,
+        # read-only with respect to research state) to the approved surface.
         text = AGENT_PATH.read_text(encoding="utf-8")
         grant = next(
             line for line in text.splitlines() if line.startswith("tools:")
@@ -384,7 +386,7 @@ class AuthorityBoundaryTests(unittest.TestCase):
         self.assertEqual(
             grant,
             "tools: literature_resolve, literature_query, literature_read, "
-            "literature_primary",
+            "literature_primary, literature_discover",
         )
 
 

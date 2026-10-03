@@ -53,15 +53,15 @@ FORBIDDEN_AGENT_TOOLS = (
 )
 ALLOWED_AGENT_TOOLS = (
     "literature_resolve", "literature_query", "literature_read",
-    "literature_primary", "yield",
+    "literature_primary", "literature_discover", "yield",
 )
 FORBIDDEN_TOOL_SOURCE = (
     "child_process", "spawnSync", "shell: true", "boto3", "botocore",
     "aws_access", "secret_access", "session_token", "s3://", "AWS_",
 )
 EXPECTED_TOOL_NAMES = (
-    "literature_primary", "literature_query", "literature_read",
-    "literature_resolve",
+    "literature_discover", "literature_primary", "literature_query",
+    "literature_read", "literature_resolve",
 )
 
 def parse_frontmatter(path):
@@ -232,11 +232,11 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertIn('"survey"', self.code)
 
     def test_adapter_exposes_the_canonical_assessment_query(self):
-        # One canonical (investigation, paper) assessment read, addable without a
-        # fifth literature tool.
+        # One canonical (investigation, paper) assessment read, part of the
+        # existing query tool rather than a tool of its own.
         self.assertIn('"assessment"', self.code)
         self.assertIn('"assessment", params.studyId, params.paperId', self.code)
-        self.assertEqual(len(re.findall(r'name:\s*"(literature_[a-z_]+)"', self.source)), 4)
+        self.assertEqual(len(re.findall(r'name:\s*"(literature_[a-z_]+)"', self.source)), 5)
 
     def test_adapter_exposes_primary_read_but_never_registration(self):
         # The agent may read a retained primary artifact by page, and may never
@@ -267,7 +267,7 @@ class ToolAdapterTests(unittest.TestCase):
         blocks = declared_parameters(self.code)
         declared = set().union(*blocks) if blocks else set()
 
-        self.assertEqual(len(blocks), 4, "one parameter block per exposed tool")
+        self.assertEqual(len(blocks), 5, "one parameter block per exposed tool")
         for name in ("paperId", "studyId", "source", "operation"):
             with self.subTest(param=name):
                 self.assertIn(name, declared)
@@ -302,6 +302,26 @@ class MutationBoundaryTests(unittest.TestCase):
         for pattern in ("boto3", "botocore", "requests", "urllib.request"):
             with self.subTest(pattern=pattern):
                 self.assertNotIn(pattern, source)
+
+    def test_discovery_package_is_metadata_only_and_writes_nothing(self):
+        """Structured discovery (INC-012) must not touch artifacts or research state."""
+
+        discovery_dir = RESEARCH_DIR / "literature_discovery"
+        modules = sorted(discovery_dir.glob("*.py"))
+
+        self.assertTrue(modules, "the discovery package is missing")
+        for path in modules:
+            source = path.read_text(encoding="utf-8")
+            for pattern in ("write_text(", "write_bytes(", "os.replace(", "import shutil",
+                            "import boto3", "import botocore", "import requests",
+                            "literature_primary", "literature_ingest"):
+                with self.subTest(module=path.name, pattern=pattern):
+                    self.assertNotIn(pattern, source)
+        # Only the HTTP layer may reach the network primitive; the model and the
+        # orchestration are transport-free.
+        for name in ("model.py", "core.py", "providers.py"):
+            source = (discovery_dir / name).read_text(encoding="utf-8")
+            self.assertNotIn("urllib.request", source)
 
     def test_agent_visible_modules_expose_no_screening_status_field(self):
         for name in ("literature_catalog.py", "literature_read.py"):
