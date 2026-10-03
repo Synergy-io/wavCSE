@@ -52,16 +52,48 @@ deterministic boundary; the prompt is not the only control.
 4. **Persist the draft.** Write `proposals/<STUDY-ID>_<slug>.md` from the
    proposal contract below with `status: DRAFT`.
 5. **Review.** Set `status: REVIEW_REQUIRED` and delegate to
-   `research-reviewer`. It returns a verdict and findings.
-6. **Reconcile.** `PASS` → `READY_FOR_HUMAN`. `CHANGES_REQUIRED` → set
-   `CHANGES_REQUESTED`, revise with the designer, re-review. Record the review
-   result and the reviewer's findings in the proposal's `## Review` section.
-   A disagreement the orchestrator cannot resolve from evidence is itself a
-   human decision to surface.
+   `research-reviewer`. It returns a verdict and findings; record them in the
+   proposal's `## Review` section.
+6. **Converge.** Apply the bounded rule in *Bounded convergence loop* below.
+   `CHANGES_REQUIRED` is not by itself a reason to return control to the human:
+   the main session owns ordinary convergence between the designer and the
+   reviewer.
 7. **Validate** with `python3 improvements/taskrelation/research/proposal_check.py
    check` and fix any violation before continuing.
 8. **Approval request** (below) and **stop**. Never proceed to registration or
    compute in this cycle.
+
+## Bounded convergence loop
+
+The main session — not the human — owns ordinary convergence between the designer
+and the reviewer. After every reviewer verdict it classifies the result with
+`improvements/taskrelation/research/convergence.py` (`classify_review_outcome`,
+`MAX_REVISION_CYCLES`) and acts on exactly one of:
+
+- `PASS` → **READY_FOR_HUMAN** (set `review: PASS`, `reviewed_by:
+  research-reviewer`); validate; emit the approval request; yield.
+- `CHANGES_REQUIRED`, **correctable within the current scope and no human
+  decision required** → revise (delegate to `research-designer` with the
+  reviewer's `questions_for_designer`), set `status: REVIEW_REQUIRED`, re-review,
+  increment the revision-cycle counter, and loop. The human is not involved.
+- `CHANGES_REQUIRED`, **a genuine human decision required** (a research-direction
+  choice, a human-fixed decision, or a protocol/resource choice classified as
+  human by `.agents/policies/autonomy.md`) → set `status: CHANGES_REQUESTED` and
+  yield the numbered decisions to the human.
+- `CHANGES_REQUIRED`, **unavailable evidence or capability blocks progress**
+  (missing record, destroyed corpus, licence-gated data, or a capability outside
+  the orchestrator's grants) → set `status: CHANGES_REQUESTED` and yield a blocker.
+- **Non-convergence / unresolved disagreement:** after `MAX_REVISION_CYCLES = 3`
+  revision cycles without a `PASS`, or when the reviewer's findings and the
+  designer's response cannot be reconciled from evidence, set `status:
+  CHANGES_REQUESTED` and yield the specialist disagreement. Never start a fourth
+  cycle.
+
+The loop may **never**: broaden the scientific question silently; change a
+human-fixed decision; register a study; create or widen an authorization;
+provision or submit compute; execute an experiment; modify `FINDINGS.md`,
+`DECISIONS.md`, `FAILURES.md`, `BACKLOG.md` or `STUDIES.jsonl`; or bypass a
+reviewer `PASS` to reach `READY_FOR_HUMAN`.
 
 ## Proposal object
 
@@ -117,4 +149,6 @@ execution; screening is never presented as confirmation.
   `STUDIES.jsonl`;
 - let a proposal claim authorization or a registered state;
 - turn a `READY_FOR_HUMAN` proposal into execution, or treat silence as approval;
+- yield on a correctable `CHANGES_REQUIRED` that needs no human decision and is
+  not blocked by missing evidence or capability;
 - let the designer or reviewer write, commit, authorize or execute anything.

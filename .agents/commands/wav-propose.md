@@ -35,8 +35,13 @@ say so and stop rather than manufacturing work.
 5. Write `improvements/taskrelation/research/proposals/<ID>_<slug>.md` as
    `DRAFT` per the contract in `proposals/README.md`.
 6. Set `REVIEW_REQUIRED` and delegate to the `research-reviewer` agent.
-7. Reconcile the verdict: revise and re-review on `CHANGES_REQUIRED`, otherwise
-   move to `READY_FOR_HUMAN`. Record the review in the proposal.
+7. Apply the skill's bounded convergence loop
+   (`improvements/taskrelation/research/convergence.py`). On a correctable
+   `CHANGES_REQUIRED` that needs no human decision, revise with the designer and
+   re-review yourself; yield to the human only for a required human decision, a
+   blocked evidence/capability, non-convergence after `MAX_REVISION_CYCLES`, an
+   unresolved specialist disagreement, or a `PASS` approval request. Record every
+   review in the proposal.
 8. Validate: `python3 improvements/taskrelation/research/proposal_check.py check`.
 9. Emit the approval request (skill format) and stop.
 
@@ -45,4 +50,6 @@ say so and stop rather than manufacturing work.
 - approve, register, authorize, provision, submit, or spend;
 - write findings, decisions, the registry, or the backlog;
 - promote screening evidence to a confirmation claim;
+- yield on a correctable `CHANGES_REQUIRED` that needs no human decision and is
+  not blocked;
 - leave the cycle without either an approval request or a stated HARD_STOP.
