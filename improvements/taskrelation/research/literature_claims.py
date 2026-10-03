@@ -4,12 +4,19 @@ Purpose: attribution correctness, not semantic search. A record answers
 "what exact literature assertion have we recorded, where did it come from, and
 what evidence supports that attribution?"
 
+A claim owns the **proposition** — a paper-bound assertion. Where that assertion
+was observed or supported is owned by one or more embedded ``EvidenceReference``
+objects. Separating the two is what lets a proposition accumulate evidence
+without deleting the evidence it was first recorded from: a claim first recorded
+from a card can later gain a primary reference, and its *derived* source level
+rises to ``primary`` while the card provenance is preserved.
+
 The motivating failure (LIT-AGENT-V1 evaluation run 2): an agent attributed the
 published ``λ₂`` grid to the per-paper card, which does not state any grid — the
 grid is recorded in a survey document citing JMLR §4.1, while the card says only
 that the paper selects ``λ₂`` on data. The value existed; the *provenance* was
-invented. A claim record therefore names the artifact class and anchor it was
-read from, and a verbatim quote must be provably present in that artifact.
+invented. An evidence reference therefore names the artifact class and anchor it
+was read from, and a verbatim quote must be provably present in that artifact.
 
 Scope rules:
 
@@ -18,11 +25,11 @@ Scope rules:
   configuration (a restricted grid, a frozen λ, a declared deviation) is research
   state and stays in ``DECISIONS.md`` / Study artifacts, owned by the main
   research agent;
-* ``primary_verified`` is legal only when the paper actually retains a primary
-  artifact, and a primary locator is bound to an explicit artifact version
-  (``preprint``/``published``) **and** to that artifact's SHA-256, so a claim can
-  never drift onto different bytes. A claim that quotes the primary artifact is
-  additionally read through the same bounded reader the Literature Agent uses and
+* ``source_level`` and ``verification`` are **derived** from ``evidence`` and are
+  never stored: a primary reference binds an explicit artifact version
+  (``preprint``/``published``) **and** that artifact's SHA-256, so a claim can
+  never drift onto different bytes. An evidence reference that quotes a primary
+  artifact is read through the same bounded reader the Literature Agent uses and
   checked verbatim against the extracted page; a paraphrase is validated against
   the manifest binding alone, so the registry stays deterministic without the
   disposable local cache.
@@ -44,6 +51,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 
 from improvements.taskrelation.research import literature_catalog
 from improvements.taskrelation.research import literature_primary
@@ -51,16 +59,25 @@ from improvements.taskrelation.research import literature_primary_text
 from improvements.taskrelation.research import literature_read
 
 
-SCHEMA_VERSION = 1
+# V2 splits the proposition from its evidence: a claim carries ``evidence`` (a
+# non-empty list of references) instead of a fused locator + stored source level
+# + stored verification.
+SCHEMA_VERSION = 2
 
-# Where the recorded assertion lives. `primary` means the paper's own artifact.
-SOURCE_LEVELS = ("primary", "card", "survey", "study")
+# The artifact class an evidence reference names. ``primary`` is the paper's own
+# artifact; the others are derived records at one or more removes from it. These
+# are the kinds V1 represented and no others.
+EVIDENCE_PRIMARY = "primary"
+EVIDENCE_CARD = "card"
+EVIDENCE_SURVEY = "survey"
+EVIDENCE_STUDY = "study"
+EVIDENCE_KINDS = (EVIDENCE_PRIMARY, EVIDENCE_CARD, EVIDENCE_SURVEY, EVIDENCE_STUDY)
 
-# Whether the proposition has been checked against the paper itself.
+# Whether the proposition has been checked against the paper's own artifact.
+# Derived from ``evidence`` and never stored on a record.
 PRIMARY_VERIFIED = "primary_verified"
 DERIVED_EXISTING_RECORD = "derived_existing_record"
-UNVERIFIED_PRIMARY = "unverified_primary"
-VERIFICATION_LEVELS = (PRIMARY_VERIFIED, DERIVED_EXISTING_RECORD, UNVERIFIED_PRIMARY)
+VERIFICATION_LEVELS = (PRIMARY_VERIFIED, DERIVED_EXISTING_RECORD)
 
 CLAIM_TYPES = (
     "relation-object",
@@ -74,38 +91,32 @@ CLAIM_TYPES = (
 ASSERTION_KINDS = ("paraphrase", "quote")
 CLAIM_STATUSES = ("active", "superseded", "retracted")
 
-LOCATOR_CARD = "card"
-LOCATOR_STUDY = "study"
-LOCATOR_SURVEY = "survey"
-LOCATOR_PRIMARY = "primary"
-LOCATOR_UNAVAILABLE = "unavailable"
-LOCATOR_KINDS = (
-    LOCATOR_CARD,
-    LOCATOR_STUDY,
-    LOCATOR_SURVEY,
-    LOCATOR_PRIMARY,
-    LOCATOR_UNAVAILABLE,
-)
-
-# A primary locator names a retained artifact version and its digest. The text of
-# a quoted primary locator is read through the bounded reader; when the disposable
-# local copy is not present the quote cannot be verified and is refused rather
-# than accepted unchecked.
+# A primary evidence reference names a retained artifact version and its digest.
+# The text of a quoted reference is read through the bounded reader; when the
+# disposable local copy is not present the quote cannot be verified and is refused
+# rather than accepted unchecked.
 PRIMARY_ARTIFACT_NOT_LOCAL = "PRIMARY_ARTIFACT_NOT_LOCAL"
 ARTIFACT_MISMATCH = "ARTIFACT_MISMATCH"
-# Primary-locator keys: where to look, in which retained version of the work, and
-# which exact bytes that version is.
-_PRIMARY_LOCATOR_KEYS = (
-    "role",
-    "sha256",
-    "page",
-    "page_end",
-    "section",
-    "equation",
-    "figure",
-    "table",
-)
-_PRIMARY_LOCATOR_REQUIRED = ("role", "sha256", "page")
+DUPLICATE_EVIDENCE = "DUPLICATE_EVIDENCE"
+
+# Required keys per evidence kind; the allowed set adds optional keys. Every
+# present value must be a non-empty trimmed string.
+_EVIDENCE_REQUIRED = {
+    EVIDENCE_PRIMARY: ("role", "sha256", "page"),
+    EVIDENCE_CARD: ("anchor",),
+    EVIDENCE_SURVEY: ("document", "anchor"),
+    EVIDENCE_STUDY: ("study_id", "artifact", "anchor"),
+}
+_EVIDENCE_OPTIONAL = {
+    EVIDENCE_PRIMARY: ("page_end", "section", "equation", "figure", "table", "quote"),
+    EVIDENCE_CARD: ("quote",),
+    EVIDENCE_SURVEY: ("quote",),
+    EVIDENCE_STUDY: ("quote",),
+}
+_EVIDENCE_ALLOWED = {
+    kind: tuple(_EVIDENCE_REQUIRED[kind] + _EVIDENCE_OPTIONAL[kind])
+    for kind in EVIDENCE_KINDS
+}
 
 _ALLOWED_KEYS = {
     "schema_version",
@@ -113,15 +124,12 @@ _ALLOWED_KEYS = {
     "claim_id",
     "assertion_kind",
     "assertion",
-    "quote",
     "claim_type",
-    "source_level",
-    "verification",
-    "locator",
+    "evidence",
     "qualification",
     "status",
 }
-_REQUIRED_KEYS = _ALLOWED_KEYS - {"quote", "qualification"}
+_REQUIRED_KEYS = _ALLOWED_KEYS - {"qualification"}
 
 _CLAIM_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _DOCUMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*\.md$")
@@ -144,19 +152,41 @@ class ClaimError(ValueError):
 
 
 @dataclass(frozen=True)
+class EvidenceReference:
+    """Where one recorded assertion was observed or supported.
+
+    ``fields`` holds exactly the kind-specific keys (never the ``kind`` itself),
+    normalized and sorted, so two references can be compared deterministically.
+    """
+
+    kind: str
+    fields: MappingProxyType
+
+    @property
+    def quote(self):
+        return self.fields.get("quote", "")
+
+    def as_dict(self):
+        payload = {"kind": self.kind}
+        payload.update(self.fields)
+        return payload
+
+
+@dataclass(frozen=True)
 class ClaimRecord:
-    """One paper-bound assertion with its provenance."""
+    """One paper-bound proposition with its evidence references.
+
+    ``source_level`` and ``verification`` are derived views over ``evidence``,
+    never stored authority.
+    """
 
     paper_id: str
     claim_id: str
     assertion_kind: str
     assertion: str
     claim_type: str
-    source_level: str
-    verification: str
-    locator: dict
+    evidence: tuple
     status: str
-    quote: str = ""
     qualification: str = ""
 
     @property
@@ -165,6 +195,43 @@ class ClaimRecord:
 
         return "{}#{}".format(self.paper_id, self.claim_id)
 
+    @property
+    def evidence_kinds(self):
+        """The evidence kinds present, in canonical enumeration order."""
+
+        return tuple(
+            kind for kind in EVIDENCE_KINDS if any(ref.kind == kind for ref in self.evidence)
+        )
+
+    @property
+    def source_level(self):
+        """The derived strongest evidence level.
+
+        ``primary`` when any primary reference is present. Otherwise the present
+        non-primary kinds joined with ``+`` in canonical enumeration order; the
+        order is enumeration order, **not** a scientific ranking of card, survey
+        and study, which V1 never ranked.
+        """
+
+        kinds = self.evidence_kinds
+        if EVIDENCE_PRIMARY in kinds:
+            return EVIDENCE_PRIMARY
+        return "+".join(kinds)
+
+    @property
+    def verification(self):
+        """The derived verification level.
+
+        ``primary_verified`` only when a validated primary reference is present —
+        the reference is version- and digest-bound, and a quote is already
+        validated verbatim against the artifact. Any other evidence is a derived
+        existing record.
+        """
+
+        if any(ref.kind == EVIDENCE_PRIMARY for ref in self.evidence):
+            return PRIMARY_VERIFIED
+        return DERIVED_EXISTING_RECORD
+
     def as_dict(self):
         return {
             "claim_ref": self.claim_ref,
@@ -172,11 +239,10 @@ class ClaimRecord:
             "claim_id": self.claim_id,
             "assertion_kind": self.assertion_kind,
             "assertion": self.assertion,
-            "quote": self.quote,
             "claim_type": self.claim_type,
+            "evidence": [ref.as_dict() for ref in self.evidence],
             "source_level": self.source_level,
             "verification": self.verification,
-            "locator": dict(self.locator),
             "qualification": self.qualification,
             "status": self.status,
         }
@@ -272,7 +338,6 @@ def load_claims(
     )
     paper_ids = {entry.paper_id for entry in catalog.entries}
     manifest = _manifest_index(repo_root, literature_dir, paper_ids)
-    retained = {paper_id for paper_id, _role in manifest}
     reader = reader if reader is not None else literature_read.LiteratureReader(
         repo_root=repo_root,
         primary=literature_primary.LiteraturePrimary(
@@ -297,7 +362,6 @@ def load_claims(
             raw,
             line_number,
             paper_ids=paper_ids,
-            retained=retained,
             manifest=manifest,
             reader=reader,
         )
@@ -332,8 +396,9 @@ def _manifest_index(repo_root, literature_dir, paper_ids):
     """Map ``(paper_id, role)`` to the retained-artifact manifest row.
 
     Retention is a Git-declared fact: the row names the artifact version and its
-    digest, which is what a claim binds to. The bytes themselves live in the
-    disposable local cache and are verified when the artifact is read.
+    digest, which is what a primary evidence reference binds to. The bytes
+    themselves live in the disposable local cache and are verified when the
+    artifact is read.
     """
 
     try:
@@ -360,7 +425,7 @@ def _require_string(record, key, where):
     return value
 
 
-def _validate_record(record, line_number, *, paper_ids, retained, manifest, reader):
+def _validate_record(record, line_number, *, paper_ids, manifest, reader):
     where = "claims line {}".format(line_number)
     if not isinstance(record, dict):
         raise ClaimError("{} must be a JSON object".format(where))
@@ -409,65 +474,14 @@ def _validate_record(record, line_number, *, paper_ids, retained, manifest, read
             "{}.claim_type must be one of: {}".format(where, ", ".join(CLAIM_TYPES))
         )
 
-    source_level = record["source_level"]
-    if source_level not in SOURCE_LEVELS:
-        raise ClaimError(
-            "{}.source_level must be one of: {}".format(
-                where, ", ".join(SOURCE_LEVELS)
-            )
-        )
-    verification = record["verification"]
-    if verification not in VERIFICATION_LEVELS:
-        raise ClaimError(
-            "{}.verification must be one of: {}".format(
-                where, ", ".join(VERIFICATION_LEVELS)
-            )
-        )
-    if verification == PRIMARY_VERIFIED:
-        if source_level != "primary":
-            raise ClaimError(
-                "{}.verification is primary_verified but source_level is {!r}; only "
-                "a primary source can be primary-verified".format(where, source_level)
-            )
-        if paper_id not in retained:
-            raise ClaimError(
-                "{} claims primary_verified for {!r}, but this repository retains no "
-                "primary artifact for that paper".format(where, paper_id),
-                kind="UNSUPPORTED_VERIFICATION",
-                detail={"paper_id": paper_id},
-            )
-    if source_level == "primary" and paper_id not in retained:
-        raise ClaimError(
-            "{} uses source_level 'primary' for {!r}, but no primary artifact is "
-            "retained; record the assertion against the card that carries it".format(
-                where, paper_id
-            ),
-            kind="UNSUPPORTED_SOURCE",
-            detail={"paper_id": paper_id},
-        )
-
-    section_text, locator = _validate_locator(
-        record["locator"],
+    evidence = _validate_evidence(
+        record["evidence"],
         where,
         paper_id=paper_id,
-        source_level=source_level,
         assertion_kind=assertion_kind,
         manifest=manifest,
         reader=reader,
     )
-
-    quote = record.get("quote", "")
-    if assertion_kind == "quote":
-        quote = _require_string(record, "quote", where)
-        if source_level == "primary" and paper_id not in retained:
-            raise ClaimError(
-                "{} quotes the primary artifact, which is not retained".format(where)
-            )
-    elif quote:
-        raise ClaimError(
-            "{}.quote is only allowed when assertion_kind is 'quote'; a paraphrase "
-            "must never carry verbatim text".format(where)
-        )
 
     qualification = record.get("qualification", "")
     if qualification and (
@@ -481,135 +495,193 @@ def _validate_record(record, line_number, *, paper_ids, retained, manifest, read
             "{}.status must be one of: {}".format(where, ", ".join(CLAIM_STATUSES))
         )
 
-    if quote:
-        if locator["kind"] == LOCATOR_UNAVAILABLE:
-            raise ClaimError(
-                "{}.quote is not allowed with an unavailable locator".format(where)
-            )
-        if normalize_whitespace(quote) not in normalize_whitespace(section_text):
-            raise ClaimError(
-                "{} quote is not present verbatim inside the located section".format(
-                    where
-                ),
-                kind="QUOTE_NOT_VERBATIM",
-                detail={"locator": locator},
-            )
-
     return ClaimRecord(
         paper_id=paper_id,
         claim_id=claim_id,
         assertion_kind=assertion_kind,
         assertion=assertion,
         claim_type=claim_type,
-        source_level=source_level,
-        verification=verification,
-        locator=locator,
+        evidence=evidence,
         status=status,
-        quote=quote,
         qualification=qualification,
     )
 
 
-def _validate_locator(locator, where, *, paper_id, source_level, assertion_kind,
-                      manifest, reader):
-    if not isinstance(locator, dict):
-        raise ClaimError("{}.locator must be an object".format(where))
-    kind = locator.get("kind")
-    if kind not in LOCATOR_KINDS:
-        raise ClaimError(
-            "{}.locator.kind must be one of: {}".format(where, ", ".join(LOCATOR_KINDS))
-        )
-    if kind == LOCATOR_UNAVAILABLE:
-        _require_string(locator, "reason", where + ".locator")
-        if set(locator) - {"kind", "reason"}:
-            raise ClaimError(
-                "{}.locator has unexpected keys for an unavailable locator".format(where)
-            )
-        return "", {"kind": kind, "reason": locator["reason"]}
+def _validate_evidence(evidence, where, *, paper_id, assertion_kind, manifest, reader):
+    """Validate the non-empty evidence list and return the references.
 
-    if kind != source_level:
+    A proposition is never recorded without at least one real location, and a
+    quote is validated against the exact reference that carries it.
+    """
+
+    if not isinstance(evidence, list) or not evidence:
         raise ClaimError(
-            "{}.locator.kind {!r} must match source_level {!r}".format(
-                where, kind, source_level
+            "{}.evidence must be a non-empty list of evidence references".format(
+                where
             )
         )
-
-    if kind == LOCATOR_CARD:
-        allowed = {"kind", "anchor"}
-        _require_string(locator, "anchor", where + ".locator")
-    elif kind == LOCATOR_STUDY:
-        allowed = {"kind", "study_id", "artifact", "anchor"}
-        _require_string(locator, "study_id", where + ".locator")
-        _require_string(locator, "artifact", where + ".locator")
-        _require_string(locator, "anchor", where + ".locator")
-        if locator["artifact"] not in literature_read._STUDY_ARTIFACT_KINDS:
+    references = []
+    seen = {}
+    quoted = False
+    for index, raw in enumerate(evidence):
+        ref_where = "{}.evidence[{}]".format(where, index)
+        reference, has_quote = _validate_evidence_reference(
+            raw,
+            ref_where,
+            paper_id=paper_id,
+            assertion_kind=assertion_kind,
+            manifest=manifest,
+            reader=reader,
+        )
+        key = (
+            reference.kind,
+            tuple(sorted(reference.fields.items(), key=lambda item: item[0])),
+        )
+        if key in seen:
             raise ClaimError(
-                "{}.locator.artifact must be one of: {}".format(
+                "{} duplicates the evidence reference at {}".format(ref_where, seen[key]),
+                kind=DUPLICATE_EVIDENCE,
+                detail={"kind": reference.kind},
+            )
+        seen[key] = ref_where
+        quoted = quoted or has_quote
+        references.append(reference)
+
+    if assertion_kind == "quote" and not quoted:
+        raise ClaimError(
+            "{} has assertion_kind 'quote' but no evidence reference carries the "
+            "verbatim text".format(where)
+        )
+    return tuple(references)
+
+
+def _validate_evidence_reference(raw, where, *, paper_id, assertion_kind, manifest,
+                                reader):
+    if not isinstance(raw, dict):
+        raise ClaimError("{} must be an object".format(where))
+    kind = raw.get("kind")
+    if kind not in EVIDENCE_KINDS:
+        raise ClaimError(
+            "{} .kind must be one of: {}".format(where, ", ".join(EVIDENCE_KINDS))
+        )
+    allowed = _EVIDENCE_ALLOWED[kind]
+    unknown = sorted(set(raw) - set(allowed) - {"kind"})
+    missing = sorted(set(_EVIDENCE_REQUIRED[kind]) - set(raw))
+    if unknown:
+        raise ClaimError(
+            "{} has unexpected key(s) for kind {!r}: {}".format(
+                where, kind, ", ".join(unknown)
+            )
+        )
+    if missing:
+        raise ClaimError(
+            "{} is missing key(s) for kind {!r}: {}".format(
+                where, kind, ", ".join(missing)
+            )
+        )
+    for key in sorted(set(raw) - {"kind"}):
+        _require_string(raw, key, where)
+
+    has_quote = "quote" in raw
+    if has_quote and assertion_kind != "quote":
+        raise ClaimError(
+            "{}.quote is only allowed when assertion_kind is 'quote'; a paraphrase "
+            "must never carry verbatim text".format(where)
+        )
+
+    section_text = _validate_evidence_location(
+        kind, raw, where, paper_id=paper_id, manifest=manifest, reader=reader,
+        quoted=has_quote,
+    )
+    if has_quote and normalize_whitespace(raw["quote"]) not in normalize_whitespace(
+        section_text
+    ):
+        raise ClaimError(
+            "{} quote is not present verbatim inside the located section".format(where),
+            kind="QUOTE_NOT_VERBATIM",
+            detail={"evidence": where, "kind": kind},
+        )
+
+    fields = {key: raw[key] for key in sorted(set(raw) - {"kind"})}
+    return EvidenceReference(kind=kind, fields=MappingProxyType(fields)), has_quote
+
+
+def _validate_evidence_location(kind, raw, where, *, paper_id, manifest, reader,
+                                quoted):
+    """Validate one reference's location, returning its located section text.
+
+    The returned text is what a carried quote is checked against. For a primary
+    reference it is read only when a quote must be verified, which keeps a
+    paraphrase claim deterministically validatable without the local cache.
+    """
+
+    if kind == EVIDENCE_PRIMARY:
+        return _primary_evidence_text(
+            raw, where, paper_id=paper_id, manifest=manifest, reader=reader,
+            quoted=quoted,
+        )
+
+    if kind == EVIDENCE_CARD:
+        text = _read_evidence_text(
+            lambda: reader.read_card(paper_id, literature_read.MAX_CHARS_CEILING).text,
+            where,
+        )
+    elif kind == EVIDENCE_STUDY:
+        if raw["artifact"] not in literature_read._STUDY_ARTIFACT_KINDS:
+            raise ClaimError(
+                "{}.artifact must be one of: {}".format(
                     where, ", ".join(literature_read._STUDY_ARTIFACT_KINDS)
                 )
             )
-    elif kind == LOCATOR_SURVEY:
-        allowed = {"kind", "document", "anchor"}
-        document = _require_string(locator, "document", where + ".locator")
-        if not _DOCUMENT.match(document):
+        text = _read_evidence_text(
+            lambda: reader.read_study(
+                raw["study_id"], raw["artifact"], literature_read.MAX_CHARS_CEILING
+            ).text,
+            where,
+        )
+    else:  # survey
+        if not _DOCUMENT.match(raw["document"]):
             raise ClaimError(
-                "{}.locator.document must be a direct literature_survey/*.md "
-                "filename".format(where)
-            )
-        _require_string(locator, "anchor", where + ".locator")
-    else:  # primary
-        allowed = {"kind"} | set(_PRIMARY_LOCATOR_KEYS)
-        for key in _PRIMARY_LOCATOR_REQUIRED:
-            _require_string(locator, key, where + ".locator")
-        for key in sorted(set(locator) - {"kind"}):
-            if key not in allowed:
-                raise ClaimError(
-                    "{}.locator has unexpected key {!r} for a primary locator".format(
-                        where, key
-                    )
+                "{}.document must be a direct literature_survey/*.md filename".format(
+                    where
                 )
-            _require_string(locator, key, where + ".locator")
-
-    unexpected = sorted(set(locator) - allowed)
-    if unexpected:
-        raise ClaimError(
-            "{}.locator has unexpected key(s) for kind {!r}: {}".format(
-                where, kind, ", ".join(unexpected)
             )
+        text = _read_evidence_text(
+            lambda: reader.read_survey(
+                raw["document"], literature_read.MAX_CHARS_CEILING
+            ).text,
+            where,
         )
 
-    if kind == LOCATOR_PRIMARY:
-        return (
-            _primary_locator_text(
-                locator,
-                where,
-                paper_id=paper_id,
-                manifest=manifest,
-                assertion_kind=assertion_kind,
-                reader=reader,
-            ),
-            {key: locator[key] for key in sorted(locator)},
-        )
-
-    text = _locator_text(dict(locator), reader, where, paper_id)
-    anchor = locator["anchor"]
-    section = _section_text(text, anchor)
+    section = _section_text(text, raw["anchor"])
     if section is None:
         raise ClaimError(
-            "{}.locator.anchor {!r} is not a heading in the located artifact".format(
-                where, anchor
+            "{}.anchor {!r} is not a heading in the located artifact".format(
+                where, raw["anchor"]
             ),
             kind="LOCATOR_NOT_FOUND",
-            detail={"anchor": anchor},
+            detail={"anchor": raw["anchor"]},
         )
-    return section, {key: locator[key] for key in sorted(locator)}
+    return section
 
 
-def _primary_locator_text(locator, where, *, paper_id, manifest, assertion_kind,
-                          reader):
-    """Validate a primary locator against the manifest, and read it if quoted.
+def _read_evidence_text(read, where):
+    """Read a located artifact through the same bounded reader the agent uses."""
 
-    The binding is (version role, digest): the locator must name a version role
+    try:
+        return read()
+    except literature_read.LiteratureReadError as exc:
+        raise ClaimError(
+            "{} cannot be read: {}".format(where, exc),
+            kind="LOCATOR_NOT_READABLE",
+            detail=exc.detail,
+        ) from exc
+
+
+def _primary_evidence_text(raw, where, *, paper_id, manifest, reader, quoted):
+    """Validate a primary reference against the manifest, reading it if quoted.
+
+    The binding is (version role, digest): the reference must name a version role
     this repository retains for the paper, and the exact digest of that retained
     artifact, so a claim can never drift onto different bytes or a different
     version. A verbatim quote is additionally read through the bounded reader the
@@ -618,10 +690,10 @@ def _primary_locator_text(locator, where, *, paper_id, manifest, assertion_kind,
     without the disposable local cache.
     """
 
-    role = locator["role"]
+    role = raw["role"]
     if role not in literature_primary.VERSION_ROLES:
         raise ClaimError(
-            "{}.locator.role must name a concrete version ({})".format(
+            "{}.role must name a concrete version ({})".format(
                 where, ", ".join(literature_primary.VERSION_ROLES)
             ),
             kind="CLAIM_INVALID",
@@ -630,15 +702,15 @@ def _primary_locator_text(locator, where, *, paper_id, manifest, assertion_kind,
     entry = manifest.get((paper_id, role))
     if entry is None:
         raise ClaimError(
-            "{}.locator names {!r} {!r}, which this repository does not retain".format(
+            "{} names {!r} {!r}, which this repository does not retain".format(
                 where, paper_id, role
             ),
             kind="LOCATOR_NOT_READABLE",
             detail={"paper_id": paper_id, "role": role},
         )
-    if locator["sha256"] != entry.sha256:
+    if raw["sha256"] != entry.sha256:
         raise ClaimError(
-            "{}.locator.sha256 is not the digest of the retained {!r} artifact for "
+            "{}.sha256 is not the digest of the retained {!r} artifact for "
             "{!r}".format(where, role, paper_id),
             kind=ARTIFACT_MISMATCH,
             detail={
@@ -647,16 +719,16 @@ def _primary_locator_text(locator, where, *, paper_id, manifest, assertion_kind,
                 "retained_sha256": entry.sha256,
             },
         )
-    page = _positive_page(locator["page"], where)
+    page = _positive_page(raw["page"], where, "page")
     page_end = None
-    if "page_end" in locator:
-        page_end = _positive_page(locator["page_end"], where)
+    if "page_end" in raw:
+        page_end = _positive_page(raw["page_end"], where, "page_end")
         if page_end < page:
             raise ClaimError(
-                "{}.locator.page_end must not precede page".format(where),
+                "{}.page_end must not precede page".format(where),
                 kind="CLAIM_INVALID",
             )
-    if assertion_kind != "quote":
+    if not quoted:
         return ""
     try:
         content = reader.read_primary(
@@ -674,24 +746,24 @@ def _primary_locator_text(locator, where, *, paper_id, manifest, assertion_kind,
         detail = dict(getattr(exc, "detail", {}) or {})
         if getattr(exc, "kind", None) == literature_primary.STORAGE_NOT_CONFIGURED:
             raise ClaimError(
-                "{}.locator names {!r} {!r}, whose bytes are not in the local primary "
-                "cache; a quoted primary locator cannot be verified without "
+                "{} names {!r} {!r}, whose bytes are not in the local primary "
+                "cache; a quoted primary reference cannot be verified without "
                 "them".format(where, paper_id, role),
                 kind=PRIMARY_ARTIFACT_NOT_LOCAL,
                 detail=detail,
             ) from exc
         raise ClaimError(
-            "{}.locator cannot be read: {}".format(where, exc),
+            "{} cannot be read: {}".format(where, exc),
             kind="LOCATOR_NOT_READABLE",
             detail=detail,
         ) from exc
     return content.text
 
 
-def _positive_page(value, where):
+def _positive_page(value, where, key):
     if not isinstance(value, str) or not value.isdigit() or int(value) < 1:
         raise ClaimError(
-            "{}.locator.page must be a 1-based page number as a string".format(where),
+            "{}.{} must be a 1-based page number as a string".format(where, key),
             kind="CLAIM_INVALID",
         )
     return int(value)
@@ -727,39 +799,6 @@ def _section_text(text, anchor):
                 end = index
                 break
     return "\n".join(lines[start:end])
-
-
-def _locator_text(locator, reader, where, paper_id):
-    """Read the located artifact through the same bounded reader the agent uses.
-
-    A claim can therefore only point where the Literature Agent can actually read,
-    and a quote is checked against exactly those bytes.
-    """
-
-    if locator["kind"] == LOCATOR_UNAVAILABLE:
-        raise ClaimError(
-            "{} cannot resolve text for an unavailable locator".format(where)
-        )
-    try:
-        if locator["kind"] == LOCATOR_CARD:
-            return reader.read_card(
-                paper_id, literature_read.MAX_CHARS_CEILING
-            ).text
-        if locator["kind"] == LOCATOR_STUDY:
-            return reader.read_study(
-                locator["study_id"],
-                locator["artifact"],
-                literature_read.MAX_CHARS_CEILING,
-            ).text
-        return reader.read_survey(
-            locator["document"], literature_read.MAX_CHARS_CEILING
-        ).text
-    except literature_read.LiteratureReadError as exc:
-        raise ClaimError(
-            "{} locator cannot be read: {}".format(where, exc),
-            kind="LOCATOR_NOT_READABLE",
-            detail=exc.detail,
-        ) from exc
 
 
 def _build_parser():

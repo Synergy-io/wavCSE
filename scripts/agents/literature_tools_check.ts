@@ -263,12 +263,14 @@ const grid = await call("literature_query", {
 	claimId: "published-lambda2-classification-grid",
 });
 const gridClaim = parse(grid);
+const gridEvidence = (gridClaim.evidence as Record<string, unknown>[])[0];
 check(
-	"claim returns the recorded grid with its validated survey locator",
+	"claim returns the recorded grid with its validated survey evidence",
 	gridClaim.claim_ref === "goncalves-2016-mssl#published-lambda2-classification-grid" &&
 		gridClaim.source_level === "survey" &&
-		(gridClaim.locator as Record<string, unknown>).document === "MSSL_SPARSITY_ANALYSIS.md" &&
-		gridClaim.verification === "unverified_primary",
+		gridEvidence.kind === "survey" &&
+		gridEvidence.document === "MSSL_SPARSITY_ANALYSIS.md" &&
+		gridClaim.verification === "derived_existing_record",
 	gridClaim,
 );
 
@@ -280,17 +282,23 @@ const objectives = await call("literature_query", {
 });
 const objectiveClaims = (parse(objectives).claims as Record<string, unknown>[]) ?? [];
 check(
-	"paper_claims filters by claim type and keeps each claim's own locator",
+	"paper_claims filters by claim type and keeps each claim's own evidence reference",
 	objectiveClaims.length === 4 &&
-		objectiveClaims.every(
-			(claim) =>
+		objectiveClaims.every((claim) => {
+			const evidence = claim.evidence as Record<string, unknown>[];
+			return (
 				claim.claim_type === "method-objective" &&
-				typeof claim.locator === "object" &&
-				typeof (claim.locator as Record<string, unknown>).kind === "string" &&
-				((claim.locator as Record<string, unknown>).kind === "primary"
-					? typeof (claim.locator as Record<string, unknown>).role === "string"
-					: typeof (claim.locator as Record<string, unknown>).anchor === "string"),
-		),
+				Array.isArray(evidence) &&
+				evidence.length >= 1 &&
+				evidence.every(
+					(ref) =>
+						typeof ref.kind === "string" &&
+						(ref.kind === "primary"
+							? typeof ref.role === "string" && typeof ref.sha256 === "string"
+							: typeof ref.anchor === "string"),
+				)
+			);
+		}),
 	objectiveClaims.map((c) => c.claim_ref),
 );
 

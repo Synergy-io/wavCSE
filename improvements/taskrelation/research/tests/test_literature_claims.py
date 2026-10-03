@@ -1,10 +1,12 @@
-"""Recorded literature claims stay source-bound, exact, and read-only.
+"""Recorded literature claims separate the proposition from its evidence.
 
-The registry exists because an agent attributed a paper's ``λ₂`` grid to the
-per-paper card, which states no grid: the value was real, the provenance was
-invented. These tests pin the mechanical guarantees that make that class of
-error detectable — every claim names an artifact class and a real section, and a
-quoted claim must contain text that is verbatim inside that section.
+A claim owns a paper-bound *proposition*; each ``EvidenceReference`` owns the
+location that proposition was observed or supported at. These tests pin the
+mechanical guarantees that make the original attribution error detectable — every
+claim names an artifact class and a real section, and a quoted claim must contain
+text that is verbatim inside that section — and pin the separation itself: a
+proposition may accumulate evidence without deleting the evidence it was first
+recorded from, and ``source_level`` / ``verification`` are derived, never stored.
 
 Scope guard: the registry records *paper-attributed* assertions. Screening
 verdicts, research decisions and authorizations are different kinds of state and
@@ -53,15 +55,13 @@ def record(**overrides):
     """A minimal valid card-sourced claim, overridable per test."""
 
     base = {
-        "schema_version": 1,
+        "schema_version": 2,
         "paper_id": "goncalves-2016-mssl",
         "claim_id": "fixture-claim",
         "assertion_kind": "paraphrase",
         "assertion": "A fixture assertion about the paper.",
         "claim_type": "method-objective",
-        "source_level": "card",
-        "verification": "derived_existing_record",
-        "locator": {"kind": "card", "anchor": "Optimization method"},
+        "evidence": [{"kind": "card", "anchor": "Optimization method"}],
         "status": "active",
     }
     base.update(overrides)
@@ -77,6 +77,22 @@ def retained_row(paper_id, role):
         if row["paper_id"] == paper_id and row["role"] == role:
             return row
     return None
+
+
+def primary_ref(paper_id="goncalves-2016-mssl", role="preprint", row=None, **extra):
+    """A primary evidence reference bound to the real retained artifact digest."""
+
+    row = row if row is not None else retained_row(paper_id, role)
+    if row is None:
+        raise AssertionError("no retained {!r} artifact for {!r}".format(role, paper_id))
+    reference = {
+        "kind": "primary",
+        "role": role,
+        "sha256": row["sha256"],
+        "page": "6",
+    }
+    reference.update(extra)
+    return reference
 
 
 def load(records, cache_root=None):
@@ -132,36 +148,78 @@ class RegistryContentTests(unittest.TestCase):
             "goncalves-2016-mssl#published-lambda2-classification-grid", refs
         )
 
-    def test_every_record_names_an_artifact_class_and_a_location(self):
+    def test_every_record_separates_proposition_from_evidence(self):
         for claim in self.registry.records:
             with self.subTest(claim=claim.claim_ref):
-                self.assertIn(claim.source_level, claims.SOURCE_LEVELS)
-                self.assertIn(claim.verification, claims.VERIFICATION_LEVELS)
+                self.assertGreaterEqual(len(claim.evidence), 1)
+                for reference in claim.evidence:
+                    self.assertIn(reference.kind, claims.EVIDENCE_KINDS)
+                self.assertIn(claim.assertion_kind, claims.ASSERTION_KINDS)
                 self.assertIn(claim.claim_type, claims.CLAIM_TYPES)
-                self.assertEqual(claim.locator["kind"], claim.source_level)
-                if claim.locator["kind"] == "primary":
-                    # A primary locator is version- and digest-bound, not anchored.
-                    self.assertTrue(claim.locator["role"])
-                    self.assertRegex(claim.locator["sha256"], "^[0-9a-f]{64}$")
-                    self.assertTrue(claim.locator["page"])
-                else:
-                    self.assertTrue(claim.locator["anchor"])
+                self.assertIn(claim.verification, claims.VERIFICATION_LEVELS)
                 self.assertEqual(claim.status, "active")
+
+    def test_evidence_provenance_is_preserved_verbatim(self):
+        """The exact V1 locator precision survives inside the evidence reference."""
+
+        range_claim = self.registry.get_claim(
+            "goncalves-2016-mssl", "barrier-placement-and-1-over-d-absorbable"
+        )
+        self.assertEqual(
+            range_claim.evidence[0].as_dict(),
+            {
+                "kind": "primary",
+                "role": "published",
+                "sha256": "5dcca4cf3cc70a0eecf99757628c0dab165e8f499c69ed96ea77a86cd3d1ce2b",
+                "page": "8",
+                "page_end": "9",
+            },
+        )
+
+        grid = self.registry.get_claim(
+            "goncalves-2016-mssl", "published-lambda2-classification-grid"
+        )
+        self.assertEqual(grid.evidence[0].kind, "survey")
+        self.assertEqual(grid.evidence[0].fields["document"], "MSSL_SPARSITY_ANALYSIS.md")
+        self.assertIn("scale `INFERRED`", grid.evidence[0].fields["anchor"])
+        self.assertIn("0.01, 0.1, 1, 10, 100", grid.evidence[0].quote)
+
+        card = self.registry.get_claim(
+            "goncalves-2016-mssl", "relation-object-sparse-task-precision"
+        )
+        self.assertEqual(card.evidence[0].kind, "card")
+        self.assertEqual(card.evidence[0].fields["anchor"], "Relation representation")
+        self.assertTrue(card.evidence[0].quote)
+
+    def test_quotes_live_on_their_evidence_reference_not_the_proposition(self):
+        selection = self.registry.get_claim(
+            "goncalves-2016-mssl", "lambda-penalties-selected-on-data"
+        )
+
+        self.assertEqual(selection.assertion_kind, "quote")
+        self.assertEqual(len(selection.evidence), 1)
+        self.assertEqual(selection.evidence[0].kind, "card")
+        self.assertIn("chosen by cross-validation", selection.evidence[0].quote)
 
     def test_get_claim_is_exact_and_never_fuzzy(self):
         found = self.registry.get_claim(
             "goncalves-2016-mssl", "published-lambda2-classification-grid"
         )
 
-        self.assertEqual(found.claim_ref, "goncalves-2016-mssl#published-lambda2-classification-grid")
+        self.assertEqual(
+            found.claim_ref,
+            "goncalves-2016-mssl#published-lambda2-classification-grid",
+        )
         self.assertEqual(found.source_level, "survey")
-        self.assertEqual(found.verification, "unverified_primary")
-        self.assertEqual(found.locator["document"], "MSSL_SPARSITY_ANALYSIS.md")
+        self.assertEqual(found.verification, "derived_existing_record")
+        self.assertEqual(found.evidence[0].fields["document"], "MSSL_SPARSITY_ANALYSIS.md")
 
         with self.assertRaises(claims.ClaimError) as caught:
             self.registry.get_claim("goncalves-2016-mssl", "published-lambda2-grid")
         self.assertEqual(caught.exception.kind, "UNKNOWN_CLAIM")
-        self.assertIn("published-lambda2-classification-grid", caught.exception.detail["available"])
+        self.assertIn(
+            "published-lambda2-classification-grid", caught.exception.detail["available"]
+        )
 
     def test_claims_for_paper_filters_and_rejects_unknown_papers(self):
         all_claims = self.registry.claims_for_paper("goncalves-2016-mssl")
@@ -194,19 +252,19 @@ class RegistryContentTests(unittest.TestCase):
             with self.subTest(claim=claim_id):
                 self.assertEqual(claim.source_level, "primary")
                 self.assertEqual(claim.verification, "primary_verified")
-                self.assertEqual(claim.locator["role"], "published")
-                digests[claim_id] = claim.locator["sha256"]
+                self.assertEqual(claim.evidence[0].fields["role"], "published")
+                digests[claim_id] = claim.evidence[0].fields["sha256"]
 
         preprint = self.registry.get_claim(
             "goncalves-2016-mssl", "preprint-barrier-is-task-scaled"
         )
         self.assertEqual(preprint.source_level, "primary")
         self.assertEqual(preprint.verification, "primary_verified")
-        self.assertEqual(preprint.locator["role"], "preprint")
+        self.assertEqual(preprint.evidence[0].fields["role"], "preprint")
         self.assertEqual(preprint.claim_type, "method-objective")
         # Neither version's evidence may be reused as the other's.
         for claim_id in published_formulations:
-            self.assertNotEqual(digests[claim_id], preprint.locator["sha256"])
+            self.assertNotEqual(digests[claim_id], preprint.evidence[0].fields["sha256"])
 
     def test_the_grid_is_recorded_against_the_survey_not_the_card(self):
         """The TR-0007 attribution failure, asserted as a positive fact."""
@@ -217,18 +275,155 @@ class RegistryContentTests(unittest.TestCase):
 
         self.assertEqual(grid.source_level, "survey")
         self.assertNotEqual(grid.source_level, "card")
+        self.assertEqual(grid.evidence[0].kind, "survey")
         # The corrected qualification now records where the retained published
         # artifact places the grid, and keeps the claim at survey provenance
         # because the paper scopes it to the algorithms' regularization parameters.
         self.assertIn("section 4.2", grid.qualification)
         self.assertIn("page 25", grid.qualification)
-        self.assertEqual(grid.verification, "unverified_primary")
+        self.assertEqual(grid.verification, "derived_existing_record")
         selection = self.registry.get_claim(
             "goncalves-2016-mssl", "lambda-penalties-selected-on-data"
         )
         self.assertEqual(selection.source_level, "card")
         self.assertEqual(selection.assertion_kind, "quote")
         self.assertIn("no numeric lambda_2 grid", selection.qualification)
+
+    def test_the_persisted_records_store_no_derived_authority(self):
+        """``source_level`` and ``verification`` are computed, not persisted."""
+
+        for line in CLAIMS_PATH.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            raw = json.loads(line)
+            with self.subTest(claim=raw["claim_id"]):
+                self.assertEqual(raw["schema_version"], 2)
+                self.assertIn("evidence", raw)
+                for derived in ("source_level", "verification", "locator", "quote"):
+                    self.assertNotIn(derived, raw)
+
+
+class EvidenceModelTests(unittest.TestCase):
+    """A proposition accumulates evidence; it never deletes the earlier record."""
+
+    def test_evidence_must_be_a_non_empty_list(self):
+        self.assertEqual(rejected([record(evidence=[])]).kind, "CLAIM_INVALID")
+
+        incomplete = record()
+        del incomplete["evidence"]
+        self.assertEqual(rejected([incomplete]).kind, "CLAIM_INVALID")
+
+        self.assertEqual(
+            rejected([record(evidence={"kind": "card", "anchor": "Optimization method"})]).kind,
+            "CLAIM_INVALID",
+        )
+
+    def test_evidence_kind_must_be_known(self):
+        error = rejected([record(evidence=[{"kind": "newspaper", "anchor": "x"}])])
+
+        self.assertEqual(error.kind, "CLAIM_INVALID")
+        self.assertIn("kind", str(error))
+
+    def test_a_card_claim_can_gain_primary_evidence_without_losing_the_card(self):
+        card_only = load([record(claim_id="same-proposition")]).records[0]
+        strengthened = load([
+            record(
+                claim_id="same-proposition",
+                evidence=[
+                    {"kind": "card", "anchor": "Optimization method"},
+                    primary_ref("goncalves-2016-mssl", "preprint"),
+                ],
+            )
+        ]).records[0]
+
+        # Identity and the original provenance are unchanged.
+        self.assertEqual(card_only.claim_ref, strengthened.claim_ref)
+        self.assertEqual(len(strengthened.evidence), 2)
+        self.assertEqual(strengthened.evidence[0].as_dict(),
+                         {"kind": "card", "anchor": "Optimization method"})
+        self.assertEqual(strengthened.evidence[1].kind, "primary")
+        # Only the derived view rises.
+        self.assertEqual(card_only.source_level, "card")
+        self.assertEqual(card_only.verification, "derived_existing_record")
+        self.assertEqual(strengthened.source_level, "primary")
+        self.assertEqual(strengthened.verification, "primary_verified")
+
+    def test_multiple_non_primary_kinds_are_joined_without_a_ranking(self):
+        anchor = "1. What each method actually couples — and what it does not"
+        loaded = load([
+            record(
+                evidence=[
+                    {"kind": "card", "anchor": "Optimization method"},
+                    {
+                        "kind": "survey",
+                        "document": "MSSL_SPARSITY_ANALYSIS.md",
+                        "anchor": anchor,
+                    },
+                ]
+            )
+        ]).records[0]
+
+        self.assertEqual(loaded.evidence_kinds, ("card", "survey"))
+        self.assertEqual(loaded.source_level, "card+survey")
+        self.assertEqual(loaded.verification, "derived_existing_record")
+
+    def test_duplicate_evidence_references_are_rejected_deterministically(self):
+        error = rejected([
+            record(
+                evidence=[
+                    {"kind": "card", "anchor": "Optimization method"},
+                    {"kind": "card", "anchor": "Optimization method"},
+                ]
+            )
+        ])
+
+        self.assertEqual(error.kind, "DUPLICATE_EVIDENCE")
+
+    def test_distinct_references_of_the_same_kind_coexist(self):
+        loaded = load([
+            record(
+                evidence=[
+                    {"kind": "card", "anchor": "Optimization method"},
+                    {"kind": "card", "anchor": "Relation representation"},
+                ]
+            )
+        ])
+
+        self.assertEqual(len(loaded.records[0].evidence), 2)
+
+    def test_study_evidence_resolves_and_derives_a_study_level(self):
+        loaded = load([
+            record(
+                evidence=[
+                    {
+                        "kind": "study",
+                        "study_id": "LT-0001",
+                        "artifact": "analysis",
+                        "anchor": "Study decision",
+                    }
+                ]
+            )
+        ]).records[0]
+
+        self.assertEqual(loaded.evidence[0].kind, "study")
+        self.assertEqual(loaded.source_level, "study")
+        self.assertEqual(loaded.verification, "derived_existing_record")
+
+    def test_study_evidence_is_bounded_to_registered_artifacts(self):
+        error = rejected([
+            record(
+                evidence=[
+                    {
+                        "kind": "study",
+                        "study_id": "LT-0001",
+                        "artifact": "transcript",
+                        "anchor": "Anything",
+                    }
+                ]
+            )
+        ])
+
+        self.assertEqual(error.kind, "CLAIM_INVALID")
 
 
 class AttributionTests(unittest.TestCase):
@@ -241,13 +436,18 @@ class AttributionTests(unittest.TestCase):
             record(
                 claim_id="grid-on-the-card",
                 assertion_kind="quote",
-                quote="The paper's classification experiments use the lambda_2 grid",
-                locator={"kind": "card", "anchor": "Evidence"},
+                evidence=[
+                    {
+                        "kind": "card",
+                        "anchor": "Evidence",
+                        "quote": "The paper's classification experiments use the lambda_2 grid",
+                    },
+                ],
             )
         ])
 
         self.assertEqual(error.kind, "QUOTE_NOT_VERBATIM")
-        self.assertEqual(error.detail["locator"]["kind"], "card")
+        self.assertEqual(error.detail["kind"], "card")
 
     def test_quote_from_another_section_of_the_same_artifact_is_rejected(self):
         verbatim_but_elsewhere = "term is on the off-diagonal"
@@ -255,10 +455,14 @@ class AttributionTests(unittest.TestCase):
         error = rejected([
             record(
                 claim_id="wrong-section",
-                source_level="card",
-                locator={"kind": "card", "anchor": "Relation representation"},
+                evidence=[
+                    {
+                        "kind": "card",
+                        "anchor": "Relation representation",
+                        "quote": verbatim_but_elsewhere,
+                    }
+                ],
                 assertion_kind="quote",
-                quote=verbatim_but_elsewhere,
             )
         ])
 
@@ -267,48 +471,45 @@ class AttributionTests(unittest.TestCase):
         accepted = load([
             record(
                 claim_id="right-section",
-                source_level="card",
-                locator={
-                    "kind": "card",
-                    "anchor": "Transcription correction (2026-09-29)",
-                },
+                evidence=[
+                    {
+                        "kind": "card",
+                        "anchor": "Transcription correction (2026-09-29)",
+                        "quote": verbatim_but_elsewhere,
+                    }
+                ],
                 assertion_kind="quote",
-                quote=verbatim_but_elsewhere,
             )
         ])
         self.assertEqual(len(accepted.records), 1)
 
+    def test_a_quote_claim_requires_a_quote_on_some_evidence_reference(self):
+        error = rejected([
+            record(assertion_kind="quote", evidence=[{"kind": "card", "anchor": "Optimization method"}])
+        ])
+
+        self.assertEqual(error.kind, "CLAIM_INVALID")
+        self.assertIn("quote", str(error))
+
     def test_unknown_anchor_and_unknown_study_locator_are_rejected(self):
         error = rejected([
-            record(locator={"kind": "card", "anchor": "A Section That Does Not Exist"})
+            record(evidence=[{"kind": "card", "anchor": "A Section That Does Not Exist"}])
         ])
         self.assertEqual(error.kind, "LOCATOR_NOT_FOUND")
 
         error = rejected([
             record(
-                source_level="study",
-                locator={
-                    "kind": "study",
-                    "study_id": "LT-9999",
-                    "artifact": "analysis",
-                    "anchor": "Anything",
-                },
+                evidence=[
+                    {
+                        "kind": "study",
+                        "study_id": "LT-9999",
+                        "artifact": "analysis",
+                        "anchor": "Anything",
+                    }
+                ]
             )
         ])
         self.assertEqual(error.kind, "LOCATOR_NOT_READABLE")
-
-        error = rejected([
-            record(
-                source_level="study",
-                locator={
-                    "kind": "study",
-                    "study_id": "LT-0001",
-                    "artifact": "transcript",
-                    "anchor": "Anything",
-                },
-            )
-        ])
-        self.assertEqual(error.kind, "CLAIM_INVALID")
 
     def test_survey_document_reference_cannot_escape_the_survey_directory(self):
         anchor = "1. What each method actually couples — and what it does not"
@@ -316,9 +517,9 @@ class AttributionTests(unittest.TestCase):
             with self.subTest(document=document):
                 error = rejected([
                     record(
-                        source_level="survey",
-                        verification="unverified_primary",
-                        locator={"kind": "survey", "document": document, "anchor": anchor},
+                        evidence=[
+                            {"kind": "survey", "document": document, "anchor": anchor}
+                        ]
                     )
                 ])
                 self.assertEqual(error.kind, "CLAIM_INVALID")
@@ -327,126 +528,116 @@ class AttributionTests(unittest.TestCase):
         # resolution failure, not a malformed reference.
         error = rejected([
             record(
-                source_level="survey",
-                verification="unverified_primary",
-                locator={"kind": "survey", "document": "MSSL.md", "anchor": anchor},
+                evidence=[
+                    {"kind": "survey", "document": "MSSL.md", "anchor": anchor}
+                ]
             )
         ])
         self.assertEqual(error.kind, "LOCATOR_NOT_READABLE")
 
     def test_a_paraphrase_must_not_carry_verbatim_text(self):
         error = rejected([
-            record(assertion_kind="paraphrase", quote="some text")
+            record(
+                assertion_kind="paraphrase",
+                evidence=[
+                    {
+                        "kind": "card",
+                        "anchor": "Optimization method",
+                        "quote": "some text",
+                    }
+                ],
+            )
         ])
 
         self.assertEqual(error.kind, "CLAIM_INVALID")
         self.assertIn("quote", str(error))
 
-    def test_a_quote_must_not_be_empty(self):
-        error = rejected([record(assertion_kind="quote", quote="   ")])
+    def test_a_carried_quote_must_not_be_empty(self):
+        error = rejected([
+            record(
+                assertion_kind="quote",
+                evidence=[{"kind": "card", "anchor": "Optimization method", "quote": "   "}],
+            )
+        ])
 
         self.assertEqual(error.kind, "CLAIM_INVALID")
 
 
 class VerificationLevelTests(unittest.TestCase):
-    """Verification is a claim about evidence, so it is checked, not trusted."""
+    """Verification and source level are derived from evidence, never trusted."""
 
     # A paper the repository does not retain a primary artifact for.
     UNRETAINED = "zhang-yang-2021-mtl-survey"
 
-    def test_primary_verified_is_impossible_without_a_retained_artifact(self):
+    def test_a_primary_reference_needs_a_retained_artifact(self):
         error = rejected([
             record(
                 paper_id=self.UNRETAINED,
-                source_level="primary",
-                verification="primary_verified",
-                locator={"kind": "primary", "section": "4.1"},
-                assertion_kind="quote",
-                quote="anything",
+                evidence=[
+                    {"kind": "primary", "role": "preprint", "sha256": "a" * 64, "page": "1"}
+                ],
             )
         ])
 
-        self.assertIn(error.kind, ("UNSUPPORTED_VERIFICATION", "UNSUPPORTED_SOURCE"))
+        self.assertEqual(error.kind, "LOCATOR_NOT_READABLE")
 
-    def test_primary_source_level_is_refused_without_a_retained_artifact(self):
-        error = rejected([
-            record(
-                paper_id=self.UNRETAINED,
-                source_level="primary",
-                verification="derived_existing_record",
-                locator={"kind": "primary", "section": "4.1"},
-            )
-        ])
-
-        self.assertEqual(error.kind, "UNSUPPORTED_SOURCE")
-
-    def test_a_primary_claim_binds_to_version_digest_and_page(self):
-        row = retained_row("goncalves-2016-mssl", "preprint")
-        if row is None:
-            self.skipTest("goncalves-2016-mssl preprint is not retained")
-
+    def test_a_primary_reference_binds_to_version_digest_and_page(self):
         loaded = load([
-            record(
-                paper_id="goncalves-2016-mssl",
-                claim_id="primary-bound",
-                source_level="primary",
-                verification="primary_verified",
-                locator={
-                    "kind": "primary",
-                    "role": "preprint",
-                    "sha256": row["sha256"],
-                    "page": "6",
-                },
-            )
+            record(claim_id="primary-bound", evidence=[primary_ref()])
         ])
 
         claim = loaded.records[0]
         self.assertEqual(claim.verification, "primary_verified")
-        self.assertEqual(claim.locator["role"], "preprint")
-        self.assertEqual(claim.locator["sha256"], row["sha256"])
+        self.assertEqual(claim.source_level, "primary")
+        self.assertEqual(claim.evidence[0].fields["role"], "preprint")
+        row = retained_row("goncalves-2016-mssl", "preprint")
+        if row is None:
+            self.skipTest("goncalves-2016-mssl preprint is not retained")
+        self.assertEqual(claim.evidence[0].fields["sha256"], row["sha256"])
 
-    def test_a_primary_locator_must_name_a_version_role(self):
+    def test_a_primary_reference_must_name_a_version_role(self):
+        row = retained_row("goncalves-2016-mssl", "preprint")
+        if row is None:
+            self.skipTest("goncalves-2016-mssl preprint is not retained")
         for role in ("source", "", "camera-ready"):
             with self.subTest(role=role):
                 error = rejected([
                     record(
-                        source_level="primary",
-                        verification="primary_verified",
-                        locator={
-                            "kind": "primary",
-                            "role": role,
-                            "sha256": "a" * 64,
-                            "page": "1",
-                        },
+                        evidence=[
+                            {
+                                "kind": "primary",
+                                "role": role,
+                                "sha256": row["sha256"],
+                                "page": "1",
+                            }
+                        ]
                     )
                 ])
                 self.assertEqual(error.kind, "CLAIM_INVALID")
 
-    def test_a_primary_locator_cannot_name_a_different_digest(self):
+    def test_a_primary_reference_cannot_name_a_different_digest(self):
         row = retained_row("goncalves-2016-mssl", "preprint")
         if row is None:
             self.skipTest("goncalves-2016-mssl preprint is not retained")
-
         error = rejected([
             record(
-                paper_id="goncalves-2016-mssl",
-                source_level="primary",
-                verification="primary_verified",
-                locator={
-                    "kind": "primary",
-                    "role": "preprint",
-                    "sha256": "b" * 64,
-                    "page": "6",
-                },
+                evidence=[
+                    {
+                        "kind": "primary",
+                        "role": "preprint",
+                        "sha256": "b" * 64,
+                        "page": "6",
+                    }
+                ]
             )
         ])
 
         self.assertEqual(error.kind, "ARTIFACT_MISMATCH")
         self.assertEqual(error.detail["retained_sha256"], row["sha256"])
 
-    def test_a_primary_locator_cannot_name_an_unretained_version(self):
+    def test_a_primary_reference_cannot_name_an_unretained_version(self):
         # A paper may retain the preprint while the published version is absent:
-        # the locator must then be refused, not silently bound to the preprint.
+        # the reference must then be refused, not silently bound to the preprint.
         with tempfile.TemporaryDirectory(prefix="claims-literature-") as tmp:
             literature_dir = Path(tmp) / "literature"
             literature_dir.mkdir()
@@ -490,14 +681,14 @@ class VerificationLevelTests(unittest.TestCase):
                 json.dumps(
                     record(
                         paper_id="alpha-2024-method",
-                        source_level="primary",
-                        verification="primary_verified",
-                        locator={
-                            "kind": "primary",
-                            "role": "published",
-                            "sha256": "a" * 64,
-                            "page": "1",
-                        },
+                        evidence=[
+                            {
+                                "kind": "primary",
+                                "role": "published",
+                                "sha256": "a" * 64,
+                                "page": "1",
+                            }
+                        ],
                     )
                 )
                 + "\n",
@@ -512,88 +703,46 @@ class VerificationLevelTests(unittest.TestCase):
         self.assertEqual(caught.exception.kind, "LOCATOR_NOT_READABLE")
         self.assertEqual(caught.exception.detail["role"], "published")
 
-    def test_a_primary_locator_may_bind_an_inclusive_page_range(self):
-        row = retained_row("goncalves-2016-mssl", "published")
-        if row is None:
-            self.skipTest("goncalves-2016-mssl published version is not retained")
-
+    def test_a_primary_reference_may_bind_an_inclusive_page_range(self):
         loaded = load([
             record(
-                paper_id="goncalves-2016-mssl",
                 claim_id="primary-range",
-                source_level="primary",
-                verification="primary_verified",
-                locator={
-                    "kind": "primary",
-                    "role": "published",
-                    "sha256": row["sha256"],
-                    "page": "8",
-                    "page_end": "9",
-                },
+                evidence=[primary_ref(role="published", page="8", page_end="9")],
             )
         ])
 
-        self.assertEqual(loaded.records[0].locator["page_end"], "9")
+        self.assertEqual(loaded.records[0].evidence[0].fields["page_end"], "9")
 
-    def test_a_primary_locator_rejects_an_inverted_page_range(self):
-        row = retained_row("goncalves-2016-mssl", "preprint")
-        if row is None:
-            self.skipTest("goncalves-2016-mssl preprint is not retained")
-
+    def test_a_primary_reference_rejects_an_inverted_page_range(self):
         error = rejected([
-            record(
-                source_level="primary",
-                verification="primary_verified",
-                locator={
-                    "kind": "primary",
-                    "role": "preprint",
-                    "sha256": row["sha256"],
-                    "page": "9",
-                    "page_end": "8",
-                },
-            )
+            record(evidence=[primary_ref(page="9", page_end="8")])
         ])
 
         self.assertEqual(error.kind, "CLAIM_INVALID")
 
-    def test_a_primary_locator_requires_page_role_and_digest(self):
-        complete = {
-            "kind": "primary",
-            "role": "preprint",
-            "sha256": "a" * 64,
-            "page": "6",
-        }
+    def test_a_primary_reference_requires_page_role_and_digest(self):
+        complete = primary_ref()
         for missing in ("role", "sha256", "page"):
             with self.subTest(missing=missing):
-                locator = dict(complete)
-                del locator[missing]
-                error = rejected([
-                    record(
-                        source_level="primary",
-                        verification="primary_verified",
-                        locator=locator,
-                    )
-                ])
+                reference = dict(complete)
+                del reference[missing]
+                error = rejected([record(evidence=[reference])])
                 self.assertEqual(error.kind, "CLAIM_INVALID")
 
-    def test_a_quoted_primary_locator_needs_the_local_artifact(self):
-        row = retained_row("goncalves-2016-mssl", "preprint")
-        if row is None:
-            self.skipTest("goncalves-2016-mssl preprint is not retained")
+    def test_a_primary_paraphrase_is_validated_without_the_local_artifact(self):
+        """A paraphrase binds to the manifest alone, so the registry stays
+        deterministically validatable from Git without the disposable cache."""
 
+        with tempfile.TemporaryDirectory(prefix="empty-primary-cache-") as cache:
+            loaded = load([record(evidence=[primary_ref()])], cache_root=cache)
+
+        self.assertEqual(loaded.records[0].verification, "primary_verified")
+
+    def test_a_quoted_primary_reference_needs_the_local_artifact(self):
         quoted = record(
-            paper_id="goncalves-2016-mssl",
             claim_id="primary-quote",
             assertion_kind="quote",
-            quote="anything",
-            source_level="primary",
-            verification="primary_verified",
-            locator={
-                "kind": "primary",
-                "role": "preprint",
-                "sha256": row["sha256"],
-                "page": "6",
-            },
+            evidence=[primary_ref(quote="anything")],
         )
         with tempfile.TemporaryDirectory(prefix="empty-primary-cache-") as cache:
             error = rejected([quoted], cache_root=cache)
@@ -601,31 +750,17 @@ class VerificationLevelTests(unittest.TestCase):
         self.assertEqual(error.kind, "PRIMARY_ARTIFACT_NOT_LOCAL")
 
     def test_strengthening_a_proposition_to_primary_verified_keeps_its_identity(self):
-        row = retained_row("goncalves-2016-mssl", "preprint")
-        if row is None:
-            self.skipTest("goncalves-2016-mssl preprint is not retained")
-
         card_sourced = load([
-            record(claim_id="same-proposition", source_level="card",
-                   locator={"kind": "card", "anchor": "Optimization method"})
+            record(claim_id="same-proposition")
         ]).records[0]
         strengthened = load([
-            record(
-                claim_id="same-proposition",
-                source_level="primary",
-                verification="primary_verified",
-                locator={
-                    "kind": "primary",
-                    "role": "preprint",
-                    "sha256": row["sha256"],
-                    "page": "6",
-                },
-            )
+            record(claim_id="same-proposition", evidence=[primary_ref()])
         ]).records[0]
 
         self.assertEqual(card_sourced.claim_ref, strengthened.claim_ref)
         self.assertEqual(card_sourced.source_level, "card")
         self.assertEqual(strengthened.source_level, "primary")
+        self.assertEqual(strengthened.verification, "primary_verified")
 
     def test_version_disagreements_remain_distinct_claims(self):
         preprint = retained_row("goncalves-2016-mssl", "preprint")
@@ -636,73 +771,32 @@ class VerificationLevelTests(unittest.TestCase):
         loaded = load([
             record(
                 claim_id="aaa-preprint-proposition",
-                source_level="primary",
-                verification="primary_verified",
-                locator={"kind": "primary", "role": "preprint",
-                         "sha256": preprint["sha256"], "page": "6"},
+                evidence=[primary_ref(role="preprint", row=preprint)],
             ),
             record(
                 claim_id="zzz-published-proposition",
-                source_level="primary",
-                verification="primary_verified",
-                locator={"kind": "primary", "role": "published",
-                         "sha256": published["sha256"], "page": "8"},
+                evidence=[primary_ref(role="published", row=published, page="8")],
             ),
         ])
 
         self.assertEqual(len(loaded.records), 2)
         self.assertEqual(
-            {claim.locator["role"] for claim in loaded.records},
+            {claim.evidence[0].fields["role"] for claim in loaded.records},
             {"preprint", "published"},
         )
         self.assertNotEqual(
-            loaded.records[0].locator["sha256"], loaded.records[1].locator["sha256"]
+            loaded.records[0].evidence[0].fields["sha256"],
+            loaded.records[1].evidence[0].fields["sha256"],
         )
-
-    def test_a_primary_verified_record_requires_a_primary_source_level(self):
-        error = rejected([record(verification="primary_verified")])
-
-        self.assertEqual(error.kind, "CLAIM_INVALID")
-
-    def test_locator_kind_must_match_the_source_level(self):
-        error = rejected([
-            record(
-                source_level="card",
-                verification="unverified_primary",
-                locator={"kind": "survey", "document": "MSSL_SPARSITY_ANALYSIS.md", "anchor": "x"},
-            )
-        ])
-
-        self.assertEqual(error.kind, "CLAIM_INVALID")
-
-    def test_an_unavailable_locator_states_a_reason_and_carries_no_quote(self):
-        loaded = load([
-            record(
-                source_level="card",
-                locator={"kind": "unavailable", "reason": "card does not state this"},
-                assertion_kind="paraphrase",
-            )
-        ])
-        self.assertEqual(loaded.records[0].locator["kind"], "unavailable")
-
-        error = rejected([
-            record(locator={"kind": "unavailable"}),
-        ])
-        self.assertEqual(error.kind, "CLAIM_INVALID")
-
-        error = rejected([
-            record(
-                locator={"kind": "unavailable", "reason": "missing"},
-                assertion_kind="quote",
-                quote="anything",
-            )
-        ])
-        self.assertEqual(error.kind, "CLAIM_INVALID")
 
 
 class SchemaTests(unittest.TestCase):
     def test_unknown_keys_are_refused_so_other_state_cannot_be_smuggled_in(self):
-        for key in ("screening", "verdict", "decision", "authorization", "study_id"):
+        for key in (
+            "screening", "verdict", "decision", "authorization", "study_id",
+            # The V1 fused provenance fields are no longer claim-level keys.
+            "locator", "source_level", "verification", "quote",
+        ):
             with self.subTest(key=key):
                 error = rejected([record(**{key: "excluded"})])
                 self.assertEqual(error.kind, "CLAIM_INVALID")
@@ -710,11 +804,11 @@ class SchemaTests(unittest.TestCase):
 
     def test_required_fields_and_versions_are_enforced(self):
         incomplete = record()
-        del incomplete["verification"]
+        del incomplete["assertion"]
         self.assertEqual(rejected([incomplete]).kind, "CLAIM_INVALID")
 
         self.assertEqual(
-            rejected([record(schema_version=2)]).kind, "CLAIM_INVALID"
+            rejected([record(schema_version=3)]).kind, "CLAIM_INVALID"
         )
         self.assertEqual(
             rejected([record(claim_id="Not A Slug")]).kind, "CLAIM_INVALID"
@@ -769,9 +863,8 @@ class ModuleBoundaryTests(unittest.TestCase):
             set(claims._ALLOWED_KEYS)
             | set(claims.CLAIM_TYPES)
             | set(claims.CLAIM_STATUSES)
-            | set(claims.SOURCE_LEVELS)
+            | set(claims.EVIDENCE_KINDS)
             | set(claims.VERIFICATION_LEVELS)
-            | set(claims.LOCATOR_KINDS)
         )
         for forbidden in (
             "screening", "decision", "verdict", "authorization", "approved",
@@ -801,11 +894,18 @@ class ModuleBoundaryTests(unittest.TestCase):
         self.assertEqual(paper.returncode, 0, paper.stderr)
         payload = json.loads(paper.stdout)
         self.assertEqual(len(payload["claims"]), 1)
-        self.assertEqual(payload["claims"][0]["claim_ref"], "goncalves-2016-mssl#relation-object-sparse-task-precision")
+        self.assertEqual(
+            payload["claims"][0]["claim_ref"],
+            "goncalves-2016-mssl#relation-object-sparse-task-precision",
+        )
+        self.assertEqual(payload["claims"][0]["evidence"][0]["kind"], "card")
 
         exact = run_cli("get", "goncalves-2016-mssl", "omega-step-is-graphical-lasso")
         self.assertEqual(exact.returncode, 0, exact.stderr)
-        self.assertEqual(json.loads(exact.stdout)["claim_type"], "method-objective")
+        document = json.loads(exact.stdout)
+        self.assertEqual(document["claim_type"], "method-objective")
+        self.assertEqual(document["verification"], "primary_verified")
+        self.assertEqual(document["evidence"][0]["role"], "published")
 
         missing = run_cli("get", "goncalves-2016-mssl", "does-not-exist")
         self.assertEqual(missing.returncode, 1)
