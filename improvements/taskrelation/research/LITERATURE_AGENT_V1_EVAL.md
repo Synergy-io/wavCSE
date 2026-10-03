@@ -839,3 +839,77 @@ off-diagonal-penalty question is qualified rather than settled; the agent named 
 as a follow-up. No OCR or equation recognition was used: imperfect extraction is
 reported as uncertainty, which is the correct behaviour and the reason the
 equation-level reading stays a paraphrase.
+
+# V6 (2026-10-03) — synthesis layer (INC-V2-4)
+
+The first evaluation in which the Literature Agent reads the derived synthesis
+layer semantically, and the first that exercises the V2 distinction between a
+paper-attributed Claim, a Synthesis and a research decision.
+
+**Code state.** Commit `833f9eaaeaf965a0a9e49f6484df12e067f64922`
+("Establish an explicit synthesis layer over the literature survey"), author
+Kevin Sanjula `<kevinxsanjula@gmail.com>`. The worktree carries another
+workstream's uncommitted files (`infra/*`, `improvements/compute/*`, `AGENTS.md`,
+`Makefile`, `.agents/policies/autonomy.md`, `wavcse-research-runner/SKILL.md`,
+untracked `.github/`, `docs/`, `mcp.json`, `weekly/*`); the literature evidence
+surface itself is clean, so the agent ran against exactly the committed state.
+
+**Invocation.**
+
+```bash
+cd <repo-root>
+timeout 640 omp -p --auto-approve --session-dir=/tmp/lit-agent-eval/inc-v2-4b \
+  --max-time=600 "Use the task tool to delegate to the literature-reviewer agent \
+  (do not answer yourself). Ask it exactly: <question> ... Return its result verbatim."
+```
+
+**Question.** "What does the retained literature synthesis say about MSSL
+sparsity, which paper-attributed claims support that synthesis, and does that
+synthesis itself constitute a research decision? Cite the exact synthesis id(s),
+claim_ref(s) and paper_id(s) you use, and state where research-decision authority
+lives."
+
+**Preflight (transcript-proven, not configured).** The child transcript
+`MsslSparsitySynthesis.jsonl` is **VALID**:
+
+| Field | Value |
+| --- | --- |
+| granted | `literature_resolve, literature_query, literature_read, literature_primary, yield` |
+| called | `literature_query` ×6, `literature_read` ×3, `yield` |
+| `literature_query` operations | `synthesis_list` ×1, `synthesis` ×1, `list` ×1, `paper_claims` ×4 |
+| `literature_read` sources | `synthesis` (`mssl-sparsity-analysis` ×2, `mssl-predictions` ×1) |
+| Deja / recall calls | none (0 `deja-recall` blocks, 0 `mcp__` calls) |
+| generic filesystem access | none — the child is the restricted-grant agent |
+| `claim_ref`s cited | 8 distinct, all present in `literature/claims.jsonl`, 0 invented |
+| synthesis ids cited | `mssl-sparsity-analysis`, `mssl-predictions` (both real) |
+
+A first attempt without explicit delegation ran the *main* session against the
+xd-device transport; its transcript has no `session_init.tools` and records
+device invocations as `read`/`write`, so the checker cannot prove a grant from
+it. That form is not admissible and is not counted; the delegated child
+transcript above is.
+
+**Behaviour.** The child queried synthesis metadata first (`synthesis_list`),
+opened only the two relevant syntheses by identity (`literature_read
+source=synthesis`), then queried the recorded claims behind them. It kept the
+three entities distinct — a Claim was reported at its own `source_level`, the
+synthesis was reported as `survey-derived` narrative, and it stated plainly that
+"neither synthesis constitutes a research decision: both explicitly disclaim that
+role", with decision authority placed in `DECISIONS.md` / `BACKLOG.md` /
+`proposals/` / `authorizations/`. It also caught the reverse direction on
+`goncalves-2016-mssl#published-lambda2-classification-grid` (a claim whose
+evidence is the survey document, not a paper) instead of treating it as
+paper-supported. Condition satisfied: the agent can query/read synthesis
+semantically and does not promote it to a research decision.
+
+**Exact-count regression — recurs.** The INC-V2-3 evaluation exposed an
+agent-level miscount (LT-0002 has 15 assessments; the prose once said 16). This
+run shows the same failure mode survives prose methodology alone: the child's
+`synthesis` field says the syntheses are "supported by **7** recorded claims from
+`goncalves-2016-mssl`", while its own `claim_refs_cited` lists **8** — the paper
+has 8 recorded claims. The records are real and the tool calls are correct; only
+the stated subtotal is wrong. A general methodology bullet was added to
+`wavcse-literature-review` ("report exact counts from the structured result, not
+from memory"), but this run shows guidance is not sufficient; no deterministic
+transcript assertion can check a prose count without a special-case hack, so the
+regression is recorded here rather than papered over.
