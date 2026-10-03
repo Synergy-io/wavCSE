@@ -54,13 +54,13 @@ import json
 import os
 import re
 import sys
-import tempfile
 from pathlib import Path
 
 from improvements.taskrelation.research import literature_assessment
 from improvements.taskrelation.research import literature_claims
 from improvements.taskrelation.research import literature_catalog
 from improvements.taskrelation.research import literature_investigation
+from improvements.taskrelation.research import literature_io
 from improvements.taskrelation.research import literature_synthesis
 
 
@@ -208,20 +208,6 @@ def _serialize(row):
     return json.dumps(row, ensure_ascii=False, sort_keys=True)
 
 
-def _atomic_replace(path, text):
-    path = Path(path)
-    handle = tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", dir=str(path.parent), delete=False, suffix=".tmp"
-    )
-    try:
-        handle.write(text)
-        handle.flush()
-        os.fsync(handle.fileno())
-    finally:
-        handle.close()
-    os.replace(handle.name, str(path))
-
-
 def _merged_jsonl(path, key, row, sort_key):
     """Return the full new JSONL text after upserting ``row`` at ``key``.
 
@@ -253,21 +239,13 @@ def _validate_then_commit(path, text, loader, **loader_kwargs):
     """
 
     path = Path(path)
-    handle = tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", dir=str(path.parent), delete=False, suffix=".tmp"
-    )
+    stage = literature_io.stage_text(path, text)
     try:
-        handle.write(text)
-        handle.flush()
-        os.fsync(handle.fileno())
-    finally:
-        handle.close()
-    try:
-        result = loader(Path(handle.name), **loader_kwargs)
+        result = loader(stage, **loader_kwargs)
     except Exception:
-        os.unlink(handle.name)
+        os.unlink(str(stage))
         raise
-    os.replace(handle.name, str(path))
+    os.replace(str(stage), str(path))
     return result
 
 
@@ -301,7 +279,7 @@ def put_note(investigation_id, heading, body, *, studies_path=None, repo_root=No
     analysis = study_dir / "analysis.md"
     text = analysis.read_text(encoding="utf-8") if analysis.is_file() else ""
     new_text = _upsert_section(text, heading, body)
-    _atomic_replace(analysis, new_text)
+    literature_io.atomic_write_text(analysis, new_text)
     return {
         "investigation_id": investigation_id,
         "artifact": analysis.relative_to(repo_root).as_posix(),
@@ -614,7 +592,7 @@ def _sync_index(literature_dir, index_path, registry):
         + text[end:]
     )
     if new_text != text:
-        _atomic_replace(path, new_text)
+        literature_io.atomic_write_text(path, new_text)
     return True
 
 

@@ -36,14 +36,13 @@ Usage::
 
 import argparse
 import json
-import os
 import re
 import sys
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 from improvements.taskrelation.research import literature_assessment
+from improvements.taskrelation.research import literature_io
 from improvements.taskrelation.research import literature_synthesis
 
 
@@ -147,25 +146,11 @@ def _serialize(row):
     return json.dumps(row, ensure_ascii=False, sort_keys=True)
 
 
-def _atomic_write(path, text):
-    path = Path(path)
-    handle = tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", dir=str(path.parent), delete=False, suffix=".tmp"
-    )
-    try:
-        handle.write(text)
-        handle.flush()
-        os.fsync(handle.fileno())
-    finally:
-        handle.close()
-    os.replace(handle.name, str(path))
-
-
 def _append_row(studies_path, row):
     path = _studies_path(studies_path)
     lines = _read_lines(path)
     lines.append(_serialize(row))
-    _atomic_write(path, "\n".join(lines) + "\n")
+    literature_io.atomic_write_text(path, "\n".join(lines) + "\n")
 
 
 def _replace_row(studies_path, study_id, row):
@@ -185,7 +170,7 @@ def _replace_row(studies_path, study_id, row):
             "Study {!r} disappeared while it was being updated".format(study_id),
             kind=INVESTIGATION_NOT_FOUND,
         )
-    _atomic_write(path, "\n".join(lines) + "\n")
+    literature_io.atomic_write_text(path, "\n".join(lines) + "\n")
 
 
 # -- helpers -----------------------------------------------------------------

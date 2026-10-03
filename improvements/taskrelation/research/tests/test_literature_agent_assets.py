@@ -27,18 +27,9 @@ REQUIRED_LITERATURE_TOOLS = (
 )
 # Historical recall is not an evidence capability in any spelling.
 RECALL_TOOL_NEEDLES = ("deja", "recall", "retain", "reflect", "history", "memory", "mcp__")
-MCP_PATH = REPO_ROOT / ".omp" / "mcp.json"
 # The native project OMP settings file; the recall *content* channel (a
 # user-scope extension) is disabled here, not in mcp.json.
 OMP_CONFIG_PATH = REPO_ROOT / ".omp" / "config.yml"
-TRANSCRIPT_CHECKER = REPO_ROOT / "scripts" / "agents" / "literature_agent_transcript.py"
-
-# The approved evidence surface: harness primitive plus the four capabilities.
-REQUIRED_LITERATURE_TOOLS = (
-    "literature_resolve", "literature_query", "literature_read", "literature_primary",
-)
-# Historical recall is not an evidence capability in any spelling.
-RECALL_TOOL_NEEDLES = ("deja", "recall", "retain", "reflect", "history", "memory", "mcp__")
 SKILL_DIR = REPO_ROOT / ".agents" / "skills" / "wavcse-literature-review"
 SKILL_PATH = SKILL_DIR / "SKILL.md"
 
