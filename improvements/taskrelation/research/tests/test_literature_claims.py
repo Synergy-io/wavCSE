@@ -288,9 +288,13 @@ class AttributionTests(unittest.TestCase):
 class VerificationLevelTests(unittest.TestCase):
     """Verification is a claim about evidence, so it is checked, not trusted."""
 
-    def test_primary_verified_is_impossible_while_no_primary_is_retained(self):
+    # A paper the repository does not retain a primary artifact for.
+    UNRETAINED = "zhang-yang-2021-mtl-survey"
+
+    def test_primary_verified_is_impossible_without_a_retained_artifact(self):
         error = rejected([
             record(
+                paper_id=self.UNRETAINED,
                 source_level="primary",
                 verification="primary_verified",
                 locator={"kind": "primary", "section": "4.1"},
@@ -304,6 +308,7 @@ class VerificationLevelTests(unittest.TestCase):
     def test_primary_source_level_is_refused_without_a_retained_artifact(self):
         error = rejected([
             record(
+                paper_id=self.UNRETAINED,
                 source_level="primary",
                 verification="derived_existing_record",
                 locator={"kind": "primary", "section": "4.1"},
@@ -311,6 +316,22 @@ class VerificationLevelTests(unittest.TestCase):
         ])
 
         self.assertEqual(error.kind, "UNSUPPORTED_SOURCE")
+
+    def test_a_retained_primary_still_cannot_be_read_as_a_claim_locator(self):
+        # goncalves-2016-mssl now has a retained primary artifact, so the refusal
+        # moves off "unsupported source" onto locator readability: the claim layer
+        # can name the evidence level but has no primary-locator reader yet, so
+        # strengthening a card claim to primary_verified is not yet expressible.
+        error = rejected([
+            record(
+                paper_id="goncalves-2016-mssl",
+                source_level="primary",
+                verification="derived_existing_record",
+                locator={"kind": "primary", "page": "6"},
+            )
+        ])
+
+        self.assertEqual(error.kind, "LOCATOR_NOT_READABLE")
 
     def test_a_primary_verified_record_requires_a_primary_source_level(self):
         error = rejected([record(verification="primary_verified")])

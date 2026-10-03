@@ -1,24 +1,38 @@
-"""Paper-id-driven retrieval of retained primary literature artifacts.
+"""Paper-id-driven retrieval, registration and bounded reading of retained
+primary literature artifacts.
 
-Authority split (roadmap INC-004, and `AGENTS.md`'s infrastructure boundary):
+Authority split (roadmap INC-004 / INC-004B.1, and `AGENTS.md`'s infrastructure
+boundary):
 
-* **Git** owns the manifest: which ``paper_id`` has a retained primary
-  artifact, its SHA-256, media type, byte size, provenance URL and object key.
-* **S3** is the canonical durable store for the artifact bytes; publication,
-  credentials, transfer and eviction live in the ``wavcse-infra`` checkout.
-* **The local cache** is disposable: it is never authoritative, and deleting it
-  must not destroy research knowledge or the canonical artifact.
+* **Git** owns the manifest: which ``paper_id`` has a retained primary artifact,
+  its SHA-256, media type, byte size, provenance URL and object key. The row is
+  the identity/provenance record and is written from the verified artifact, never
+  authored by hand.
+* **The retained bytes** live in the local store the policy resolves
+  (``WAVCSE_PRIMARY_CACHE``). The manifest checksum is the identity, so those
+  bytes are trusted only while they still match it. A durable remote store (S3,
+  owned by the ``wavcse-infra`` checkout) is the *deferred* INC-004B boundary;
+  until it is wired the transfer seam (``fetcher``) is ``None`` and a cache miss
+  reports ``STORAGE_NOT_CONFIGURED`` rather than fabricating bytes.
+* **Registration** is an operator-side act: it copies one known local file into
+  the retained location, computes its SHA-256 and writes the manifest row. It is
+  deterministic, refuses conflicting identity, and is never exposed to the
+  Literature Agent (the model-facing adapter exposes only status/get/read).
 
 This module is the repository-side adapter. It receives no credentials, resolves
-everything from ``paper_id``, and returns either a checksum-verified local path
-or a precise, structured unavailable reason. Remote transfer is an injected
-seam so the adapter stays credential-free and testable offline.
+everything from ``paper_id``, and returns either checksum-verified bytes or a
+page-provenanced text view, or a precise, structured unavailable reason. Remote
+transfer is an injected seam so the adapter stays credential-free and testable
+offline.
 
 Usage::
 
     python -m improvements.taskrelation.research.literature_primary validate
     python -m improvements.taskrelation.research.literature_primary status <paper_id>
     python -m improvements.taskrelation.research.literature_primary get <paper_id>
+    python -m improvements.taskrelation.research.literature_primary read <paper_id> --page N
+    python -m improvements.taskrelation.research.literature_primary register \
+        --paper-id <id> --file <path> --source-url <url>
 """
 
 import argparse
@@ -26,12 +40,15 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
 from improvements.taskrelation.research import literature_catalog
+from improvements.taskrelation.research import literature_primary_text
 
 
 # Deterministic failure taxonomy: a caller branches on `kind`, never on prose.
@@ -41,6 +58,12 @@ STORAGE_NOT_CONFIGURED = "STORAGE_NOT_CONFIGURED"
 CREDENTIALS_UNAVAILABLE = "CREDENTIALS_UNAVAILABLE"
 REMOTE_RETRIEVAL_FAILED = "REMOTE_RETRIEVAL_FAILED"
 INTEGRITY_MISMATCH = "INTEGRITY_MISMATCH"
+
+# Registration taxonomy: operator-side failures, kept distinct from retrieval.
+SOURCE_NOT_FOUND = "SOURCE_NOT_FOUND"
+SOURCE_NOT_PDF = "SOURCE_NOT_PDF"
+SOURCE_URL_NOT_RECORDED = "SOURCE_URL_NOT_RECORDED"
+REGISTRATION_CONFLICT = "REGISTRATION_CONFLICT"
 
 # Role -> (file suffix, canonical media type). The object key depends on the
 # paper and its role only, so metadata changes never move stored artifacts.
@@ -196,6 +219,19 @@ class PrimaryManifestEntry:
     source_url: str
     retained_at: str
 
+    def as_dict(self):
+        return {
+            "schema_version": _SCHEMA_VERSION,
+            "paper_id": self.paper_id,
+            "role": self.role,
+            "object_key": self.object_key,
+            "sha256": self.sha256,
+            "size_bytes": self.size_bytes,
+            "media_type": self.media_type,
+            "source_url": self.source_url,
+            "retained_at": self.retained_at,
+        }
+
 
 @dataclass(frozen=True)
 class PrimaryStatus:
@@ -253,11 +289,59 @@ class PrimaryArtifact:
         }
 
 
+@dataclass(frozen=True)
+class PrimaryText:
+    """A bounded, page-provenanced text view of a verified primary artifact.
+
+    The view is derived on demand from the checksum-verified local copy, so its
+    ``sha256`` is the identity of the exact artifact the text came from. It
+    carries page provenance (1-based physical PDF pages) and exposes no filesystem
+    path: evidence is addressed by ``paper_id`` and locator, never by a path.
+    """
+
+    paper_id: str
+    role: str
+    sha256: str
+    source_url: str
+    source: str
+    page: int
+    page_end: int
+    page_count: int
+    locator: str
+    extractor: str
+    extractor_version: str
+    warnings: tuple
+    pages: tuple
+    characters: int
+    truncated: bool
+
+    def as_dict(self):
+        return {
+            "paper_id": self.paper_id,
+            "role": self.role,
+            "evidence_level": "primary",
+            "sha256": self.sha256,
+            "source_url": self.source_url,
+            "source": self.source,
+            "page": self.page,
+            "page_end": self.page_end,
+            "page_count": self.page_count,
+            "locator": self.locator,
+            "extractor": self.extractor,
+            "extractor_version": self.extractor_version,
+            "warnings": list(self.warnings),
+            "pages": [{"page": page, "text": text} for page, text in self.pages],
+            "characters": self.characters,
+            "truncated": self.truncated,
+        }
+
+
 class LiteraturePrimary:
     """Resolve ``paper_id`` to verified primary bytes, or to a precise reason."""
 
     def __init__(self, policy=None, *, repo_root=None, research_dir=None,
-                 catalog_path=None, manifest_path=None, fetcher=None):
+                 catalog_path=None, manifest_path=None, fetcher=None,
+                 text_extractor=None):
         if policy is None:
             policy = StoragePolicy.from_environment(
                 research_dir=research_dir,
@@ -265,6 +349,7 @@ class LiteraturePrimary:
             )
         self.policy = policy
         self._fetcher = fetcher
+        self._text_extractor = text_extractor
         self._catalog_path = Path(catalog_path) if catalog_path is not None else (
             Path(policy.literature_dir) / _CATALOG_FILENAME
         )
@@ -358,6 +443,214 @@ class LiteraturePrimary:
             )
         self._fetch_to_cache(self._fetcher, entry, cache)
         return self._artifact(entry, cache, "remote")
+
+    def read(self, paper_id, *, page=None, page_end=None, max_chars=None):
+        """Return a bounded, page-provenanced text view of the verified artifact.
+
+        Retrieval failures propagate as :class:`PrimaryError` (so a caller branches
+        on the same deterministic kinds); derivation failures raise
+        :class:`literature_primary_text.PrimaryTextError`. Text is extracted on
+        demand from the checksum-verified copy, so ``sha256`` always names the exact
+        artifact version the text came from. Printed page labels are *not* used as
+        identity: ``page`` is a 1-based physical PDF page index.
+        """
+
+        paper_id = self._known_paper_id(paper_id)
+        artifact = self.get(paper_id)
+        document = self._extract_document(artifact.path)
+        if document.page_count < 1:
+            raise literature_primary_text.PrimaryTextError(
+                "the retained artifact yielded no pages",
+                kind=literature_primary_text.EXTRACTION_FAILED,
+                detail={"paper_id": paper_id},
+            )
+        start, end = self._resolve_page_range(page, page_end, document.page_count)
+        return self._text_view(artifact, document, start, end, max_chars)
+
+    def register(self, paper_id, source_path, *, source_url=None,
+                 role=_DEFAULT_ROLE, replace=False):
+        """Register one known local file as the retained primary artifact.
+
+        Operator-side only — the model-facing adapter never exposes this. Given the
+        inputs it is deterministic: it verifies the paper identity, the file, the
+        PDF media type and the recorded provenance URL, computes the SHA-256, copies
+        the bytes into the retained local store, and writes the manifest row from the
+        verified artifact. An existing row for the same ``(paper_id, role)`` is only
+        overwritten with ``replace=True``; otherwise a differing artifact is refused
+        as a conflict.
+        """
+
+        _require_paper_id(paper_id)
+        try:
+            paper = self._catalog.get(paper_id)
+        except literature_catalog.CatalogError as exc:
+            raise PrimaryError(
+                "unknown paper_id {!r}".format(paper_id),
+                kind=UNKNOWN_PAPER,
+                detail={"paper_id": paper_id},
+            ) from exc
+        paper_id = paper.paper_id
+        _suffix, media_type = _role_spec(role)
+
+        source = Path(source_path)
+        if not source.is_file():
+            raise PrimaryError(
+                "registration source is not a readable file",
+                kind=SOURCE_NOT_FOUND,
+                detail={"source_path": str(source)},
+            )
+        if not _is_pdf(source):
+            raise PrimaryError(
+                "registration source is not a PDF (expected {!r})".format(media_type),
+                kind=SOURCE_NOT_PDF,
+                detail={"source_path": str(source)},
+            )
+        if source_url is None or source_url not in paper.source_urls:
+            raise PrimaryError(
+                "source_url must be one recorded in the catalog for {!r}".format(
+                    paper_id
+                ),
+                kind=SOURCE_URL_NOT_RECORDED,
+                detail={
+                    "paper_id": paper_id,
+                    "source_url": source_url,
+                    "recorded": list(paper.source_urls),
+                },
+            )
+
+        sha256 = _sha256(source)
+        size = source.stat().st_size
+        existing = self._entries.get((paper_id, role))
+        if existing is not None and not replace:
+            if (
+                existing.sha256 == sha256
+                and existing.size_bytes == size
+                and existing.source_url == source_url
+            ):
+                self._ensure_cached(source, existing)
+                return existing
+            raise PrimaryError(
+                "a different artifact is already retained for {!r}".format(paper_id),
+                kind=REGISTRATION_CONFLICT,
+                detail={
+                    "paper_id": paper_id,
+                    "role": role,
+                    "retained_sha256": existing.sha256,
+                    "candidate_sha256": sha256,
+                    "retained_source_url": existing.source_url,
+                    "candidate_source_url": source_url,
+                },
+            )
+
+        entry = PrimaryManifestEntry(
+            paper_id=paper_id,
+            role=role,
+            object_key=self.policy.object_key(paper_id, role),
+            sha256=sha256,
+            size_bytes=size,
+            media_type=media_type,
+            source_url=source_url,
+            retained_at=_utc_now(),
+        )
+        self._ensure_cached(source, entry)
+        entries = dict(self._entries)
+        entries[(paper_id, role)] = entry
+        self._write_manifest(entries)
+        self._entries = entries
+        return entry
+
+    def _resolve_page_range(self, page, page_end, page_count):
+        if page is None:
+            if page_end is not None:
+                raise literature_primary_text.PrimaryTextError(
+                    "page_end requires an explicit page",
+                    kind=literature_primary_text.INVALID_LOCATOR,
+                )
+            return 1, page_count
+        start = literature_primary_text.validate_page(page, page_count, "page")
+        if page_end is None:
+            return start, start
+        end = literature_primary_text.validate_page(page_end, page_count, "page_end")
+        if end < start:
+            raise literature_primary_text.PrimaryTextError(
+                "page_end must not precede page",
+                kind=literature_primary_text.INVALID_LOCATOR,
+                detail={"page": page, "page_end": page_end},
+            )
+        return start, end
+
+    @staticmethod
+    def _text_view(artifact, document, start, end, max_chars):
+        budget = literature_primary_text.validate_max_chars(max_chars)
+        pages = []
+        truncated = False
+        for index in range(start, end + 1):
+            text = document.pages[index - 1]
+            if len(text) > budget:
+                text = text[:budget]
+                truncated = True
+            pages.append((index, text))
+            budget -= len(text)
+            if budget <= 0:
+                if index < end:
+                    truncated = True
+                break
+        return PrimaryText(
+            paper_id=artifact.paper_id,
+            role=artifact.role,
+            sha256=artifact.sha256,
+            source_url=artifact.source_url,
+            source=artifact.source,
+            page=start,
+            page_end=end,
+            page_count=document.page_count,
+            locator=literature_primary_text.page_locator(start, end),
+            extractor=document.extractor,
+            extractor_version=document.extractor_version,
+            warnings=tuple(document.warnings),
+            pages=tuple(pages),
+            characters=sum(len(text) for _, text in pages),
+            truncated=truncated,
+        )
+
+    def _extract_document(self, path):
+        extractor = self._text_extractor
+        if extractor is None:
+            return literature_primary_text.extract_document(path)
+        return extractor(path)
+
+    def _ensure_cached(self, source, entry):
+        cache = self.cache_path(entry.paper_id, entry.role)
+        if self._cache_state(cache, entry) == "valid":
+            return cache
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        partial = cache.parent / ".{}.{}.partial".format(entry.paper_id, entry.role)
+        try:
+            shutil.copyfile(str(source), str(partial))
+            if _sha256(partial) != entry.sha256:
+                raise PrimaryError(
+                    "registered copy does not match the artifact checksum",
+                    kind=INTEGRITY_MISMATCH,
+                    detail={"paper_id": entry.paper_id, "expected_sha256": entry.sha256},
+                )
+            os.replace(str(partial), str(cache))
+        finally:
+            if partial.exists():
+                partial.unlink()
+        return cache
+
+    def _write_manifest(self, entries):
+        payload = "".join(
+            json.dumps(entries[key].as_dict()) + "\n" for key in sorted(entries)
+        )
+        partial = self._manifest_path.with_name(self._manifest_path.name + ".partial")
+        try:
+            with open(str(partial), "w", encoding="utf-8") as handle:
+                handle.write(payload)
+            os.replace(str(partial), str(self._manifest_path))
+        finally:
+            if partial.exists():
+                partial.unlink()
 
     def _known_paper_id(self, paper_id):
         _require_paper_id(paper_id)
@@ -571,6 +864,20 @@ def _matches(path, entry):
     return _sha256(path) == entry.sha256
 
 
+def _is_pdf(path):
+    """A file is a PDF candidate only by its header, not by its name."""
+
+    try:
+        with open(str(path), "rb") as handle:
+            return handle.read(5) == b"%PDF-"
+    except OSError:
+        return False
+
+
+def _utc_now():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
 def _build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command")
@@ -579,6 +886,23 @@ def _build_parser():
     status.add_argument("paper_id")
     get = commands.add_parser("get", help="resolve a verified local primary artifact")
     get.add_argument("paper_id")
+    read = commands.add_parser(
+        "read", help="read a bounded, page-provenanced view of the verified artifact"
+    )
+    read.add_argument("paper_id")
+    read.add_argument("--page", type=int, default=None)
+    read.add_argument("--page-end", type=int, default=None)
+    read.add_argument(
+        "--max-chars", type=int, default=literature_primary_text.DEFAULT_MAX_CHARS
+    )
+    register = commands.add_parser(
+        "register", help="register a known local PDF as the retained artifact"
+    )
+    register.add_argument("--paper-id", required=True)
+    register.add_argument("--file", required=True)
+    register.add_argument("--source-url", required=True)
+    register.add_argument("--role", default=_DEFAULT_ROLE)
+    register.add_argument("--replace", action="store_true")
     return parser
 
 
@@ -595,12 +919,32 @@ def main(argv=None):
             )
         elif command == "status":
             print(json.dumps(primary.status(args.paper_id).as_dict(), sort_keys=True))
+        elif command == "read":
+            result = primary.read(
+                args.paper_id,
+                page=args.page,
+                page_end=args.page_end,
+                max_chars=args.max_chars,
+            )
+            print(json.dumps(result.as_dict(), ensure_ascii=False, sort_keys=True))
+        elif command == "register":
+            entry = primary.register(
+                args.paper_id,
+                args.file,
+                source_url=args.source_url,
+                role=args.role,
+                replace=args.replace,
+            )
+            print(json.dumps(entry.as_dict(), ensure_ascii=False, sort_keys=True))
         else:
             print(
                 json.dumps(primary.get(args.paper_id).as_dict(), sort_keys=True)
             )
         return 0
     except PrimaryError as exc:
+        print(json.dumps(exc.as_dict(), sort_keys=True), file=sys.stderr)
+        return 1
+    except literature_primary_text.PrimaryTextError as exc:
         print(json.dumps(exc.as_dict(), sort_keys=True), file=sys.stderr)
         return 1
     except PrimaryManifestError as exc:

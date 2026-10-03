@@ -29,6 +29,7 @@ from pathlib import Path
 
 from improvements.taskrelation.research import literature_catalog
 from improvements.taskrelation.research import literature_primary
+from improvements.taskrelation.research import literature_primary_text
 from improvements.taskrelation.research import literature_query
 
 
@@ -120,7 +121,11 @@ class LiteratureReader:
         self._primary = primary if primary is not None else literature_primary.LiteraturePrimary(
             repo_root=self.repo_root
         )
-        self._extractor = primary_extractor
+        self._extractor = (
+            primary_extractor
+            if primary_extractor is not None
+            else literature_primary_text.extract_text
+        )
 
     # -- canonical literature knowledge -------------------------------------
 

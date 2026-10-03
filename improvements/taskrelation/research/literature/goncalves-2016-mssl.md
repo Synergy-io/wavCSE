@@ -6,6 +6,11 @@ André R. Gonçalves, Fernando J. Von Zuben, and Arindam Banerjee. “Multi-task
 
 Primary source: https://jmlr.org/papers/volume17/15-215/15-215.pdf (verified 2026-09-22; the `/v17/…` short path 404s)
 
+Preprint: https://arxiv.org/abs/1409.0272 (arXiv:1409.0272v2, 2014). It is the
+locally retained primary artifact; it is a predecessor version whose equation
+numbering, notation and author list differ from the JMLR version above, so an
+assertion verified against it is not thereby verified against the JMLR version.
+
 ## Problem
 
 The task-relationship structure usually has to be estimated from data, not assumed. Earlier estimators either restrict the dependence structure (Zhang & Yeung’s convex relaxation) or are computationally prohibitive because they model a large feature covariance. The paper wants a sparse, interpretable *conditional* task graph, jointly learned with the task parameters, that works for regression and classification.

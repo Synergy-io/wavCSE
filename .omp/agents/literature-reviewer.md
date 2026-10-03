@@ -19,10 +19,20 @@ these capabilities:
 literature_resolve    identity and candidate dedup
 literature_query      enumerate / resolve / paper_claims / claim / Study context
 literature_read       bounded text of a card, a survey document, an LT-* artifact
-literature_primary    primary-artifact status and retrieval
+literature_primary    primary-artifact status, retrieval, and bounded page read
 ```
 
 `yield` is the harness primitive that returns your result; it is not evidence.
+
+`literature_primary operation=read` returns a bounded text view of the verified
+primary artifact with page provenance: a `sha256`, a `source_url`, a `locator`
+(`primary:page:N` / `primary:pages:A-B`), the extractor and any extraction
+warnings. `page` is a **1-based physical PDF page index**, not a printed page
+label. The returned text is a derived view — the PDF bytes are the evidence, and
+`source_url`/version identify which artifact you actually read: a preprint and
+the published version are different artifacts, and a claim recorded against one
+is not verified by the other. Report imperfect equation extraction as uncertain
+rather than reconstructing the equation.
 
 You have no general file access: you cannot open a source file, a model
 implementation, a training config or a research record, and you must not ask for

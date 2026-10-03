@@ -231,6 +231,14 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertIn('"literature_claims"', self.code)
         self.assertIn('"survey"', self.code)
 
+    def test_adapter_exposes_primary_read_but_never_registration(self):
+        # The agent may read a retained primary artifact by page, and may never
+        # register one: registration is an operator-side act.
+        self.assertIn('"read"', self.code)
+        self.assertIn("--page", self.code)
+        self.assertIn("--page-end", self.code)
+        self.assertNotIn('"register"', self.code)
+
     def test_agent_declares_no_file_access_and_claim_first_provenance(self):
         lowered = "\n".join(parse_frontmatter(AGENT_PATH)[1]).lower()
 
@@ -337,7 +345,9 @@ class BoundedReadCliTests(unittest.TestCase):
                 self.assertTrue(json.loads(result.stderr)["kind"])
 
     def test_primary_reports_a_precise_state_instead_of_credentials(self):
-        result = run_module("literature_primary", "get", "goncalves-2016-mssl")
+        # A paper the manifest does not retain: the state is deterministic and
+        # never contains credential material, whatever the environment.
+        result = run_module("literature_primary", "get", "zhang-yang-2021-mtl-survey")
 
         self.assertEqual(result.returncode, 1)
         document = json.loads(result.stderr)
@@ -346,6 +356,28 @@ class BoundedReadCliTests(unittest.TestCase):
         for needle in ("secret", "access_key", "aws", "bucket"):
             with self.subTest(needle=needle):
                 self.assertNotIn(needle, serialized)
+
+    def test_primary_read_is_page_and_sha_addressed_when_cached(self):
+        status = run_module("literature_primary", "status", "goncalves-2016-mssl")
+        state = json.loads(status.stdout)
+        if not state["retained"] or state["cache_state"] != "valid":
+            self.skipTest("goncalves-2016-mssl has no verified local copy")
+
+        result = run_module(
+            "literature_primary", "read", "goncalves-2016-mssl",
+            "--page", "6", "--max-chars", "400",
+        )
+        if result.returncode != 0:
+            self.assertEqual(json.loads(result.stderr)["kind"], "EXTRACTOR_UNAVAILABLE")
+            self.skipTest("no PDF text extractor is installed")
+
+        page = json.loads(result.stdout)
+        self.assertEqual(page["evidence_level"], "primary")
+        self.assertEqual(page["locator"], "primary:page:6")
+        self.assertEqual(page["sha256"], state["sha256"])
+        self.assertEqual(page["page"], 6)
+        self.assertNotIn("cache_path", json.dumps(page))
+        self.assertNotIn("secret", json.dumps(page).lower())
 
 
 

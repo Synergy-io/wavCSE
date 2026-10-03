@@ -18,8 +18,10 @@ Scope rules:
   configuration (a restricted grid, a frozen λ, a declared deviation) is research
   state and stays in ``DECISIONS.md`` / Study artifacts, owned by the main
   research agent;
-* ``primary_verified`` is only legal when the paper actually has a retained
-  primary artifact, so today nothing can claim it.
+* ``primary_verified`` is legal only when the paper actually has a retained
+  primary artifact; and because a claim locator is resolved through the bounded
+  reader, which has no primary-locator reader yet, it is still unavailable rather
+  than merely discouraged (``LOCATOR_NOT_READABLE``) even once one is retained.
 
 Authority: this module is read-only. Claim records are created under human/operator
 review and validated here; the Literature Agent never writes them.

@@ -306,6 +306,7 @@ the increment numbers are not mistaken for the build order.
 | INC-004 | Primary-artifact manifest and retrieval contract | done (remote seam deferred) |
 | — | **Literature Agent vertical slice (read-only V1)** | this increment, inserted before INC-004B |
 | INC-004B | Connect primary-artifact storage to `infra/` | **deferred** |
+| INC-004B.1 | Local-first retained primary: registration + bounded page read | done (one-paper vertical slice; remote storage still deferred) |
 | INC-005 | Literature claim records | **partially built** — provenance, locators and verbatim quotes enforced; topic/stance links and Study links deferred |
 | INC-006 | Cards/syntheses provenance | later |
 | INC-007 | Literature-review skill | later |
@@ -654,6 +655,59 @@ Given a `paper_id`, an authorized run obtains the canonical remote artifact
 through `infra/` semantics, verifies it against the manifest checksum, populates
 the disposable cache atomically, and returns the same structured result INC-004
 already defines — with no credential ever entering model context.
+
+## INC-004B.1 — Local-first retained primary: registration and bounded page read
+
+**Status:** `done` (2026-10-03) — the local vertical slice INC-004B was deferred
+until it had been exercised. Remote durable storage remains INC-004B.
+
+**Goal**
+
+Prove ONE complete local primary-evidence path for a single `paper_id`: a known
+local PDF → deterministic registration → SHA-256 identity → manifest row →
+verified local copy → bounded, page-provenanced text → the Literature Agent
+answering an exact-equation question from primary evidence. Not generalized to
+the corpus, and not wired to `infra/`.
+
+**What was built**
+
+- `literature_primary.py`: `LiteraturePrimary.register(paper_id, source_path,
+  source_url=…)` and `.read(paper_id, page=/page_end=/max_chars=)`, plus the
+  `register` / `read` CLI subcommands. Registration is operator-side only — the
+  model-facing adapter never exposes it — and refuses conflicting identity unless
+  `--replace` is given.
+- `literature_primary_text.py`: deterministic, page-indexed extraction via
+  poppler `pdftotext` (form-feed page boundaries, no OCR), fail-closed with
+  `EXTRACTOR_UNAVAILABLE` / `EXTRACTION_FAILED` / `INVALID_LOCATOR`.
+- The model-facing `literature_primary` operation set becomes
+  `status | get | read`; `read` returns a bounded text view carrying `sha256`,
+  `source_url`, `extractor`, `warnings` and a page locator, and exposes no
+  filesystem path. `literature_read` now defaults its primary extractor to the
+  new module.
+
+**New invariants introduced**
+
+- The derived text view is bound to the exact verified artifact: extraction is on
+  demand from the checksum-verified copy, so a view can never be attributed to a
+  different artifact version.
+- A page locator is a **1-based physical PDF page index** (`primary:page:N`,
+  `primary:pages:A-B`), never a printed page label.
+- Registration is an operator act and cannot be reached by the Literature Agent.
+
+**Retained artifact recorded for `goncalves-2016-mssl`**
+
+The only local PDF was the **arXiv preprint** (`arXiv:1409.0272v2`, 2014) — a
+predecessor of the JMLR 17(33) version the card cites — and it is registered as
+such (`source_url` = the arXiv URL, recorded in the card and the catalog). Its
+equation numbering, notation (`K`/`λ`/`γ`) and objective differ from the JMLR
+formulation recorded in the card, which is itself a result: verifying the card's
+`−d log|Ω|` / `−log|Ω|` claim requires the JMLR PDF, which is not retained.
+
+**Deferred (unchanged)**
+
+S3/`infra`, bulk ingestion, web/DOI acquisition, OCR, a document database, claim
+mutation, and all-paper migration. This increment deliberately did not satisfy
+INC-004B's exit criteria.
 
 ## INC-005 — Introduce literature claim records for active questions
 

@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 
 from improvements.taskrelation.research import literature_primary as lp
+from improvements.taskrelation.research import literature_primary_text as lt
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -98,7 +99,7 @@ class PrimaryFixture(unittest.TestCase):
         self.fetch_policies.append(policy)
         Path(destination).write_bytes(PDF_BYTES)
 
-    def open_primary(self, fetcher=None, bucket="wavcse-primary"):
+    def open_primary(self, fetcher=None, bucket="wavcse-primary", text_extractor=None):
         policy = lp.StoragePolicy(
             research_dir=self.research_dir,
             cache_root=self.cache_root,
@@ -109,10 +110,16 @@ class PrimaryFixture(unittest.TestCase):
             catalog_path=self.catalog_path,
             manifest_path=self.manifest_path,
             fetcher=fetcher,
+            text_extractor=text_extractor,
         )
 
     def cache_file(self, paper_id, role="source"):
         return self.open_primary().cache_path(paper_id, role)
+
+    def source_file(self, name="local.pdf", payload=PDF_BYTES):
+        path = self.root / name
+        path.write_bytes(payload)
+        return path
 
 
 class StoragePolicyTests(PrimaryFixture):
@@ -447,24 +454,272 @@ class PrimaryRetrievalTests(PrimaryFixture):
                 self.assertNotIn(needle, serialized)
 
 
+class RegistrationTests(PrimaryFixture):
+    """Registration is a deterministic operator-side act over a known local PDF."""
+
+    def test_register_persists_a_manifest_row_and_populates_the_cache(self):
+        primary = self.open_primary()
+
+        entry = primary.register(
+            "alpha-2024-method",
+            self.source_file(),
+            source_url="https://example.org/alpha-2024-method.pdf",
+        )
+
+        self.assertEqual(entry.sha256, PDF_SHA256)
+        self.assertEqual(entry.size_bytes, len(PDF_BYTES))
+        self.assertEqual(entry.object_key, "papers/alpha-2024-method/source.pdf")
+        row = json.loads(self.manifest_path.read_text(encoding="utf-8").strip())
+        self.assertEqual(row["sha256"], PDF_SHA256)
+        self.assertEqual(row["source_url"], "https://example.org/alpha-2024-method.pdf")
+        artifact = primary.get("alpha-2024-method")
+        self.assertEqual(artifact.source, "cache")
+        self.assertEqual(artifact.sha256, PDF_SHA256)
+        self.assertEqual(artifact.path.read_bytes(), PDF_BYTES)
+
+    def test_register_is_idempotent_for_identical_bytes(self):
+        primary = self.open_primary()
+        url = "https://example.org/alpha-2024-method.pdf"
+        first = primary.register("alpha-2024-method", self.source_file(), source_url=url)
+        second = primary.register("alpha-2024-method", self.source_file(), source_url=url)
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(self.manifest_path.read_text(encoding="utf-8").splitlines()), 1)
+
+    def test_register_unknown_paper_is_rejected(self):
+        with self.assertRaises(lp.PrimaryError) as caught:
+            self.open_primary().register(
+                "nope", self.source_file(), source_url="https://example.org/x.pdf"
+            )
+
+        self.assertEqual(caught.exception.kind, lp.UNKNOWN_PAPER)
+
+    def test_register_missing_file_is_rejected(self):
+        with self.assertRaises(lp.PrimaryError) as caught:
+            self.open_primary().register(
+                "alpha-2024-method",
+                self.root / "absent.pdf",
+                source_url="https://example.org/alpha-2024-method.pdf",
+            )
+
+        self.assertEqual(caught.exception.kind, lp.SOURCE_NOT_FOUND)
+
+    def test_register_non_pdf_is_rejected(self):
+        source = self.source_file("not-a-pdf.pdf", b"just text\n")
+
+        with self.assertRaises(lp.PrimaryError) as caught:
+            self.open_primary().register(
+                "alpha-2024-method", source,
+                source_url="https://example.org/alpha-2024-method.pdf",
+            )
+
+        self.assertEqual(caught.exception.kind, lp.SOURCE_NOT_PDF)
+
+    def test_register_requires_a_recorded_provenance_url(self):
+        for url in (None, "https://invented.example/x.pdf"):
+            with self.subTest(url=url):
+                with self.assertRaises(lp.PrimaryError) as caught:
+                    self.open_primary().register(
+                        "alpha-2024-method", self.source_file(), source_url=url
+                    )
+                self.assertEqual(caught.exception.kind, lp.SOURCE_URL_NOT_RECORDED)
+
+    def test_conflicting_registration_is_refused_without_replace(self):
+        primary = self.open_primary()
+        url = "https://example.org/alpha-2024-method.pdf"
+        primary.register("alpha-2024-method", self.source_file(), source_url=url)
+
+        with self.assertRaises(lp.PrimaryError) as caught:
+            primary.register(
+                "alpha-2024-method",
+                self.source_file("other.pdf", b"%PDF-1.4 a different artifact\n"),
+                source_url=url,
+            )
+
+        self.assertEqual(caught.exception.kind, lp.REGISTRATION_CONFLICT)
+        self.assertEqual(caught.exception.detail["retained_sha256"], PDF_SHA256)
+
+    def test_replace_overwrites_the_conflicting_row(self):
+        primary = self.open_primary()
+        url = "https://example.org/alpha-2024-method.pdf"
+        primary.register("alpha-2024-method", self.source_file(), source_url=url)
+        replacement = b"%PDF-1.4 replacement artifact\n"
+
+        entry = primary.register(
+            "alpha-2024-method",
+            self.source_file("other.pdf", replacement),
+            source_url=url,
+            replace=True,
+        )
+
+        self.assertEqual(entry.sha256, hashlib.sha256(replacement).hexdigest())
+        row = json.loads(self.manifest_path.read_text(encoding="utf-8").strip())
+        self.assertEqual(row["sha256"], entry.sha256)
+
+    def test_cache_tamper_after_registration_is_an_integrity_failure(self):
+        primary = self.open_primary()
+        primary.register(
+            "alpha-2024-method", self.source_file(),
+            source_url="https://example.org/alpha-2024-method.pdf",
+        )
+        primary.cache_path("alpha-2024-method").write_bytes(b"%PDF-1.4 tampered\n")
+
+        with self.assertRaises(lp.PrimaryError) as caught:
+            primary.get("alpha-2024-method")
+
+        self.assertEqual(caught.exception.kind, lp.INTEGRITY_MISMATCH)
+
+    def test_registered_row_never_leaks_credential_material(self):
+        entry = self.open_primary().register(
+            "alpha-2024-method", self.source_file(),
+            source_url="https://example.org/alpha-2024-method.pdf",
+        )
+        serialized = json.dumps(entry.as_dict()).lower()
+
+        for needle in ("secret", "access_key", "session_token"):
+            with self.subTest(needle=needle):
+                self.assertNotIn(needle, serialized)
+
+
+def stub_document():
+    return lt.ExtractedDocument(
+        page_count=3,
+        pages=("alpha page one\n", "beta page two\n", "gamma page three\n"),
+        extractor="stub",
+        extractor_version="0",
+        warnings=("a stub warning",),
+    )
+
+
+class ReadTests(PrimaryFixture):
+    """Bounded primary reading is page-provenanced and bound to the verified SHA."""
+
+    def setUp(self):
+        super().setUp()
+        self.primary = self.open_primary(text_extractor=lambda path: stub_document())
+        self.primary.register(
+            "alpha-2024-method", self.source_file(),
+            source_url="https://example.org/alpha-2024-method.pdf",
+        )
+
+    def test_read_binds_page_provenance_to_the_verified_sha(self):
+        document = self.primary.read("alpha-2024-method", page=2).as_dict()
+
+        self.assertEqual(document["evidence_level"], "primary")
+        self.assertEqual(document["sha256"], PDF_SHA256)
+        self.assertEqual(document["page"], 2)
+        self.assertEqual(document["page_end"], 2)
+        self.assertEqual(document["page_count"], 3)
+        self.assertEqual(document["locator"], "primary:page:2")
+        self.assertEqual([p["text"] for p in document["pages"]], ["beta page two\n"])
+        self.assertEqual(document["extractor"], "stub")
+
+    def test_read_defaults_to_the_whole_document(self):
+        document = self.primary.read("alpha-2024-method").as_dict()
+
+        self.assertEqual((document["page"], document["page_end"]), (1, 3))
+        self.assertEqual(document["locator"], "primary:pages:1-3")
+
+    def test_read_range_is_bounded_and_reports_truncation(self):
+        document = self.primary.read(
+            "alpha-2024-method", page=1, page_end=3, max_chars=10
+        ).as_dict()
+
+        self.assertTrue(document["truncated"])
+        self.assertLessEqual(document["characters"], 10)
+        self.assertEqual(document["pages"][0]["text"], "alpha page")
+
+    def test_read_unknown_paper_is_rejected(self):
+        with self.assertRaises(lp.PrimaryError) as caught:
+            self.primary.read("nope")
+
+        self.assertEqual(caught.exception.kind, lp.UNKNOWN_PAPER)
+
+    def test_read_invalid_locators_are_rejected(self):
+        for kwargs in (
+            {"page": 0}, {"page": 4}, {"page": 1, "page_end": 0},
+            {"page": 2, "page_end": 1}, {"page_end": 2},
+        ):
+            with self.subTest(**kwargs):
+                with self.assertRaises(lt.PrimaryTextError) as caught:
+                    self.primary.read("alpha-2024-method", **kwargs)
+                self.assertEqual(caught.exception.kind, lt.INVALID_LOCATOR)
+
+    def test_read_exposes_no_filesystem_path(self):
+        serialized = json.dumps(self.primary.read("alpha-2024-method", page=1).as_dict())
+
+        self.assertNotIn(str(self.cache_root), serialized)
+        self.assertNotIn("cache_path", serialized)
+
+    def test_read_unavailable_artifact_fails_before_any_extraction(self):
+        calls = []
+        primary = self.open_primary(text_extractor=lambda path: calls.append(path) or stub_document())
+
+        with self.assertRaises(lp.PrimaryError) as caught:
+            primary.read("beta-2020-method")
+
+        self.assertEqual(caught.exception.kind, lp.PRIMARY_NOT_AVAILABLE)
+        self.assertEqual(calls, [])
+
+
 class RealRepositoryPrimaryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.primary = lp.LiteraturePrimary(repo_root=REPO_ROOT)
 
-    def test_repository_manifest_is_valid_and_declares_no_fabricated_artifacts(self):
-        self.assertEqual(self.primary.manifest_rows(), ())
-        self.assertEqual(self.primary.validate(), 0)
+    def test_repository_manifest_rows_are_valid_and_bound_to_catalog_papers(self):
+        rows = self.primary.manifest_rows()
 
-    def test_every_known_paper_reports_a_precise_unavailable_reason(self):
+        self.assertEqual(self.primary.validate(), len(rows))
+        for row in rows:
+            with self.subTest(paper_id=row.paper_id):
+                self.assertRegex(row.sha256, "^[0-9a-f]{64}$")
+                self.assertEqual(row.media_type, "application/pdf")
+                self.assertEqual(row.object_key, "papers/{}/source.pdf".format(row.paper_id))
+
+    def test_every_known_paper_yields_a_precise_state_never_unverified_bytes(self):
         from improvements.taskrelation.research import literature_query
 
+        retained = {row.paper_id: row for row in self.primary.manifest_rows()}
         query = literature_query.LiteratureQuery(repo_root=REPO_ROOT)
         for paper in query.list_papers():
             with self.subTest(paper_id=paper.paper_id):
-                with self.assertRaises(lp.PrimaryError) as caught:
-                    self.primary.get(paper.paper_id)
-                self.assertEqual(caught.exception.kind, lp.PRIMARY_NOT_AVAILABLE)
+                if paper.paper_id not in retained:
+                    with self.assertRaises(lp.PrimaryError) as caught:
+                        self.primary.get(paper.paper_id)
+                    self.assertEqual(caught.exception.kind, lp.PRIMARY_NOT_AVAILABLE)
+                    continue
+                try:
+                    artifact = self.primary.get(paper.paper_id)
+                except lp.PrimaryError as exc:
+                    self.assertIn(
+                        exc.kind,
+                        (
+                            lp.STORAGE_NOT_CONFIGURED,
+                            lp.INTEGRITY_MISMATCH,
+                            lp.CREDENTIALS_UNAVAILABLE,
+                            lp.REMOTE_RETRIEVAL_FAILED,
+                        ),
+                    )
+                else:
+                    self.assertEqual(artifact.sha256, retained[paper.paper_id].sha256)
+
+    def test_retained_primary_read_is_bounded_and_checksum_bound(self):
+        retained = {row.paper_id: row for row in self.primary.manifest_rows()}
+        row = retained.get("goncalves-2016-mssl")
+        if row is None:
+            self.skipTest("goncalves-2016-mssl is not retained")
+        try:
+            result = self.primary.read("goncalves-2016-mssl", page=6, max_chars=500)
+        except (lp.PrimaryError, lt.PrimaryTextError) as exc:
+            self.skipTest("primary cache or extractor unavailable: {}".format(exc.kind))
+
+        document = result.as_dict()
+        self.assertEqual(document["evidence_level"], "primary")
+        self.assertEqual(document["sha256"], row.sha256)
+        self.assertEqual(document["locator"], "primary:page:6")
+        self.assertEqual(document["page"], 6)
+        self.assertLessEqual(document["characters"], 500)
 
     def test_default_cache_root_is_outside_the_repository(self):
         self.assertNotIn(str(REPO_ROOT), str(self.primary.policy.cache_root))

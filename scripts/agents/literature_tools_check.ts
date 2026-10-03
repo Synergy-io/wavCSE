@@ -50,6 +50,7 @@ const host = {
 			schema.min = () => schema;
 			schema.max = () => schema;
 			schema.optional = () => schema;
+			schema.describe = () => schema;
 			return schema;
 		},
 		enum: () => {
@@ -188,20 +189,53 @@ check(
 	incomplete.details,
 );
 
-// 10. primary: precise state, no credentials
-const primary = await call("literature_primary", {
-	paperId: "goncalves-2016-mssl",
+// 10. primary: precise state for an unretained paper, no credentials
+const unretained = await call("literature_primary", {
+	paperId: "zhang-yang-2021-mtl-survey",
 	operation: "get",
 });
 check(
-	"primary reports a precise unavailable state",
-	primary.details.ok === false && primary.details.kind === "PRIMARY_NOT_AVAILABLE",
-	primary.details,
+	"primary reports a precise unavailable state for an unretained paper",
+	unretained.details.ok === false && unretained.details.kind === "PRIMARY_NOT_AVAILABLE",
+	unretained.details,
 );
 check(
 	"primary output never mentions credentials, buckets or keys",
-	!/secret|access_key|aws_|bucket|s3/i.test(primary.content[0].text),
-	primary.content[0].text,
+	!/secret|access_key|aws_|bucket|s3/i.test(unretained.content[0].text),
+	unretained.content[0].text,
+);
+
+// 11. primary: retention status and a bounded, page-provenanced read
+const status = await call("literature_primary", {
+	paperId: "goncalves-2016-mssl",
+	operation: "status",
+});
+const statusDoc = parse(status);
+check(
+	"primary status reports retention without credentials",
+	statusDoc.retained === true && typeof statusDoc.sha256 === "string",
+	statusDoc,
+);
+
+const read = await call("literature_primary", {
+	paperId: "goncalves-2016-mssl",
+	operation: "read",
+	page: 6,
+	maxChars: 400,
+});
+const readDoc = parse(read);
+check(
+	"primary read is page- and sha-addressed, or reports a precise reason",
+	read.details.ok === true
+		? readDoc.evidence_level === "primary" &&
+			readDoc.locator === "primary:page:6" &&
+			readDoc.sha256 === statusDoc.sha256 &&
+			readDoc.page === 6 &&
+			!JSON.stringify(readDoc).includes("cache_path")
+		: ["STORAGE_NOT_CONFIGURED", "EXTRACTOR_UNAVAILABLE", "INTEGRITY_MISMATCH"].includes(
+				String(read.details.kind),
+			),
+	read.details.ok ? readDoc.locator : read.details,
 );
 
 // 12. recorded claims: the grid is attributed to the survey, not the card
