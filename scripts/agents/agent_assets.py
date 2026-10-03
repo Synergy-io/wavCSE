@@ -19,6 +19,7 @@ from pathlib import Path
 OMP_DIR = ".omp"
 OMP_AGENTS = ".omp/AGENTS.md"
 OMP_AGENTS_TARGET = "../AGENTS.md"
+OMP_AGENT_DIRS = (".omp/agents", ".omp/tools")
 ROOT_AGENTS = "AGENTS.md"
 SKILLS_DIR = ".agents/skills"
 COMMANDS_DIR = ".agents/commands"
@@ -35,8 +36,10 @@ RETIRED_PATHS = (".omp/skills", ".omp/commands", ".claude/commands",
                  ".codex/commands", ".claude/skills", ".codex/skills")
 # Present-but-unread locations: reported as INERT, never as a failure.
 INERT_PATHS = (".claude/rules", "CLAUDE.md")
-# Paths scanned for forbidden content; the Makefile is deliberately in both sets.
-CONTENT_TARGETS = (".agents", ROOT_AGENTS, "CLAUDE.md", MAKEFILE)
+# Paths scanned for forbidden content; the Makefile is deliberately in both sets,
+# and the native agent/tool roots are scanned so project agent assets get the
+# same hygiene check as skills and commands.
+CONTENT_TARGETS = (".agents", ROOT_AGENTS, "CLAUDE.md", MAKEFILE) + OMP_AGENT_DIRS
 TOOLING_TARGETS = (SCRIPTS_DIR, MAKEFILE)
 
 # Every needle is assembled from fragments on purpose: this file lives under

@@ -2,6 +2,135 @@
 
 Primary-source literature cards for the formal Task Relation Learning programme. Cards record both eligible mechanisms and explicit taxonomy/assumption rejections; a paper’s presence here does not mean it is approved for implementation.
 
+Paper identity is declared in [`catalog.jsonl`](catalog.jsonl): each existing
+card filename stem is its immutable `paper_id`, and the catalog maps that ID and
+recorded external identifiers to the canonical card. The catalog contains no
+screening verdicts; those remain specific to the `LT-*` Study tables below.
+Validate it with
+`python -m improvements.taskrelation.research.literature_catalog`.
+
+## Structured query interface
+
+Use `python -m improvements.taskrelation.research.literature_query` for
+read-only identity, metadata and `LT-*` Study relationships before opening
+cards:
+
+```bash
+python -m improvements.taskrelation.research.literature_query list
+python -m improvements.taskrelation.research.literature_query resolve <paper-id-or-alias>
+python -m improvements.taskrelation.research.literature_query identify --doi 10.1145/3580305.3599261
+python -m improvements.taskrelation.research.literature_query paper-studies <paper-id-or-alias>
+python -m improvements.taskrelation.research.literature_query study-papers LT-0001
+```
+
+Results contain compact paper metadata, canonical card paths, Study metadata
+and Study-scoped assessment pointers. A structured per-paper decision is
+returned only where the existing `LT-*` result records one; otherwise the query
+returns the exact card section to open. Study decisions are never paper status.
+
+`identify` is the deduplication front door for a candidate paper: it reports
+`known` (with the existing `paper_id` and card), `new`, or `ambiguous`. It uses
+only the catalog's existing identity vocabulary — immutable slug, normalized
+title, recorded DOI/arXiv, recorded source URL — with exact matching and no
+fuzzy search, so it cannot invent a second identity system. Ambiguity, when
+supplied fields point at different papers, is a returned verdict rather than a
+silent pick.
+
+### Operation authority
+
+| Operation | READ/WRITE | Source of truth | Notes |
+| --- | --- | --- | --- |
+| `list_papers` | READ | `catalog.jsonl` | exact metadata filters only |
+| `resolve_paper` | READ | `catalog.jsonl` | raises on unknown identity |
+| `identify_candidate` | READ | `catalog.jsonl` | returns `known` / `new` / `ambiguous` |
+| `studies_for_paper` | READ | catalog × `STUDIES.jsonl` × LT `result.json` | each record Study-scoped |
+| `papers_for_study` | READ | `STUDIES.jsonl` × LT `result.json` | raises on unknown Study |
+| `get_study` | READ | `STUDIES.jsonl` + Study folder | artifact presence only |
+
+Every operation above is read-only, idempotent and deterministic; none mutates
+research state. Mutation of literature state remains outside this interface and
+belongs to the future increments.
+
+## Primary artifacts
+
+Retained original papers are addressed by `paper_id`, never by bucket, key, path
+or credential:
+
+```bash
+python -m improvements.taskrelation.research.literature_primary validate
+python -m improvements.taskrelation.research.literature_primary status <paper-id>
+python -m improvements.taskrelation.research.literature_primary get <paper-id>
+```
+
+Authority split:
+
+| Store | Owns |
+| --- | --- |
+| Git (`primary_manifest.jsonl`) | which `paper_id` has a retained artifact, its SHA-256, size, media type, provenance URL and object key |
+| S3 | the canonical durable artifact bytes; publication, credentials, transfer and eviction live in the `wavcse-infra` checkout |
+| local cache | disposable performance copies, never authoritative |
+
+The manifest contains storage metadata only — never title, authors, year or any
+other catalog identity. `object_key` is validated to equal the deterministic
+derivation `[prefix]papers/<paper_id>/<role>.pdf`, so keys are derived from
+`paper_id` and never authored by hand; changing a title cannot move an artifact.
+
+The cache lives outside the repository (default `$XDG_CACHE_HOME/wavcse/literature-primary`,
+else `~/.cache/wavcse/literature-primary`); a cache root inside the repository is
+refused. A cached copy is trusted only when its SHA-256 matches the manifest, and
+a corrupt entry is reported and removed rather than returned or silently
+repaired. A manifest row declares retention under explicit infrastructure
+authority — this repository never fabricates checksums, and an empty manifest
+means no primary artifact is retained yet, so every paper reports
+`PRIMARY_NOT_AVAILABLE` precisely.
+
+Deterministic failure kinds: `UNKNOWN_PAPER`, `PRIMARY_NOT_AVAILABLE`,
+`STORAGE_NOT_CONFIGURED`, `CREDENTIALS_UNAVAILABLE`, `REMOTE_RETRIEVAL_FAILED`,
+`INTEGRITY_MISMATCH`. Credentials are never read, returned or logged here.
+
+Retrieving a paper establishes trustworthy access to primary evidence only; it
+does not summarize, extract claims from, parse, or modify any card. Claim-level
+work is a later increment.
+
+## Literature Agent (read-only V1)
+
+A bounded Literature Review specialist exists for delegating one literature
+question to a fresh, isolated context:
+
+- `.omp/agents/literature-reviewer.md` — the agent definition (responsibility,
+  authority, evidence discipline, output contract). Model role: `@slow`.
+- `.agents/skills/wavcse-literature-review/SKILL.md` — the investigation
+  methodology, including progressive disclosure and the four-way separation of
+  paper claim / reported evidence / agent interpretation / research implication.
+- `.omp/tools/literature.ts` — the semantic model-facing capabilities.
+
+Exposed capabilities (all read-only over canonical research state):
+
+| Tool | Purpose | Deterministic backing |
+| --- | --- | --- |
+| `literature_resolve` | identity resolution and candidate dedup (`known`/`new`/`ambiguous`) | `literature_query.identify_candidate` |
+| `literature_query` | enumerate retained papers; Study-scoped literature state | `list_papers`, `papers_for_study`, `studies_for_paper`, `get_study` |
+| `literature_read` | bounded text of one card or one registered `LT-*` artifact | `literature_read.LiteratureReader` |
+| `literature_primary` | primary-artifact status / verified local copy | `literature_primary.LiteraturePrimary` |
+
+The agent is addressed by `paper_id` or a registered Study artifact kind; it is
+never given a bucket, object key, filesystem path, credential, or shell. Its only
+write is the disposable primary cache. It cannot modify any research record,
+authorize an experiment, or provision compute.
+
+Verify the adapter with `make literature-tools-check` (needs `bun`); its static
+contract is additionally enforced inside `make research-check`.
+
+Two open gaps observed from real use are recorded in the roadmap: primary
+artifacts are not yet retained (`PRIMARY_NOT_AVAILABLE` for every paper, so
+primary verification is unavailable and answers rest on cards), and no wiring
+exists to `infra/` (INC-004B).
+
+This interface does not answer semantic claim questions such as which papers
+support asymmetric transfer, contradict a mechanism, or learn a particular
+relation. Those require claim-level evidence that is not represented yet; do
+not infer it from titles or screening outcomes.
+
 ## Current literature Study
 
 `LT-0002 — Published relation-learning variants for two selected families` (DEC-0013)

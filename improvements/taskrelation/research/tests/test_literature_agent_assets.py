@@ -1,0 +1,505 @@
+"""The Literature Agent vertical slice stays read-only and reference-bounded.
+
+These tests cover the parts a unit test can hold: the agent's declared authority,
+its skill, the tool adapter's declared surface, and the deterministic modules'
+mutation behaviour. Model reasoning quality is evaluated by real runs, not here.
+"""
+
+import json
+import re
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+RESEARCH_DIR = REPO_ROOT / "improvements" / "taskrelation" / "research"
+AGENT_PATH = REPO_ROOT / ".omp" / "agents" / "literature-reviewer.md"
+TOOLS_PATH = REPO_ROOT / ".omp" / "tools" / "literature.ts"
+MCP_PATH = REPO_ROOT / ".omp" / "mcp.json"
+TRANSCRIPT_CHECKER = REPO_ROOT / "scripts" / "agents" / "literature_agent_transcript.py"
+
+# The approved evidence surface: the harness primitive plus four capabilities.
+REQUIRED_LITERATURE_TOOLS = (
+    "literature_resolve", "literature_query", "literature_read", "literature_primary",
+)
+# Historical recall is not an evidence capability in any spelling.
+RECALL_TOOL_NEEDLES = ("deja", "recall", "retain", "reflect", "history", "memory", "mcp__")
+MCP_PATH = REPO_ROOT / ".omp" / "mcp.json"
+TRANSCRIPT_CHECKER = REPO_ROOT / "scripts" / "agents" / "literature_agent_transcript.py"
+
+# The approved evidence surface: harness primitive plus the four capabilities.
+REQUIRED_LITERATURE_TOOLS = (
+    "literature_resolve", "literature_query", "literature_read", "literature_primary",
+)
+# Historical recall is not an evidence capability in any spelling.
+RECALL_TOOL_NEEDLES = ("deja", "recall", "retain", "reflect", "history", "memory", "mcp__")
+SKILL_DIR = REPO_ROOT / ".agents" / "skills" / "wavcse-literature-review"
+SKILL_PATH = SKILL_DIR / "SKILL.md"
+
+# The authority contract for V1: read-only, reference-bounded, no shell, no
+# mutation, no infrastructure, no credential access.
+FORBIDDEN_AGENT_TOOLS = (
+    "bash", "write", "edit", "python", "notebook", "browser", "computer",
+    "task", "glob", "grep", "find", "lsp", "web_search", "ask",
+    # The evidence surface is the retained corpus only: a generic reader would
+    # let the literature agent answer questions about our own code and state.
+    "read",
+)
+ALLOWED_AGENT_TOOLS = (
+    "literature_resolve", "literature_query", "literature_read",
+    "literature_primary", "yield",
+)
+FORBIDDEN_TOOL_SOURCE = (
+    "child_process", "spawnSync", "shell: true", "boto3", "botocore",
+    "aws_access", "secret_access", "session_token", "s3://", "AWS_",
+)
+EXPECTED_TOOL_NAMES = (
+    "literature_primary", "literature_query", "literature_read",
+    "literature_resolve",
+)
+
+def parse_frontmatter(path):
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise AssertionError("{} has no frontmatter block".format(path.name))
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            return lines[1:index], lines[index + 1:]
+    raise AssertionError("{} frontmatter is never closed".format(path.name))
+
+
+def run_module(module, *argv):
+    result = subprocess.run(
+        [sys.executable, "-m", "improvements.taskrelation.research." + module, *argv],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    return result
+
+
+class AgentDefinitionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.entries, body = parse_frontmatter(AGENT_PATH)
+        cls.body = "\n".join(body)
+        cls.fields = {}
+        for line in cls.entries:
+            key, _, value = line.partition(":")
+            cls.fields[key.strip()] = value.strip().strip('"').strip("'")
+
+    def test_agent_declares_identity_and_a_model_role(self):
+        self.assertEqual(self.fields.get("name"), "literature-reviewer")
+        self.assertTrue(self.fields.get("description"))
+        self.assertTrue(self.fields.get("model", "").startswith("@"))
+
+    def test_agent_grants_only_read_only_tools(self):
+        declared = [
+            name.strip() for name in self.fields["tools"].split(",") if name.strip()
+        ]
+
+        for forbidden in FORBIDDEN_AGENT_TOOLS:
+            with self.subTest(tool=forbidden):
+                self.assertNotIn(forbidden, declared)
+        for name in declared:
+            with self.subTest(tool=name):
+                self.assertIn(name, ALLOWED_AGENT_TOOLS)
+
+    def test_agent_autoloads_a_skill_that_exists(self):
+        declared = self.fields.get("autoloadSkills", "")
+
+        self.assertEqual(declared, SKILL_DIR.name)
+        self.assertTrue(SKILL_PATH.is_file())
+
+    def test_agent_forbids_decisions_experiments_and_state_changes(self):
+        lowered = self.body.lower()
+
+        for phrase in (
+            "authorize", "decision", "findings.md", "decisions.md",
+            "studies.jsonl", "manifest", "credential",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, lowered)
+
+
+class SkillAssetTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.entries, body = parse_frontmatter(SKILL_PATH)
+        cls.body = "\n".join(body)
+        cls.fields = {}
+        for line in cls.entries:
+            key, _, value = line.partition(":")
+            cls.fields[key.strip()] = value.strip().strip('"').strip("'")
+
+    def test_skill_name_matches_its_directory_and_has_a_bounded_description(self):
+        self.assertEqual(self.fields.get("name"), SKILL_DIR.name)
+        description = self.fields.get("description", "")
+        self.assertTrue(description)
+        self.assertLessEqual(len(description), 200)
+
+    def test_skill_teaches_progressive_disclosure_and_evidence_levels(self):
+        lowered = self.body.lower()
+
+        for phrase in (
+            "cheapest sufficient evidence", "card-derived", "study-derived",
+            "primary", "never present card-derived",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, lowered)
+
+    def test_skill_separates_claim_evidence_interpretation_and_implication(self):
+        lowered = self.body.lower()
+
+        for phrase in (
+            "paper claim", "reported evidence", "your interpretation",
+            "research implication",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, lowered)
+
+    def test_skill_states_the_authority_limits(self):
+        lowered = self.body.lower()
+
+        for phrase in (
+            "findings.md", "decisions.md", "studies.jsonl",
+            "authoriz", "creating a claim record is not yours to do",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, lowered)
+
+
+def declared_parameters(code):
+    """Collect parameter names from each `parameters: z.object({...})` block."""
+
+    blocks = []
+    current = None
+    for line in code.splitlines():
+        if "z.object({" in line:
+            current = set()
+            continue
+        if current is None:
+            continue
+        if line.strip().startswith("})"):
+            blocks.append(current)
+            current = None
+            continue
+        match = re.match(r"\s*([A-Za-z][A-Za-z0-9]*)\s*:", line)
+        if match:
+            current.add(match.group(1))
+    return blocks
+
+
+def code_only(source):
+    """Strip comments so capability assertions test code, not prose."""
+
+    without_block = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+    return "\n".join(
+        line.split("//", 1)[0] for line in without_block.splitlines()
+    )
+
+
+class ToolAdapterTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.source = TOOLS_PATH.read_text(encoding="utf-8")
+        cls.code = code_only(cls.source)
+
+    def test_adapter_exposes_exactly_the_semantic_surface(self):
+        declared = sorted(re.findall(r'name:\s*"(literature_[a-z_]+)"', self.source))
+
+        self.assertEqual(declared, list(EXPECTED_TOOL_NAMES))
+
+    def test_adapter_declares_no_shell_infrastructure_or_credentials(self):
+        for needle in FORBIDDEN_TOOL_SOURCE:
+            with self.subTest(needle=needle):
+                self.assertNotIn(needle, self.code)
+        # The only executable reached is the fixed Python interpreter, never a shell.
+        self.assertNotIn("Bun.$", self.code)
+        self.assertEqual(self.code.count("pi.exec("), 1)
+
+    def test_adapter_exposes_recorded_claims_and_survey_reads(self):
+        self.assertIn('"paper_claims"', self.code)
+        self.assertIn('"claim"', self.code)
+        self.assertIn('"literature_claims"', self.code)
+        self.assertIn('"survey"', self.code)
+
+    def test_agent_declares_no_file_access_and_claim_first_provenance(self):
+        lowered = "\n".join(parse_frontmatter(AGENT_PATH)[1]).lower()
+
+        self.assertIn("no general file access", lowered)
+        self.assertIn("paper_claims", lowered)
+        self.assertIn("claim_ref", lowered)
+
+    def test_adapter_declares_paper_addressed_parameters_only(self):
+        blocks = declared_parameters(self.code)
+        declared = set().union(*blocks) if blocks else set()
+
+        self.assertEqual(len(blocks), 4, "one parameter block per exposed tool")
+        for name in ("paperId", "studyId", "source", "operation"):
+            with self.subTest(param=name):
+                self.assertIn(name, declared)
+        for forbidden in ("path", "filePath", "objectKey", "bucket", "command", "url"):
+            with self.subTest(param=forbidden):
+                self.assertNotIn(forbidden, declared)
+
+
+class MutationBoundaryTests(unittest.TestCase):
+    """Only literature_primary may write, and only inside the disposable cache."""
+
+    READ_ONLY_MODULES = (
+        "literature_catalog.py", "literature_query.py", "literature_read.py",
+        "literature_claims.py",
+    )
+    WRITE_PATTERNS = ("write_text(", "open(", ".unlink(", "mkdir(", "os.replace(")
+
+    def test_read_only_modules_contain_no_write_operations(self):
+        for name in self.READ_ONLY_MODULES:
+            source = (RESEARCH_DIR / name).read_text(encoding="utf-8")
+            for pattern in self.WRITE_PATTERNS:
+                with self.subTest(module=name, pattern=pattern):
+                    self.assertNotIn(pattern, source)
+
+    def test_primary_module_writes_only_paths_derived_from_paper_id(self):
+        source = (RESEARCH_DIR / "literature_primary.py").read_text(encoding="utf-8")
+
+        self.assertIn("cache_path", source)
+        # A cache root inside the repository is refused outright.
+        self.assertIn("outside the repository", source)
+        self.assertIn("os.replace", source)
+        for pattern in ("boto3", "botocore", "requests", "urllib.request"):
+            with self.subTest(pattern=pattern):
+                self.assertNotIn(pattern, source)
+
+    def test_agent_visible_modules_expose_no_screening_status_field(self):
+        for name in ("literature_catalog.py", "literature_read.py"):
+            source = (RESEARCH_DIR / name).read_text(encoding="utf-8")
+            for pattern in ('"status"', "'status'"):
+                with self.subTest(module=name, pattern=pattern):
+                    self.assertNotIn(pattern, source)
+
+
+class BoundedReadCliTests(unittest.TestCase):
+    def test_card_read_returns_card_derived_text_for_a_known_paper(self):
+        result = run_module("literature_read", "card", "goncalves-2016-mssl", "--max-chars", "400")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        document = json.loads(result.stdout)
+        self.assertEqual(document["source_kind"], "card")
+        self.assertEqual(document["evidence_level"], "card-derived")
+        self.assertEqual(document["paper_id"], "goncalves-2016-mssl")
+
+    def test_study_artifact_reads_are_limited_to_registered_kinds(self):
+        ok = run_module("literature_read", "study", "LT-0001", "analysis", "--max-chars", "200")
+        missing = run_module("literature_read", "study", "LT-0002", "result")
+
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        self.assertEqual(json.loads(ok.stdout)["evidence_level"], "Study-derived")
+        self.assertEqual(missing.returncode, 1)
+        self.assertEqual(json.loads(missing.stderr)["kind"], "ARTIFACT_NOT_AVAILABLE")
+
+    def test_survey_reads_are_limited_to_derived_survey_documents(self):
+        ok = run_module("literature_read", "survey", "MSSL_SPARSITY_ANALYSIS.md", "--max-chars", "300")
+
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        document = json.loads(ok.stdout)
+        self.assertEqual(document["source_kind"], "survey")
+        self.assertEqual(document["evidence_level"], "survey-derived")
+        self.assertEqual(document["characters"], 300)
+        self.assertTrue(document["truncated"])
+
+        # A survey document is derived knowledge one level below a card, so a
+        # caller can never mistake it for the paper's own statement.
+        self.assertNotEqual(document["evidence_level"], "card-derived")
+
+        for reference in ("../DECISIONS.md", "/etc/passwd", "notes.txt"):
+            with self.subTest(reference=reference):
+                result = run_module("literature_read", "survey", reference)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(json.loads(result.stderr)["kind"], "INVALID_REFERENCE")
+
+        missing = run_module("literature_read", "survey", "NO_SUCH_SURVEY.md")
+        self.assertEqual(missing.returncode, 1)
+        self.assertEqual(json.loads(missing.stderr)["kind"], "ARTIFACT_NOT_AVAILABLE")
+
+    def test_path_like_reference_cannot_escape_the_literature_set(self):
+        for reference in ("../DECISIONS.md", "/etc/passwd", "..", "INDEX"):
+            with self.subTest(reference=reference):
+                result = run_module("literature_read", "card", reference)
+                self.assertEqual(result.returncode, 1)
+                self.assertTrue(json.loads(result.stderr)["kind"])
+
+    def test_primary_reports_a_precise_state_instead_of_credentials(self):
+        result = run_module("literature_primary", "get", "goncalves-2016-mssl")
+
+        self.assertEqual(result.returncode, 1)
+        document = json.loads(result.stderr)
+        self.assertEqual(document["kind"], "PRIMARY_NOT_AVAILABLE")
+        serialized = json.dumps(document).lower()
+        for needle in ("secret", "access_key", "aws", "bucket"):
+            with self.subTest(needle=needle):
+                self.assertNotIn(needle, serialized)
+
+
+
+
+
+
+class EvidenceAuthorityTests(unittest.TestCase):
+    """Historical recall is removed at the configuration boundary, not by prose."""
+
+    def test_project_mcp_config_disables_the_historical_recall_server(self):
+        # The native project MCP config path is `<cwd>/.omp/mcp.json`; a root-level
+        # `mcp.json` is not read, so a disable placed there would be inert.
+        self.assertTrue(MCP_PATH.is_file(), "%s is missing" % MCP_PATH)
+        config = json.loads(MCP_PATH.read_text(encoding="utf-8"))
+
+        disabled = config.get("disabledServers") or []
+        deja = (config.get("mcpServers") or {}).get("deja") or {}
+
+        self.assertTrue(
+            "deja" in disabled or deja.get("enabled") is False,
+            "the project MCP config does not disable the recall server: %r" % config,
+        )
+
+    def test_agent_declares_no_recall_or_mcp_capability(self):
+        entries, _ = parse_frontmatter(AGENT_PATH)
+        fields = {}
+        for line in entries:
+            key, _, value = line.partition(":")
+            fields[key.strip()] = value.strip()
+        declared = [n.strip() for n in fields.get("tools", "").split(",") if n.strip()]
+
+        for name in declared:
+            lowered = name.lower()
+            for needle in RECALL_TOOL_NEEDLES:
+                with self.subTest(tool=name, needle=needle):
+                    self.assertNotIn(needle, lowered)
+
+    def test_skill_fails_closed_when_evidence_tools_are_unavailable(self):
+        lowered = SKILL_PATH.read_text(encoding="utf-8").lower()
+
+        for phrase in (
+            "required_literature_tool_unavailable",
+            "evidence_status: unavailable",
+            "not established from approved evidence",
+            "fail closed",
+            "missing_capability",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, lowered)
+
+    def test_skill_and_agent_reject_recalled_text_as_provenance(self):
+        for path in (SKILL_PATH, AGENT_PATH):
+            lowered = path.read_text(encoding="utf-8").lower()
+            with self.subTest(path=path.name):
+                self.assertIn("never evidence", lowered)
+                self.assertIn("recalled", lowered)
+                self.assertIn("this run", lowered)
+                self.assertNotIn("session-recalled", lowered)
+
+    def test_skill_requires_claim_lookup_for_every_question_shape(self):
+        lowered = SKILL_PATH.read_text(encoding="utf-8").lower()
+
+        for phrase in ("every question shape", "comparative", "claim_ref", "even when"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, lowered)
+
+
+def write_transcript(path, *, tools, calls, with_init=True):
+    lines = []
+    if with_init:
+        lines.append({"type": "session_init", "tools": list(tools)})
+    for name in calls:
+        lines.append({
+            "type": "message",
+            "message": {"role": "assistant", "content": [{"type": "toolCall", "name": name}]},
+        })
+    Path(path).write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+
+
+class TranscriptCheckerTests(unittest.TestCase):
+    """An evaluation is invalid unless its own transcript proves the grant."""
+
+    def run_checker(self, *argv):
+        return subprocess.run(
+            [sys.executable, str(TRANSCRIPT_CHECKER), *argv],
+            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=120,
+        )
+
+    def fixture(self, **kwargs):
+        handle = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+        handle.close()
+        write_transcript(handle.name, **kwargs)
+        self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
+        return handle.name
+
+    def test_accepts_a_grant_that_was_exercised(self):
+        path = self.fixture(
+            tools=REQUIRED_LITERATURE_TOOLS + ("yield",),
+            calls=["literature_query", "literature_read", "yield"],
+        )
+        result = self.run_checker(path)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("OK", result.stdout)
+
+    def test_rejects_the_provenance_bypass_run(self):
+        """The observed failure: recall granted, called, and no corpus tool used."""
+
+        path = self.fixture(
+            tools=("yield", "mcp__deja_deja"),
+            calls=["mcp__deja_deja", "mcp__deja_deja", "yield"],
+        )
+        result = self.run_checker("--json", path)
+        report = json.loads(result.stdout.strip().splitlines()[0])
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(report["verdict"], "INVALID")
+        self.assertIn("mcp__deja_deja", report["forbidden_granted"])
+        self.assertIn("mcp__deja_deja", report["forbidden_called"])
+        self.assertEqual(report["missing_required"], list(REQUIRED_LITERATURE_TOOLS))
+        self.assertTrue(any(r.startswith("NO_EVIDENCE_CALL") for r in report["reasons"]))
+
+    def test_rejects_a_grant_without_an_evidence_call(self):
+        path = self.fixture(tools=REQUIRED_LITERATURE_TOOLS + ("yield",), calls=["yield"])
+        result = self.run_checker(path)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("NO_EVIDENCE_CALL", result.stdout)
+
+    def test_rejects_a_transcript_that_never_recorded_a_grant(self):
+        path = self.fixture(tools=(), calls=["literature_query"], with_init=False)
+        result = self.run_checker(path)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("TRANSCRIPT_WITHOUT_TOOL_GRANT", result.stdout)
+
+    def test_rejects_a_native_recall_device_in_the_grant(self):
+        path = self.fixture(
+            tools=REQUIRED_LITERATURE_TOOLS + ("yield", "recall"),
+            calls=["literature_query"],
+        )
+        result = self.run_checker(path)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("FORBIDDEN_TOOL_GRANTED", result.stdout)
+
+    def test_can_require_specific_calls(self):
+        path = self.fixture(
+            tools=REQUIRED_LITERATURE_TOOLS + ("yield",), calls=["literature_read"]
+        )
+        ok = self.run_checker("--require-call", "literature_read", path)
+        bad = self.run_checker("--require-call", "literature_query", path)
+
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("REQUIRED_CALL_ABSENT", bad.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()

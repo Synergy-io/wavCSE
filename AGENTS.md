@@ -163,6 +163,10 @@ Never weaken or delete a failing test to make the gate pass.
 - `.agents/skills/wavcse-embedding-generation/SKILL.md` — embedding readiness and extraction
   semantics: canonical artifact reuse, scientific configuration and invariants, source readiness,
   validation, dataset-specific (KS/SID/ER/FSC) pitfalls.
+- `.agents/skills/wavcse-literature-review/SKILL.md` — one bounded literature investigation over the
+  retained corpus: identity resolution, the cheapest sufficient evidence, recorded claims first,
+  and a provenance-carrying synthesis with evidence levels instead of a decision. Read-only; its
+  agent is `.omp/agents/literature-reviewer.md`.
 - Infra-side companions live in the `wavcse-infra` checkout: `wavcse-infra-operator`,
   `gpu-research-operator`, `wavcse-artifact-pipeline`. Load the relevant one before consequential work
   in its domain and follow it rather than paraphrasing it.
@@ -176,7 +180,9 @@ Never weaken or delete a failing test to make the gate pass.
 - `STUDIES.jsonl` — study registry; `studies/` — one folder per Study ID;
 - `FINDINGS.md`, `FAILURES.md`, `DECISIONS.md`, `BACKLOG.md`;
 - `FRAMEWORK.md`, `VARIANT_BENCHMARK_PROTOCOL.md` — the comparison contract;
-- `literature/` — verified sources; `weekly/` — supervisor-facing reports.
+- `literature/` — verified sources; `literature/claims.jsonl` — source-bound claim records keyed
+  `paper_id#claim_id`, validated by `literature_claims.py` (each quote must be verbatim inside the
+  named section); `weekly/` — supervisor-facing reports.
 
 Before proposing an experiment, read the existing evidence: the architecture READMEs (`01-mtrl/`,
 `02-lnp/`, `03-gbc/`) and `improvements/base/POOLING_GRID_SEARCH.md`.
