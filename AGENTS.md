@@ -167,10 +167,16 @@ Never weaken or delete a failing test to make the gate pass.
   retained corpus: identity resolution, the cheapest sufficient evidence, recorded claims first,
   and a provenance-carrying synthesis with evidence levels instead of a decision. Read-only; its
   agent is `.omp/agents/literature-reviewer.md`.
+- `.agents/skills/wavcse-research-computer/SKILL.md` — the research-computer loop: a human goal →
+  reconciled evidence → a proposal designed by the read-only `.omp/agents/research-designer.md` →
+  challenged by the read-only `.omp/agents/research-reviewer.md` → a human approval request, then
+  **stop**. The proposal object is `improvements/taskrelation/research/proposals/README.md`,
+  validated deterministically by `proposal_check.py`. V1 registers nothing, authorizes nothing and
+  runs nothing; execution stays a separate human-gated increment.
 - Infra-side companions live in the `wavcse-infra` checkout: `wavcse-infra-operator`,
   `gpu-research-operator`, `wavcse-artifact-pipeline`. Load the relevant one before consequential work
   in its domain and follow it rather than paraphrasing it.
-- Commands: `.agents/commands/{wav-cycle,wav-experiment,wav-embeddings,wav-analyze,wav-literature,wav-status,wav-weekly}.md`.
+- Commands: `.agents/commands/{wav-cycle,wav-experiment,wav-embeddings,wav-analyze,wav-literature,wav-status,wav-weekly,wav-propose}.md`.
 
 ## Current state — reconcile, never assume
 

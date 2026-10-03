@@ -52,6 +52,10 @@ This repository (wavCSE):
 - `wavcse-experiment-operator` — study design, execution, analysis, decisions.
 - `wavcse-embedding-generation` — embedding readiness and extraction semantics.
 
+For a request to *propose* a study rather than run one, the design/review loop
+is `wavcse-research-computer` — it produces a reviewed, human-gated proposal and
+stops before any compute.
+
 The wavcse-infra checkout:
 
 - `wavcse-infra-operator` — controller, workers, jobs, storage, lifecycle.
