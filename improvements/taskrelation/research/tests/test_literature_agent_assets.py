@@ -129,6 +129,69 @@ class AgentDefinitionTests(unittest.TestCase):
                 self.assertIn(phrase, lowered)
 
 
+class CapabilityDeclarationDriftTests(unittest.TestCase):
+    """INC-016: declaration, adapter surface and approved grant must not drift.
+
+    The first real Literature Agent investigation observed `literature_discover`
+    declared in the agent frontmatter but absent from the runtime grant. A
+    declared-but-ungranted capability is a defect class of its own, so this test
+    pins the agent's declaration to the adapter's exported surface and the
+    approved constant; if any layer loses a capability the others still declare,
+    it fails. Runtime reachability is proved separately by the transcript
+    checker (`scripts/agents/literature_agent_transcript.py`), which reads the
+    real `session_init.tools` of a run.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        entries, _ = parse_frontmatter(AGENT_PATH)
+        fields = {}
+        for line in entries:
+            key, _, value = line.partition(":")
+            fields[key.strip()] = value.strip().strip('"').strip("'")
+        cls.declared = tuple(
+            sorted(name.strip() for name in fields["tools"].split(",") if name.strip())
+        )
+        cls.adapter = tuple(
+            sorted(re.findall(r'name:\s*"(literature_[a-z_]+)"', TOOLS_PATH.read_text(encoding="utf-8")))
+        )
+        cls.code = code_only(TOOLS_PATH.read_text(encoding="utf-8"))
+
+    def test_agent_declaration_equals_the_adapter_surface(self):
+        self.assertEqual(self.declared, tuple(sorted(EXPECTED_TOOL_NAMES)))
+        self.assertEqual(self.adapter, tuple(sorted(EXPECTED_TOOL_NAMES)))
+
+    def test_every_required_capability_is_declared_and_granted(self):
+        for capability in REQUIRED_LITERATURE_TOOLS + ("literature_discover",):
+            with self.subTest(capability=capability):
+                self.assertIn(capability, self.declared)
+                self.assertIn(capability, self.adapter)
+                self.assertIn(capability, ALLOWED_AGENT_TOOLS)
+
+    def test_adapter_query_operations_cover_the_intended_surface(self):
+        for operation in (
+            "list", "resolve", "paper_studies", "study_papers", "study",
+            "assessment", "paper_claims", "claim", "synthesis_list", "synthesis",
+        ):
+            with self.subTest(operation=operation):
+                self.assertIn('"{}"'.format(operation), self.code)
+        # synthesis_list and synthesis resolve to the existing Python commands.
+        self.assertIn('["literature_query", "syntheses"]', self.code)
+        self.assertIn('"synthesis", params.synthesisId', self.code)
+
+    def test_adapter_read_sources_cover_every_artifact_class(self):
+        for source in ("card", "study", "survey", "synthesis"):
+            with self.subTest(source=source):
+                self.assertIn('"{}"'.format(source), self.code)
+
+    def test_adapter_discovery_operations_cover_the_provider_surface(self):
+        for operation in (
+            "doi", "arxiv", "title", "search", "references", "citations", "providers",
+        ):
+            with self.subTest(operation=operation):
+                self.assertIn('"{}"'.format(operation), self.code)
+
+
 class SkillAssetTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -548,6 +611,32 @@ class EvidenceAuthorityTests(unittest.TestCase):
         for phrase in ("every question shape", "comparative", "claim_ref", "even when"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, lowered)
+
+    def test_agent_and_skill_forbid_undisclosed_recall_substitution(self):
+        # Observed failure: with discovery unavailable the agent substituted
+        # remembered arXiv identifiers without disclosing the provenance. Both
+        # assets must state that a remembered identifier is not retrieved
+        # evidence, and that model memory may only seed a search query.
+        for path in (SKILL_PATH, AGENT_PATH):
+            lowered = path.read_text(encoding="utf-8").lower()
+            with self.subTest(path=path.name):
+                self.assertIn("never substitute", lowered)
+                self.assertIn("search query", lowered)
+                self.assertIn("not retrieved evidence", lowered)
+
+    def test_skill_requires_counts_from_the_structured_result(self):
+        lowered = SKILL_PATH.read_text(encoding="utf-8").lower()
+
+        for phrase in ("exact count", "structured result", "its length"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, lowered)
+
+    def test_agent_requires_counts_from_the_structured_result(self):
+        lowered = AGENT_PATH.read_text(encoding="utf-8").lower()
+
+        self.assertIn("exact count", lowered)
+        self.assertIn("structured query result", lowered)
+        self.assertIn("its length", lowered)
 
 
 def write_transcript(path, *, tools, calls, with_init=True):

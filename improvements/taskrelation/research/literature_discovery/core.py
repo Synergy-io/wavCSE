@@ -16,6 +16,17 @@ or the acquisition ledger, and never calls `LiteraturePrimary.register`. A
 
 Authority: read-only with respect to research state. ``search`` and ``discover``
 have no side effects beyond an in-memory request cache.
+
+Multi-provider aggregation policy (INC-016). Every queryable provider is invoked
+with the same global ``limit``; their result streams are then merged by
+deterministic round-robin interleave in provider order, deduplicated by the
+candidate's strongest shared identifier (DOI > arXiv id > OpenReview id >
+provider-local record id), and truncated to the global bound. Because the merge
+interleaves rather than concatenates, one provider cannot consume the whole
+candidate budget merely because it is consulted first, while a lone healthy
+provider still fills the whole budget. Provider order, per-provider result order,
+and the dedup key are all deterministic, so identical inputs yield an identical
+result.
 """
 
 import re
@@ -154,9 +165,8 @@ class StructuredDiscovery:
                 limit=self.DEFAULT_LIMIT,
             )
 
-        collected = []
+        groups = []
         failures = []
-        queried = []
         truncated = False
         for name in self._order:
             if "search" not in self._providers[name].capabilities:
@@ -164,16 +174,16 @@ class StructuredDiscovery:
             result = self._invoke(name, "search", query=query, limit=bound, year=year)
             if result is None:
                 continue
-            queried.append(name)
             failures.extend([result.failure] if result.failure else [])
             truncated = truncated or result.truncated
-            collected.extend(self._classify_all(result.candidates))
+            groups.append((name, self._classify_all(result.candidates)))
 
-        candidates, dropped = self._truncate(collected, bound)
-        truncated = truncated or dropped
+        queried = [name for name, _ in groups]
+        candidates, merged_truncated = self._merge_providers(groups, bound)
         return self._assemble(
             mode="search", request=request, candidates=candidates,
-            failures=failures, queried=queried, limit=bound, truncated=truncated,
+            failures=failures, queried=queried, limit=bound,
+            truncated=truncated or merged_truncated,
         )
 
     def references(self, paper_id, *, limit=None):
@@ -233,9 +243,8 @@ class StructuredDiscovery:
         composed = title
         if authors:
             composed = "{} {}".format(title, " ".join(authors))
-        collected = []
+        groups = []
         failures = []
-        queried = []
         truncated = False
         for name in self._order:
             if "search" not in self._providers[name].capabilities:
@@ -243,15 +252,16 @@ class StructuredDiscovery:
             result = self._invoke(name, "search", query=composed, limit=limit, year=year)
             if result is None:
                 continue
-            queried.append(name)
             failures.extend([result.failure] if result.failure else [])
             truncated = truncated or result.truncated
-            collected.extend(self._classify_all(result.candidates))
-        ranked = self._rank_by_title(collected, title)
-        candidates, dropped = self._truncate(ranked, limit)
+            groups.append((name, self._classify_all(result.candidates)))
+        queried = [name for name, _ in groups]
+        ranked, merged_truncated = self._merge_providers(
+            groups, limit, rank=lambda items: self._rank_by_title(items, title)
+        )
         return self._assemble(
-            mode="lookup", request=request, candidates=candidates, failures=failures,
-            queried=queried, limit=limit, truncated=truncated or dropped,
+            mode="lookup", request=request, candidates=ranked, failures=failures,
+            queried=queried, limit=limit, truncated=truncated or merged_truncated,
         )
 
     def _expand(self, paper_id, *, mode, relation, limit):
@@ -276,9 +286,8 @@ class StructuredDiscovery:
 
         target, source = self._expand_target(paper)
         capability = "references" if relation == model.REFERENCE else "citations"
-        collected = []
+        groups = []
         failures = []
-        queried = []
         for name in self._order:
             provider = self._providers[name]
             if capability not in provider.capabilities or not self._can_target(provider, target):
@@ -286,11 +295,11 @@ class StructuredDiscovery:
             result = self._invoke(name, capability, target=target, limit=limit)
             if result is None:
                 continue
-            queried.append(name)
             failures.extend([result.failure] if result.failure else [])
-            collected.extend(self._classify_all(result.candidates, relation=relation))
+            groups.append((name, self._classify_all(result.candidates, relation=relation)))
 
-        candidates, dropped = self._truncate(collected, limit)
+        queried = [name for name, _ in groups]
+        candidates, dropped = self._merge_providers(groups, limit)
         if not candidates and not queried:
             failures.append(
                 model.DiscoveryFailure(
@@ -430,6 +439,48 @@ class StructuredDiscovery:
             return candidates, False
         return candidates[:limit], True
 
+    def _merge_providers(self, groups, limit, *, rank=None):
+        """Merge per-provider candidate streams deterministically and fairly.
+
+        Aggregation policy: every provider is queried with the same global bound,
+        and its results are interleaved *round-robin* in provider order rather
+        than concatenated. A single provider therefore cannot consume the whole
+        budget merely because it executes first — any provider that returned a
+        candidate is represented before any provider contributes a second one,
+        while a lone healthy provider still fills the whole budget. The merged
+        stream is deduplicated by its strongest shared identifier (DOI, then
+        arXiv id, then OpenReview id, otherwise the provider-local record id), so
+        the same work returned by two providers is not counted twice; the first
+        occurrence in provider order is kept together with its own identity
+        verdict. Ordering is fully deterministic: provider order, then each
+        provider's own result order. An optional ``rank`` reorders the bounded
+        result (title lookup promotes exact matches). Returns
+        ``(candidates, truncated)``.
+        """
+        seen = set()
+        merged = []
+        cursors = [0] * len(groups)
+        total = sum(len(items) for _, items in groups)
+        taken = 0
+        while len(merged) < limit and taken < total:
+            for index, (_, items) in enumerate(groups):
+                if len(merged) >= limit or taken >= total:
+                    break
+                cursor = cursors[index]
+                if cursor >= len(items):
+                    continue
+                candidate = items[cursor]
+                cursors[index] = cursor + 1
+                taken += 1
+                key = _candidate_identity_key(candidate.paper)
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(candidate)
+        if rank is not None:
+            merged = rank(merged)
+        return merged, taken < total
+
     def _rank_by_title(self, candidates, title):
         normalized = _normalize_title(title)
         exact = [candidate for candidate in candidates
@@ -464,6 +515,24 @@ class StructuredDiscovery:
         if not _ARXIV.match(value):
             raise DiscoveryError("arxiv {!r} is not a valid arXiv identifier".format(value))
         return value
+
+
+def _candidate_identity_key(paper):
+    """A deterministic cross-provider dedup key for one normalized candidate.
+
+    The strongest shared identifier wins, so the same work returned by two
+    providers collapses to a single candidate in an aggregated result set; a
+    record that carries no shared identifier is keyed by its provider-local
+    record id and is never merged across providers.
+    """
+
+    if paper.doi:
+        return ("doi", paper.doi.strip().lower())
+    if paper.arxiv_id:
+        return ("arxiv", paper.arxiv_id.strip().lower())
+    if paper.openreview_id:
+        return ("openreview", paper.openreview_id.strip())
+    return ("record", paper.provider, paper.provider_record_id)
 
 
 def _first_id(external, kind):

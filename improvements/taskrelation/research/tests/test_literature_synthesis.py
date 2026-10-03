@@ -333,6 +333,54 @@ class RealRegistryTests(unittest.TestCase):
         self.assertTrue(content.text.startswith("#"))
 
 
+class SurveyEnumerationTests(unittest.TestCase):
+    """INC-016: the literature_survey corpus must be enumerable and readable.
+
+    The corpus is addressed through the registered synthesis layer, so the
+    bounded enumeration mechanism is ``literature_query.syntheses`` (the
+    ``synthesis_list`` tool operation): it returns metadata only, never prose,
+    and covers every ``literature_survey/*.md`` document exactly once. A selected
+    document can then be opened either by stable ``synthesis_id`` or by its raw
+    filename.
+    """
+
+    def test_every_survey_document_is_enumerated_exactly_once(self):
+        on_disk = sorted(path.name for path in SURVEY_DIR.glob("*.md"))
+        enumerated = sorted(
+            Path(record.path).name
+            for record in literature_synthesis.load_syntheses().records
+        )
+        self.assertEqual(enumerated, on_disk)
+        self.assertTrue(on_disk)
+
+    def test_enumeration_is_bounded_metadata_without_prose(self):
+        records = literature_query.LiteratureQuery().list_syntheses()
+        self.assertGreaterEqual(len(records), 1)
+        for record in records:
+            payload = record.as_dict()
+            self.assertNotIn("text", payload)
+            self.assertNotIn("content", payload)
+
+    def test_selected_survey_document_reads_by_filename_and_by_identity(self):
+        document = "MSSL_SPARSITY_ANALYSIS.md"
+        reader = literature_read.LiteratureReader()
+        by_name = reader.read_survey(document, max_chars=80)
+        by_identity = reader.read_synthesis("mssl-sparsity-analysis", max_chars=80)
+
+        self.assertEqual(by_name.evidence_level, "survey-derived")
+        self.assertEqual(by_identity.evidence_level, "survey-derived")
+        self.assertEqual(by_name.reference, document)
+        self.assertEqual(by_identity.reference, "mssl-sparsity-analysis")
+        self.assertEqual(by_name.path, by_identity.path)
+
+    def test_survey_reads_refuse_unknown_or_path_like_references(self):
+        reader = literature_read.LiteratureReader()
+        with self.assertRaises(literature_read.LiteratureReadError):
+            reader.read_survey("../../DECISIONS.md")
+        with self.assertRaises(literature_read.LiteratureReadError):
+            reader.read_survey("NO_SUCH_DOCUMENT.md")
+
+
 class AuthorityBoundaryTests(unittest.TestCase):
     def test_check_authority_passes_on_the_real_repository(self):
         registry = literature_synthesis.check_authority()

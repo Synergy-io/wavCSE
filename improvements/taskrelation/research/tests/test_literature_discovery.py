@@ -254,7 +254,112 @@ class SearchTests(unittest.TestCase):
         self.assertTrue(candidate.abstract.endswith("\u2026"))
 
 
+class ProviderAggregationTests(unittest.TestCase):
+    """INC-016: one provider must not starve the others under a bounded search."""
+
+    def _route(self, crossref_items, *, s2_items=None, fail=()):
+        def route(url, headers):
+            if "crossref" in url:
+                if "crossref" in fail:
+                    return http_response(200, b"{ not json")
+                return json_response(
+                    {"message": {"items": crossref_items, "total-results": len(crossref_items)}}
+                )
+            if "arxiv" in url:
+                return http_response(200, ARXIV_FEED.encode("utf-8"))
+            if "semanticscholar" in url:
+                return json_response({"data": s2_items or [], "total": len(s2_items or [])})
+            raise AssertionError("unexpected url {!r}".format(url))
+
+        return route
+
+    @staticmethod
+    def _crossref_items(count):
+        return [crossref_item(doi="10.1000/cr{}".format(i), title="CR {}".format(i))
+                for i in range(count)]
+
+    def test_a_first_provider_cannot_starve_later_ones(self):
+        discovery = make_discovery(
+            FakeTransport(self._route(self._crossref_items(5))),
+            provider_names=("crossref", "arxiv"),
+        )
+        result = discovery.search("multi-task learning", limit=3)
+
+        providers = [candidate.paper.provider for candidate in result.candidates]
+        self.assertEqual(len(providers), 3)
+        self.assertIn("crossref", providers)
+        self.assertIn("arxiv", providers)
+
+    def test_multiple_providers_contribute_under_the_global_bound(self):
+        discovery = make_discovery(
+            FakeTransport(self._route(self._crossref_items(5))),
+            provider_names=("crossref", "arxiv"),
+        )
+        result = discovery.search("multi-task learning", limit=2)
+
+        self.assertEqual(
+            [candidate.paper.provider for candidate in result.candidates],
+            ["crossref", "arxiv"],
+        )
+        self.assertEqual(result.returned, 2)
+        self.assertLessEqual(result.returned, result.limit)
+
+    def test_shared_identifier_is_deduplicated_keeping_the_first_provider(self):
+        route = self._route(
+            [crossref_item(doi=KNOWN_DOI, title="Shared Work")],
+            s2_items=[s2_paper(doi=KNOWN_DOI, title="Shared Work", paper_id="S1")],
+        )
+        discovery = make_discovery(
+            FakeTransport(route), provider_names=("crossref", "semanticscholar")
+        )
+        result = discovery.search("shared", limit=5)
+
+        self.assertEqual(result.returned, 1)
+        self.assertEqual(result.candidates[0].paper.provider, "crossref")
+
+    def test_merge_order_is_deterministic_across_runs(self):
+        def run():
+            discovery = make_discovery(
+                FakeTransport(self._route(self._crossref_items(5))),
+                provider_names=("crossref", "arxiv"),
+            )
+            return [
+                (candidate.paper.provider, candidate.paper.title)
+                for candidate in discovery.search("q", limit=4).candidates
+            ]
+
+        self.assertEqual(run(), run())
+
+    def test_a_failed_provider_does_not_destroy_anothers_candidates(self):
+        route = self._route(
+            [],
+            s2_items=[s2_paper(doi="10.9999/healthy", title="Recovered")],
+            fail=("crossref",),
+        )
+        discovery = make_discovery(
+            FakeTransport(route), provider_names=("crossref", "semanticscholar")
+        )
+        result = discovery.search("q", limit=5)
+
+        self.assertEqual(result.returned, 1)
+        self.assertEqual(result.candidates[0].paper.provider, "semanticscholar")
+        self.assertIn(
+            model.MALFORMED_PROVIDER_RESPONSE, [failure.kind for failure in result.failures]
+        )
+
+    def test_search_mutates_no_research_state(self):
+        before = research_state()
+        discovery = make_discovery(
+            FakeTransport(self._route(self._crossref_items(3))),
+            provider_names=("crossref", "arxiv"),
+        )
+        discovery.search("q", limit=2)
+
+        self.assertEqual(research_state(), before)
+
+
 class IdentityClassificationTests(unittest.TestCase):
+
     """Identity uses the real catalog and its own known/new/ambiguous vocabulary."""
 
     def _discovery(self, transport, query=None):

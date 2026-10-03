@@ -120,8 +120,12 @@ class CandidateArtifactLocation:
 class CandidatePaper:
     """One provider's normalized record of a scholarly work.
 
-    Providers are never merged: two providers returning the same work produce
-    two `CandidatePaper` records with distinct `provider`/`provider_record_id`.
+    Providers are never merged at the record level: two providers returning the
+    same work produce two `CandidatePaper` records with distinct
+    `provider`/`provider_record_id`. An *aggregated result set* (search, title
+    lookup, reference/citation expansion) may deduplicate candidates carrying the
+    same shared identifier so the same work is not returned twice; see
+    `core.StructuredDiscovery._merge_providers`.
     """
 
     provider: str
