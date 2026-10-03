@@ -26,9 +26,12 @@ that operator-side ``register`` primitive cannot express on its own:
 * **Acquisition-attempt provenance.** ``register`` records the retained artifact,
   not the attempt and not *how* the bytes arrived. Every attempt is appended to
   ``literature/acquisitions.jsonl`` — an append-only, Git-tracked ledger with the
-  provenance channel (``USER_SUPPLIED`` today), the resolved identity, the
-  artifact digest and a machine-readable failure ``kind`` — so a failed or
-  repeated attempt is auditable rather than lost in a traceback.
+  provenance channel (``USER_SUPPLIED`` for a researcher's file, ``PUBLIC_ACQUIRED``
+  for deterministic web acquisition), the resolved identity, the artifact digest
+  and a machine-readable failure ``kind`` — so a failed or repeated attempt is
+  auditable rather than lost in a traceback. A public-acquisition row additionally
+  records the URL actually retrieved, the discovery provider, the retrieval time,
+  the candidate identifiers and the identity evidence that admitted the bytes.
 
 Authority boundary (binding, mirrors ``AGENTS.md``):
 
@@ -74,10 +77,12 @@ DUPLICATE = "DUPLICATE"
 REJECTED = "REJECTED"
 _STATUSES = (ADMITTED, DUPLICATE, REJECTED)
 
-# Provenance channels. Only user-supplied ingestion exists today; structured
-# discovery and the paper-hunter fallback will add channels, never a new pipeline.
+# Provenance channels. User-supplied ingestion (INC-011) and deterministic
+# public acquisition (INC-013) converge on this one admission pipeline; a new
+# channel is added here, never as a second pipeline.
 USER_SUPPLIED = "USER_SUPPLIED"
-_PROVENANCES = (USER_SUPPLIED,)
+PUBLIC_ACQUIRED = "PUBLIC_ACQUIRED"
+_PROVENANCES = (USER_SUPPLIED, PUBLIC_ACQUIRED)
 
 # Identity-resolution failures (this module); artifact/registration failures are
 # reused verbatim from `literature_primary` so the taxonomy stays one vocabulary.
@@ -92,11 +97,15 @@ INVALID_REQUEST = "INVALID_REQUEST"
 _KNOWN_ROLES = tuple(sorted(lp._ROLE_SPEC))
 _DEFAULT_ROLE = lp._DEFAULT_ROLE
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+# v1 rows (the INC-011 shape) remain valid and are never rewritten; v2 adds the
+# optional acquisition-channel fields below, so a public acquisition attempt can
+# record how it arrived without weakening the manifest.
+_SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 _LEDGER_FILENAME = "acquisitions.jsonl"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
-_LEDGER_ALLOWED_KEYS = {
+_LEDGER_BASE_KEYS = {
     "schema_version",
     "acquisition_id",
     "recorded_at",
@@ -112,7 +121,17 @@ _LEDGER_ALLOWED_KEYS = {
     "failure_kind",
     "detail",
 }
-_LEDGER_REQUIRED_KEYS = _LEDGER_ALLOWED_KEYS
+# v2-only: the retrieval facts a public acquisition adds. Optional in general,
+# but required (with a non-empty shape) for a PUBLIC_ACQUIRED row.
+_ACQUISITION_KEYS = {
+    "retrieved_url",
+    "discovery_provider",
+    "retrieved_at",
+    "candidate_identifiers",
+    "identity_evidence",
+}
+_LEDGER_ALLOWED_KEYS = _LEDGER_BASE_KEYS | _ACQUISITION_KEYS
+_LEDGER_REQUIRED_KEYS = _LEDGER_BASE_KEYS
 
 
 class IngestLedgerError(ValueError):
@@ -143,6 +162,10 @@ class AcquisitionResult:
     kind: Optional[str] = None
     detail: Mapping = field(default_factory=dict)
     message: Optional[str] = None
+    # Public-acquisition channel facts (empty for USER_SUPPLIED): the URL actually
+    # retrieved, the discovery provider, the retrieval time, the candidate's
+    # identifiers and the identity evidence that admitted the bytes.
+    acquisition: Mapping = field(default_factory=dict)
 
     @property
     def admitted(self):
@@ -165,6 +188,7 @@ class AcquisitionResult:
             "kind": self.kind,
             "detail": dict(self.detail),
             "message": self.message,
+            "acquisition": dict(self.acquisition),
         }
 
 
@@ -245,20 +269,36 @@ class LiteratureIngest:
         return len(self._ledger)
 
     def ingest(self, source_path, *, paper_id=None, doi=None, arxiv=None,
-               title=None, source_url=None, role=None, source_label=None):
-        """Admit one user-supplied local file as a primary artifact.
+               title=None, source_url=None, role=None, source_label=None,
+               provenance=USER_SUPPLIED, acquisition=None):
+        """Admit one local file as a primary artifact, recording how it arrived.
 
         Returns an :class:`AcquisitionResult`; never raises for a domain failure.
         The returned artifact (when admitted) is immediately reachable through
         the existing ``literature_primary`` / ``literature_read`` path, because
         the manifest row and the local copy are written by
         ``literature_primary.register`` before this method returns.
+
+        ``provenance`` names the acquisition channel (``USER_SUPPLIED`` or
+        ``PUBLIC_ACQUIRED``); ``acquisition`` carries the retrieval facts a public
+        acquisition adds (retrieved URL, discovery provider, retrieval time,
+        candidate identifiers, identity evidence). It is inert provenance data and
+        never participates in admission.
         """
+
+        provenance = provenance if provenance in _PROVENANCES else USER_SUPPLIED
+        acquisition = self._acquisition_facts(acquisition)
+
+        def reject(kind, message, detail, **fields):
+            return self._reject(provenance, acquisition, kind, message, detail, **fields)
+
+        def result(status, **fields):
+            return self._result(provenance, acquisition, status, **fields)
 
         hints = self._hints(paper_id, doi, arxiv, title, source_url)
         if not hints:
             return self._record(
-                self._reject(
+                reject(
                     NO_IDENTITY_INPUT,
                     "at least one of paper_id, doi, arxiv, title or source_url "
                     "is required to attach the artifact to a canonical Paper",
@@ -270,14 +310,14 @@ class LiteratureIngest:
         source, sha256, size_bytes, read_error = self._read_source(source_path)
         if read_error is not None:
             return self._record(
-                self._reject(
+                reject(
                     read_error["kind"], read_error["message"], read_error["detail"],
                     hints=hints, source_label=label,
                 )
             )
         if not lp._is_pdf(source):
             return self._record(
-                self._reject(
+                reject(
                     lp.SOURCE_NOT_PDF,
                     "the supplied file is not a PDF (missing a %PDF- header)",
                     {"source_path": str(source_path)},
@@ -289,7 +329,7 @@ class LiteratureIngest:
         paper, failure = self._resolve_paper(hints)
         if failure is not None:
             return self._record(
-                self._reject(
+                reject(
                     failure["kind"], failure["message"], failure["detail"],
                     hints=hints, sha256=sha256, size_bytes=size_bytes,
                     source_label=label,
@@ -299,7 +339,7 @@ class LiteratureIngest:
         existing = self._retained_for_digest(paper.paper_id, sha256, size_bytes)
         if existing is not None:
             return self._record(
-                self._result(
+                result(
                     DUPLICATE,
                     paper_id=paper.paper_id,
                     role=existing.role,
@@ -320,7 +360,7 @@ class LiteratureIngest:
         resolved_role, failure = self._resolve_role(paper.paper_id, role)
         if failure is not None:
             return self._record(
-                self._reject(
+                reject(
                     failure["kind"], failure["message"], failure["detail"],
                     hints=hints, paper_id=paper.paper_id, role=role,
                     sha256=sha256, size_bytes=size_bytes, source_label=label,
@@ -330,7 +370,7 @@ class LiteratureIngest:
         resolved_url, failure = self._resolve_source_url(paper, source_url)
         if failure is not None:
             return self._record(
-                self._reject(
+                reject(
                     failure["kind"], failure["message"], failure["detail"],
                     hints=hints, paper_id=paper.paper_id, role=resolved_role,
                     sha256=sha256, size_bytes=size_bytes, source_label=label,
@@ -344,14 +384,14 @@ class LiteratureIngest:
             )
         except lp.PrimaryError as exc:
             return self._record(
-                self._reject(
+                reject(
                     exc.kind, str(exc), exc.detail,
                     hints=hints, paper_id=paper.paper_id, role=resolved_role,
                     sha256=sha256, size_bytes=size_bytes, source_label=label,
                 )
             )
         return self._record(
-            self._result(
+            result(
                 ADMITTED,
                 paper_id=entry.paper_id,
                 role=entry.role,
@@ -364,6 +404,17 @@ class LiteratureIngest:
                 message="admitted as {!r} for {!r}".format(entry.role, entry.paper_id),
             )
         )
+
+    @staticmethod
+    def _acquisition_facts(acquisition):
+        """Bound channel provenance to the ledger's allowed acquisition keys."""
+
+        if not acquisition:
+            return {}
+        return {
+            key: value for key, value in dict(acquisition).items()
+            if key in _ACQUISITION_KEYS
+        }
 
     # -- identity resolution ------------------------------------------------
 
@@ -574,20 +625,24 @@ class LiteratureIngest:
 
     # -- ledger -------------------------------------------------------------
 
-    def _result(self, status, *, hints, **fields):
-        provenance = USER_SUPPLIED
-        acquisition_id = _acquisition_id(provenance, hints, fields)
+    def _result(self, provenance, acquisition, status, *, hints, **fields):
+        acquisition_id = _acquisition_id(
+            provenance, hints, fields, acquisition
+        )
         return AcquisitionResult(
             status=status,
             provenance=provenance,
             acquisition_id=acquisition_id,
+            acquisition=acquisition,
             **fields
         )
 
     @staticmethod
-    def _reject(kind, message, detail, *, hints=None, **fields):
-        provenance = USER_SUPPLIED
-        acquisition_id = _acquisition_id(provenance, hints or {}, fields)
+    def _reject(provenance, acquisition, kind, message, detail, *, hints=None,
+                **fields):
+        acquisition_id = _acquisition_id(
+            provenance, hints or {}, fields, acquisition
+        )
         return AcquisitionResult(
             status=REJECTED,
             provenance=provenance,
@@ -595,6 +650,7 @@ class LiteratureIngest:
             detail=dict(detail or {}),
             message=message,
             acquisition_id=acquisition_id,
+            acquisition=acquisition,
             **fields
         )
 
@@ -641,7 +697,17 @@ class LiteratureIngest:
         where = "ledger line {}".format(line_number)
         if not isinstance(record, dict):
             raise IngestLedgerError("{} must be a JSON object".format(where))
-        unknown = sorted(set(record) - _LEDGER_ALLOWED_KEYS)
+        schema_version = record.get("schema_version")
+        if schema_version not in _SUPPORTED_SCHEMA_VERSIONS:
+            raise IngestLedgerError(
+                "{}.schema_version must be one of: {}".format(
+                    where, ", ".join(str(v) for v in _SUPPORTED_SCHEMA_VERSIONS)
+                )
+            )
+        allowed = (
+            _LEDGER_ALLOWED_KEYS if schema_version >= 2 else _LEDGER_BASE_KEYS
+        )
+        unknown = sorted(set(record) - allowed)
         missing = sorted(_LEDGER_REQUIRED_KEYS - set(record))
         if unknown:
             raise IngestLedgerError(
@@ -650,10 +716,6 @@ class LiteratureIngest:
         if missing:
             raise IngestLedgerError(
                 "{} is missing key(s): {}".format(where, ", ".join(missing))
-            )
-        if record["schema_version"] != _SCHEMA_VERSION:
-            raise IngestLedgerError(
-                "{}.schema_version must be {}".format(where, _SCHEMA_VERSION)
             )
         for field_name in ("acquisition_id", "recorded_at"):
             value = record[field_name]
@@ -673,6 +735,54 @@ class LiteratureIngest:
             )
         if not isinstance(record["detail"], dict):
             raise IngestLedgerError("{}.detail must be an object".format(where))
+        # v2 channel fields, when present, keep a fixed shape; a public
+        # acquisition must name where the bytes were actually retrieved from.
+        if schema_version >= 2:
+            self._validate_acquisition_fields(record, where)
+        return record
+
+    @staticmethod
+    def _validate_acquisition_fields(record, where):
+        retrieved_url = record.get("retrieved_url")
+        if retrieved_url is not None and (
+            not isinstance(retrieved_url, str)
+            or not retrieved_url.startswith("https://")
+        ):
+            raise IngestLedgerError(
+                "{}.retrieved_url must be null or an https URL".format(where)
+            )
+        provider = record.get("discovery_provider")
+        if provider is not None and not isinstance(provider, str):
+            raise IngestLedgerError(
+                "{}.discovery_provider must be null or a string".format(where)
+            )
+        retrieved_at = record.get("retrieved_at")
+        if retrieved_at is not None and not isinstance(retrieved_at, str):
+            raise IngestLedgerError(
+                "{}.retrieved_at must be null or a string".format(where)
+            )
+        identifiers = record.get("candidate_identifiers")
+        if identifiers is not None and not isinstance(identifiers, dict):
+            raise IngestLedgerError(
+                "{}.candidate_identifiers must be null or an object".format(where)
+            )
+        evidence = record.get("identity_evidence")
+        if evidence is not None and (
+            not isinstance(evidence, list)
+            or not all(isinstance(item, str) for item in evidence)
+        ):
+            raise IngestLedgerError(
+                "{}.identity_evidence must be null or a list of strings".format(where)
+            )
+        if record["provenance"] == PUBLIC_ACQUIRED:
+            if not isinstance(retrieved_url, str) or not retrieved_url:
+                raise IngestLedgerError(
+                    "{} is PUBLIC_ACQUIRED but names no retrieved_url".format(where)
+                )
+            if not isinstance(retrieved_at, str) or not retrieved_at.strip():
+                raise IngestLedgerError(
+                    "{} is PUBLIC_ACQUIRED but names no retrieved_at".format(where)
+                )
         sha256 = record["sha256"]
         if sha256 is not None and (
             not isinstance(sha256, str) or not _SHA256.match(sha256)
@@ -691,27 +801,30 @@ class LiteratureIngest:
         return record
 
 
-def _acquisition_id(provenance, hints, fields):
+def _acquisition_id(provenance, hints, fields, acquisition=None):
     """Deterministic identity of an attempt, from its inputs only.
 
     Two attempts with the same channel, hints and resolved artifact facts share
-    an id, so a repeated identical attempt is not recorded twice; a changed file
-    or a changed identity hint yields a different id and a new record.
+    an id, so a repeated identical attempt is not recorded twice; a changed file,
+    a changed identity hint or a different retrieved URL yields a different id
+    and a new record.
     """
 
+    acquisition = acquisition or {}
     document = {
         "provenance": provenance,
         "hints": {key: hints[key] for key in sorted(hints)},
         "paper_id": fields.get("paper_id"),
         "role": fields.get("role"),
         "sha256": fields.get("sha256"),
+        "retrieved_url": acquisition.get("retrieved_url"),
     }
     canonical = json.dumps(document, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
 def _ledger_row(result):
-    return {
+    row = {
         "schema_version": _SCHEMA_VERSION,
         "acquisition_id": result.acquisition_id,
         "recorded_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
@@ -727,6 +840,12 @@ def _ledger_row(result):
         "failure_kind": result.kind,
         "detail": dict(result.detail),
     }
+    # The channel's retrieval facts are written as explicit v2 fields, never
+    # folded into `detail`, so a public acquisition is auditable on its own terms.
+    for key, value in (result.acquisition or {}).items():
+        if key in _ACQUISITION_KEYS:
+            row.setdefault(key, value)
+    return row
 
 
 def _build_parser():

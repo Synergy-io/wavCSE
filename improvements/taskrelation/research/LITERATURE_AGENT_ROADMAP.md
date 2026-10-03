@@ -315,7 +315,8 @@ the increment numbers are not mistaken for the build order.
 | INC-009 | Exercise real questions, measure query behaviour | later |
 | INC-010 | Broader research query index | later |
 | INC-011 | User-supplied primary-artifact ingestion (acquisition path A) | done (operator-side) |
-| INC-012 | Structured scholarly discovery (acquisition path B, discovery half) | done (metadata-only; deterministic web acquisition, paper hunter and desktop→remote transport are INC-013..015, not built) |
+| INC-012 | Structured scholarly discovery (acquisition path B, discovery half) | done (metadata-only) |
+| INC-013 | Deterministic public primary-artifact acquisition (acquisition path B, retrieval half) | done (operator-side; paper hunter and desktop→remote transport are INC-014..015, not built) |
 
 Roadmap INC-002 was not built to restore numbering, and must not be. Query-time
 joins in `literature_query` already derive Study-scoped assessments from their
@@ -1326,12 +1327,104 @@ candidates with Crossref/Semantic Scholar/arXiv rate limits appearing as
 structured `RATE_LIMITED` failures. No PDF was fetched and no research state
 changed.
 
+## INC-013 — Deterministic public-artifact acquisition
+
+**Status:** `done` (2026-10-03). Operator-side only: it turns one candidate
+artifact location reported by structured discovery into validated, admitted bytes
+for a *known* canonical Paper. The model-facing evidence surface is unchanged —
+the Literature Agent may *select* a candidate location, but acquisition itself is
+never exposed as a model tool.
+
+**Goal**
+
+Open the second acquisition entry path without letting an LLM, a browsing agent,
+a credential or an arbitrary URL create an admitted `PrimaryArtifact` directly.
+Candidate bytes converge on the *same* `LiteratureIngest` admission path as
+user-supplied ingestion, so one pipeline serves both channels.
+
+**What was built**
+
+`improvements/taskrelation/research/literature_acquire.py` — a deterministic,
+operator-side module and `acquire` / `policy` / `validate` CLI:
+
+- **Source policy.** Hosts are classified as recognized scholarly / publisher /
+  institutional repository / restricted / unknown. Recognized, open-publisher and
+  repository hosts may be attempted; restricted (paywalled/authenticated) hosts
+  fail `ACCESS_RESTRICTED` and unknown hosts fail `POLICY_BLOCKED`. HTTPS only,
+  no embedded credentials, no non-standard ports. Domain classification never
+  establishes identity; it only decides whether retrieval may be tried.
+- **Retrieval.** Reuses INC-012's bounded `HttpFetcher` (`fetch_response` gained a
+  per-request byte cap and an injectable `redirect_guard`): 40 MiB artifact cap,
+  30 s timeout, up to five HTTPS redirects, up to two retries with backoff
+  honoring `Retry-After`, per-host minimum intervals, and a `RESPONSE_TOO_LARGE`
+  failure kind added to the shared HTTP vocabulary. Every redirect target is
+  re-checked against the source policy *and* the SSRF rules before it is followed.
+- **SSRF / URL security.** Non-HTTPS schemes, embedded credentials, non-default
+  ports, restricted/unknown hosts, and any host that resolves into loopback,
+  link-local, private, reserved or cloud-metadata address space are refused. DNS
+  resolution is an injected seam, so the policy is tested with no network.
+- **Artifact validation.** HTTP 200 is not sufficient: the media type, byte
+  length, `%PDF-` header and (when a bounded extractor is available) PDF
+  readability are checked. HTML/paywall bodies are `INVALID_CONTENT_TYPE`; a
+  bytes-level PDF that yields no readable page is `INVALID_ARTIFACT`.
+- **Identity / version validation.** Evidence hierarchy strongest-first: a
+  candidate DOI / arXiv id, a DOI / arXiv id extracted from the PDF, then the
+  Paper's exact normalized title corroborated by year or author. A strong
+  identifier that contradicts the Paper — or resolves to a different catalog
+  Paper — fails `IDENTITY_MISMATCH`; no admissible evidence fails
+  `IDENTITY_INSUFFICIENT`. Title evidence is never fuzzy. PDF text is untrusted
+  data and is discarded once the bounded identity check is done.
+- **Source-URL correspondence.** The manifest's `source_url` stays a catalog URL
+  by design, so the retrieved bytes are associated with the recorded
+  representation of the *same* source (exact URL, shared DOI, or shared arXiv base
+  id, with same-host agreement as the weakest admissible link). No correspondence
+  fails `SOURCE_URL_NOT_RECORDED`; the manifest invariant is never weakened.
+- **Handoff.** The validated bytes are staged to a disposable temporary file and
+  handed to `LiteratureIngest.ingest(..., provenance=PUBLIC_ACQUIRED, acquisition=…)`,
+  which owns SHA-256, duplicate/version handling, retention and the manifest row.
+  The temporary file is always removed.
+
+**State / provenance**
+
+No new ledger. `literature/acquisitions.jsonl` gains schema **v2** with five
+optional, PUBLIC_ACQUIRED-only fields — `retrieved_url`, `discovery_provider`,
+`retrieved_at`, `candidate_identifiers`, `identity_evidence`; v1 (INC-011) rows
+remain valid and are never rewritten, and both versions are validated. The
+manifest is untouched: it still records the artifact's catalog provenance URL and
+digest.
+
+**Model-facing surface**
+
+**No new tool.** The Literature Agent's five read-only capabilities are unchanged;
+acquisition, like INC-011 ingestion, is operator-side. This preserves the
+read-only evidence-surface contract (there is deliberately no URL parameter in the
+model-facing adapter) while still letting the agent *request* acquisition by
+selecting a candidate location discovery returned.
+
+**Tests/verification**
+
+`tests/test_literature_acquire.py` (35 fixtures-only cases, no live service):
+admission; idempotent duplicate; distinct versions; same-role conflict;
+`IDENTITY_MISMATCH` / `IDENTITY_INSUFFICIENT` / `INVALID_ARTIFACT` /
+`INVALID_CONTENT_TYPE` / `ACCESS_RESTRICTED` / `RATE_LIMITED` /
+`RESPONSE_TOO_LARGE` / `POLICY_BLOCKED` / `SOURCE_URL_NOT_RECORDED` /
+`VERSION_REQUIREMENT_UNSATISFIED`; direct SSRF and redirect-to-private/metadata
+blocking; unknown-host and non-HTTPS blocking; content-type disagreement;
+source-URL correspondence; PUBLIC_ACQUIRED provenance in the ledger; readability
+through `literature_primary`/`literature_read`; the write set is exactly manifest
++ ledger + cache; no temporary file is left behind; credentials and hostile PDF
+text never reach a result or persisted state. Agent-asset tests lock the module as
+operator-side and assert the model-facing adapter exposes no acquisition. The
+whole research suite stays green under `make check`.
+
+**What is deliberately NOT done**
+
+No paper hunter, no crawler, no paywall/CAPTCHA bypass, no credential handling, no
+garbage/fuzzy identity, no manifest weakening, no new database and no model-facing
+widening.
+
 ### Planned acquisition increments (designed, not implemented)
 
-- **INC-013 — Deterministic public-artifact acquisition.** A source policy, HTTP
-  retrieval with redirects, content/size validation, identity/version
-  verification, bounded retries/backoff, rate limiting, caching and provenance —
-  producing candidate bytes for the same `LiteratureIngest` admission path.
 - **INC-014 — Narrow paper hunter.** A read-only specialist invoked only when
   structured acquisition is insufficient; public location discovery and
   structured candidate-location output only, with no admission authority and no
@@ -1341,6 +1434,7 @@ changed.
   remote controller can ingest a file that lives on the researcher's machine; the
   bytes arrive and invoke the *same* `LiteratureIngest.ingest` path. No file
   sync, upload service or desktop infrastructure is built before then.
+
 
 # First Implementation Recommendation
 

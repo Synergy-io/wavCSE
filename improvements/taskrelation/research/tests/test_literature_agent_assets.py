@@ -331,6 +331,43 @@ class MutationBoundaryTests(unittest.TestCase):
                     self.assertNotIn(pattern, source)
 
 
+class AcquisitionBoundaryTests(unittest.TestCase):
+    """Public acquisition (INC-013) is deterministic, operator-side tooling.
+
+    The Literature Agent's evidence surface stays read-only: a candidate location
+    can be selected, but acquisition itself is never exposed as a model tool.
+    """
+
+    ACQUIRE_PATH = RESEARCH_DIR / "literature_acquire.py"
+
+    def test_acquisition_module_converges_on_the_one_ingest_pipeline(self):
+        source = self.ACQUIRE_PATH.read_text(encoding="utf-8")
+
+        self.assertTrue(self.ACQUIRE_PATH.is_file())
+        self.assertIn("literature_ingest", source)
+        self.assertIn("PUBLIC_ACQUIRED", source)
+        # No second HTTP stack, no shell and no cloud SDK.
+        for forbidden in ("subprocess", "os.system", "os.popen", "eval(", "exec(",
+                          "__import__", "boto3", "botocore"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
+
+    def test_public_acquisition_reuses_the_discovery_http_machinery(self):
+        source = self.ACQUIRE_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("literature_discovery", source)
+        self.assertIn("HttpFetcher", source)
+        self.assertNotIn("urllib.request", source)
+
+    def test_model_facing_adapter_never_exposes_acquisition(self):
+        adapter = TOOLS_PATH.read_text(encoding="utf-8")
+        agent = AGENT_PATH.read_text(encoding="utf-8")
+
+        self.assertNotIn("literature_acquire", adapter)
+        self.assertNotIn("acquire", adapter)
+        self.assertNotIn("literature_acquire", agent)
+
+
 class BoundedReadCliTests(unittest.TestCase):
     def test_card_read_returns_card_derived_text_for_a_known_paper(self):
         result = run_module("literature_read", "card", "goncalves-2016-mssl", "--max-chars", "400")

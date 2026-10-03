@@ -14,8 +14,11 @@ Nothing here writes to disk, and no credential is ever logged or returned. The
 transport is injectable, so tests exercise the whole policy with fixtures and no
 network.
 
-Only metadata endpoints are reachable through this class. It is never given an
-artifact URL: downloading artifact bytes is acquisition (INC-013), not discovery.
+The class is deliberately policy-agnostic and is shared by both discovery
+(metadata) and acquisition (INC-013 artifact retrieval): a caller may pass a
+per-request byte bound and a ``redirect_guard`` callback that is consulted for
+every redirect target, so artifact acquisition can re-apply its own source policy
+and SSRF checks on each hop. Discovery itself is never given an artifact URL.
 """
 
 import json
@@ -52,6 +55,11 @@ DEFAULT_INTERVALS = {
 
 DEFAULT_CONTACT_ENV = "WAVCSE_DISCOVERY_CONTACT"
 _TOOL_UA = "wavcse-structured-discovery/0.1"
+
+# A response the byte bound rejected is structurally distinct from a malformed
+# provider body: a caller (acquisition) must be able to branch on "too large"
+# without parsing prose. Kept here with the other transport vocabulary.
+RESPONSE_TOO_LARGE = "RESPONSE_TOO_LARGE"
 
 
 def default_user_agent(env=None):
@@ -232,16 +240,24 @@ class HttpFetcher:
         separator = "&" if urllib.parse.urlparse(url).query else "?"
         return url + separator + urllib.parse.urlencode(filtered, doseq=True)
 
-    def fetch(self, provider, url, *, params=None, accept=None, headers=None,
-              cache_ttl=None):
-        """Return the response body bytes or raise a structured :class:`HttpError`.
+    def fetch_response(self, provider, url, *, params=None, accept=None, headers=None,
+                       cache_ttl=None, max_bytes=None, redirect_guard=None):
+        """Return the bounded :class:`HttpResponse`, or raise a structured error.
 
         ``headers`` carries per-request credentials (e.g. an API key). Headers are
         never cached, logged, or attached to an error; only the response body is
         cached, under a key that does not include them.
+
+        ``max_bytes`` overrides the instance byte bound for this request (artifact
+        acquisition uses a larger, explicit cap than metadata discovery).
+        ``redirect_guard``, when given, is called with every redirect target
+        *before* it is followed; it may raise :class:`HttpError` (or any
+        exception) to refuse the hop, so a caller re-applies its own source policy
+        and SSRF checks on each redirect.
         """
 
         target = self.build_url(url, params)
+        limit = self.max_response_bytes if max_bytes is None else max_bytes
         cache_key = (provider, target, accept)
         if self.cache is not None:
             cached = self.cache.get(cache_key)
@@ -260,7 +276,7 @@ class HttpFetcher:
             try:
                 response = self.transport.request(
                     target, headers=request_headers, timeout=self.timeout,
-                    max_bytes=self.max_response_bytes,
+                    max_bytes=limit,
                 )
             except HttpTransportError as exc:
                 last_error = HttpError(
@@ -285,6 +301,10 @@ class HttpFetcher:
                         provider=provider, status=status, detail={"url": _redact(target)},
                     )
                 target = urllib.parse.urljoin(target, location)
+                if redirect_guard is not None:
+                    # Re-apply the caller's source policy and SSRF checks on the
+                    # hop target before it is requested.
+                    redirect_guard(target)
                 if not target.lower().startswith("https://"):
                     raise HttpError(
                         model.PROVIDER_ERROR,
@@ -295,17 +315,28 @@ class HttpFetcher:
                 continue
 
             if status == 200:
-                if len(response.body) > self.max_response_bytes:
+                declared = _content_length(response.headers)
+                if declared is not None and declared > limit:
                     raise HttpError(
-                        model.MALFORMED_PROVIDER_RESPONSE,
+                        RESPONSE_TOO_LARGE,
+                        "{} response declared {} bytes, above the {}-byte bound".format(
+                            provider, declared, limit
+                        ),
+                        provider=provider, status=status,
+                        detail={"bound": limit, "declared_bytes": declared,
+                                "url": _redact(target)},
+                    )
+                if len(response.body) > limit:
+                    raise HttpError(
+                        RESPONSE_TOO_LARGE,
                         "{} response exceeded the size bound".format(provider),
                         provider=provider, status=status,
-                        detail={"bound": self.max_response_bytes,
+                        detail={"bound": limit,
                                 "url": _redact(target)},
                     )
                 if self.cache is not None:
-                    self.cache.set(cache_key, response.body, ttl=cache_ttl)
-                return response.body
+                    self.cache.set(cache_key, response, ttl=cache_ttl)
+                return response
 
             if status == 429:
                 retry_after = _retry_after(response.headers)
@@ -355,6 +386,11 @@ class HttpFetcher:
             model.PROVIDER_ERROR, "{} request failed".format(provider), provider=provider
         )
 
+    def fetch(self, provider, url, **kwargs):
+        """Return only the bounded response body bytes (see :meth:`fetch_response`)."""
+
+        return self.fetch_response(provider, url, **kwargs).body
+
     def get_json(self, provider, url, *, params=None, cache_ttl=None):
         body = self.fetch(provider, url, params=params, accept="application/json",
                           cache_ttl=cache_ttl)
@@ -394,6 +430,17 @@ def _retry_after(headers):
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _content_length(headers):
+    value = (headers or {}).get("content-length")
+    if not value:
+        return None
+    try:
+        length = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return length if length >= 0 else None
 
 
 def _redact(url):

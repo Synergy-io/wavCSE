@@ -35,6 +35,9 @@ PROVIDER_AUTH_REQUIRED = "PROVIDER_AUTH_REQUIRED"
 PROVIDER_ERROR = "PROVIDER_ERROR"
 IDENTITY_CONFLICT = "IDENTITY_CONFLICT"
 DISCOVERY_EXHAUSTED = "DISCOVERY_EXHAUSTED"
+# A bounded response that exceeded its byte cap. Shared with artifact
+# acquisition, which sets a larger explicit cap.
+RESPONSE_TOO_LARGE = "RESPONSE_TOO_LARGE"
 
 FAILURE_KINDS = frozenset(
     {
@@ -47,6 +50,7 @@ FAILURE_KINDS = frozenset(
         PROVIDER_ERROR,
         IDENTITY_CONFLICT,
         DISCOVERY_EXHAUSTED,
+        RESPONSE_TOO_LARGE,
     }
 )
 
