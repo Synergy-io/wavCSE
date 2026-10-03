@@ -1,0 +1,17 @@
+# wavCSE project settings.
+#
+# Disable the user-scope Deja auto-recall extension inside this repository.
+# `deja install omp-auto` writes ~/.omp/agent/extensions/deja/index.js, which
+# hooks before_agent_start/context/tool_result and injects historical
+# <deja-recall> text into every agent's context — including Literature Agent
+# children, where recalled session text is not literature evidence at any
+# strength and previously produced a fabricated claim_ref (PROVENANCE_BYPASS).
+#
+# `disabledExtensions` is OMP's supported per-module disable; the id form is
+# `extension-module:<derivedName>`, and getExtensionNameFromPath() derives the
+# name `deja` from the .../extensions/deja/index.js entry path. The Deja MCP
+# server is separately disabled in .omp/mcp.json (the tool grant), while this
+# removes the context-injection channel. Explicit Deja use outside this
+# repository is unaffected.
+disabledExtensions:
+  - extension-module:deja

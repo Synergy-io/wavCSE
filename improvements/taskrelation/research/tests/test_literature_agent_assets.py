@@ -28,6 +28,9 @@ REQUIRED_LITERATURE_TOOLS = (
 # Historical recall is not an evidence capability in any spelling.
 RECALL_TOOL_NEEDLES = ("deja", "recall", "retain", "reflect", "history", "memory", "mcp__")
 MCP_PATH = REPO_ROOT / ".omp" / "mcp.json"
+# The native project OMP settings file; the recall *content* channel (a
+# user-scope extension) is disabled here, not in mcp.json.
+OMP_CONFIG_PATH = REPO_ROOT / ".omp" / "config.yml"
 TRANSCRIPT_CHECKER = REPO_ROOT / "scripts" / "agents" / "literature_agent_transcript.py"
 
 # The approved evidence surface: harness primitive plus the four capabilities.
@@ -364,6 +367,24 @@ class EvidenceAuthorityTests(unittest.TestCase):
         self.assertTrue(
             "deja" in disabled or deja.get("enabled") is False,
             "the project MCP config does not disable the recall server: %r" % config,
+        )
+
+    def test_project_omp_config_disables_the_recall_extension(self):
+        # The recall *content* channel is the user-scope OMP extension written by
+        # `deja install omp-auto` at `<omp-config>/extensions/deja/index.js`. It
+        # hooks before_agent_start/context and injects <deja-recall> text into
+        # every agent's context, which mcp.json cannot gate. The lever is the
+        # `disabledExtensions` setting; the project settings file OMP reads is
+        # `<cwd>/.omp/config.yml` and the id form is
+        # `extension-module:<derivedName>` (derived name `deja`).
+        self.assertTrue(OMP_CONFIG_PATH.is_file(), "%s is missing" % OMP_CONFIG_PATH)
+        text = OMP_CONFIG_PATH.read_text(encoding="utf-8")
+        entries = re.findall(r"^\s*-\s*(\S+)\s*$", text, re.MULTILINE)
+
+        self.assertIn(
+            "extension-module:deja",
+            entries,
+            "the project OMP config does not disable the recall extension: %r" % text,
         )
 
     def test_agent_declares_no_recall_or_mcp_capability(self):

@@ -536,3 +536,96 @@ model role; granted tools as recorded in `session_init`; literature tools actual
 called; `claim_ref`s used, checked against `literature/claims.jsonl`; cards / survey
 documents / Study artifacts opened; primary-artifact status; any unsupported
 attribution; and the final result.
+
+# Clean evaluations (V4) — baseline `1551d960`
+
+Both questions re-run after the hardening commit, in the protocol above.
+
+**Code state.** Commit `1551d960754635ea391a18e0732c93dcaeb0b848`
+("Make the literature evidence surface provenance-bounded"), author Kevin Sanjula
+`<kevinxsanjula@gmail.com>`. The worktree is **dirty** with another workstream's
+uncommitted files (`infra/*`, `improvements/compute/*`, `docs/`, `.github/`,
+`AGENTS.md` and `Makefile` infra edits, `weekly/*`); the literature evidence
+surface itself is clean —
+`git status --porcelain -- .omp/mcp.json .omp/agents .omp/tools
+improvements/taskrelation/research/literature* scripts/agents/literature*` is
+empty, so the agent ran against exactly the committed state.
+
+**Invocation** (identical for both, prompts unchanged from V2):
+
+```bash
+cd <repo-root>
+timeout 640 omp -p --auto-approve --session-dir=/tmp/lit-agent-eval/<runN> --max-time=600 "<prompt>"
+```
+
+`--session-dir` on an empty directory gives a fresh session (no prior session to
+resume) *and* persists the transcript for audit — `--no-session` would have saved
+nothing to prove the grant against. Agent `literature-reviewer`, model role
+`@slow`.
+
+## Preflight (transcript-proven, not configured)
+
+| Run | Child transcript | Granted | Verdict |
+| --- | --- | --- | --- |
+| 1 | `IntermediateBug.jsonl` | `literature_resolve, literature_query, literature_read, literature_primary, yield` | **VALID** |
+| 2 | `PMSSLOmegaInvestigation.jsonl` | same five | **VALID** |
+
+`scripts/agents/literature_agent_transcript.py` reports no missing required tool,
+no forbidden tool granted, no forbidden tool called, and (for run 1) only the
+approved calls. Both runs are admissible.
+
+## Run 1 — directed relation objects and heterogeneous heads
+
+| Field | Value |
+| --- | --- |
+| tools called | `literature_query:list` ×1, **`literature_query:paper_claims` ×23**, `literature_read:card` ×18, `literature_query:paper_studies` ×1, `literature_read:study` ×2, `yield` |
+| `claim_ref`s cited | 11 distinct, **all 11 present in `literature/claims.jsonl`**, 0 invented |
+| evidence levels | `card-derived`, `Study-derived` only |
+| primary status | not retrieved; the answer states the MSSL card itself records that no primary PDF is retained and that its transcription correction is "not independently primary-verified", and recommends retrieval before an exact-equation check |
+| unsupported attributions | none found; the one non-claim attribution (`fifty-2021-tag`) is a retained catalog paper and was read from its card |
+
+The `paper_claims` count (23 = the whole retained corpus) is the point: the V2
+breadth run cited **zero** claim references; this run queried claims for every
+candidate before opening prose, then read 18 cards to cover what claims do not
+record. Condition F satisfied.
+
+## Run 2 — the p-MSSL Omega step
+
+| Field | Value |
+| --- | --- |
+| tools called | `literature_query:list` ×1, `literature_resolve` ×1, `literature_query:paper_claims` ×1, `literature_primary:status` ×1, `literature_read:card` ×1, `literature_query:paper_studies` ×1, `literature_read:study` ×1, `yield` |
+| `claim_ref`s cited | 4 distinct, all real, 0 invented (`#barrier-placement-and-1-over-d-absorbable`, `#l1-penalty-is-off-diagonal`, `#omega-step-is-graphical-lasso`, `#relation-object-sparse-task-precision`) |
+| evidence levels | `card-derived`, `Study-derived` only |
+| primary status | `retained=false, cache_state=absent, retrieval=not_configured`, reported as a limitation bounding the equation-level conclusion |
+| unsupported attributions | none found; unanswered detail is moved to `uncertainties` / `missing_primary_evidence` rather than asserted |
+| λ₂ attribution | **not repeated.** The published grid is not asserted at all in this run; the barrier-coefficient disagreement between Eq. (4b) and Eq. (8) is explicitly listed as unresolved while the PDF is absent |
+| boundary | states that whether the project code reproduces Eq. (4b)/Eq. (8) is outside the literature surface and belongs to the main research session |
+
+## Recall content still reaches the child — open channel
+
+The deja **tool** is gone (grant list, above), but the child transcript still
+contains `<deja-recall>` blocks: past-session recall injected as a *user message*.
+Source: the user-scope OMP extension installed by `deja install omp-auto`
+(`<omp-config>/extensions/deja/index.js`), which hooks a context event and prepends
+recalled text. That channel is **not** controlled by the project MCP config.
+
+**Closed 2026-10-03.** The channel is closable from this repository after all: OMP
+exposes `disabledExtensions`, whose id form is `extension-module:<derivedName>`
+(`getExtensionNameFromPath` derives `deja` from `.../extensions/deja/index.js`).
+The project settings file OMP reads is `<cwd>/.omp/config.yml`, so the repository
+now carries `disabledExtensions: [extension-module:deja]` alongside the MCP
+disable. Verified in a fresh `omp -p` process: the p-MSSL prompt that previously
+produced four `<deja-recall>` blocks in the child transcript produced **zero**
+`deja` mentions in either the parent or the child transcript, while the grant
+stayed exactly `literature_resolve, literature_query, literature_read,
+literature_primary, yield` and
+`scripts/agents/literature_agent_transcript.py` returned `VALID`. The change is
+project-scoped, so it travels with the clone and needs no controller-bootstrap
+edit; the main session in this repository also loses Deja, the same trade the MCP
+disable already made.
+
+Neither clean run used it: no `deja` reference appears in either result, both cited
+only repository-backed evidence, and both used only `card-derived` /
+`Study-derived` levels. So condition C holds for the *capability* and holds in
+*behaviour* for these two runs — and the content channel is now closed by an
+authority boundary rather than by instruction.
