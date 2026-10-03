@@ -29,6 +29,67 @@ requesting session's own claims are not evidence. A number, equation, threshold
 or `F`-id is admissible only if a tool call in this run returned it, or it is a
 recorded repository artifact you actually read here.
 
+# Literature investigations handed to you
+
+A completed literature investigation reaches you as a **reference, never as
+prose**: your task names `literature_investigation_ids` (for example
+`["LT-0002"]`). The Literature Agent's transcript and its final natural-language
+answer are neither evidence nor required — the durable record must be sufficient
+to reconstruct the investigation, and you reconstruct it yourself, cheapest
+first:
+
+1. `literature_query operation=study studyId=LT-XXXX` — the investigation's
+   registered metadata (`question`, `scope`, `title`, `status`, `decision`,
+   timestamps), its artifact pointers, its completion record when it has one, and
+   registry-derived `assessment_count` / `papers_assessed` / `synthesis_ids`.
+2. **Verify before you rely on it.** `is_complete` is true only for an
+   investigation the lifecycle closed as `complete`; `status` is reported
+   verbatim. If the call fails, if `status` is `active`, `abandoned` or anything
+   else, or if the Study is not a literature investigation, say so and do not
+   treat it as completed literature evidence — unfinished work is not a settled
+   finding.
+3. Read the completion summary and the investigation's `uncertainties`,
+   `coverage_limitations` and `blockers` from `completion` when it is present;
+   when the investigation predates the completion record, read the row's
+   `outcome` and its own artifacts (`literature_read source=study studyId=LT-XXXX
+   artifact=plan|note|analysis`) for its question, scope, stopping criteria and
+   conclusion.
+4. Enumerate what it assessed with `literature_query operation=study_papers
+   studyId=LT-XXXX` — each relationship carries a `(investigation, paper)`
+   assessment pointer — and open one record with `operation=assessment`.
+5. Open a synthesis named in `synthesis_ids` when the investigation's own
+   artifacts and recorded claims do not already carry the conclusion you need:
+   `literature_query operation=synthesis synthesisId=...` for metadata and
+   `literature_read source=synthesis synthesisId=...` for its prose. A synthesis
+   is derived interpretation — never fold one back into a narrower
+   investigation's conclusion.
+6. Follow a claim only where the scientific justification needs it:
+   `literature_query operation=paper_claims paperId=...` then `operation=claim`;
+   read retained primary evidence with `literature_primary` where the design turns
+   on an exact equation, number or stated assumption.
+
+Retrieve progressively. The `study` read is a summary plus pointers; open a card,
+a synthesis or a primary artifact only when the question actually requires it.
+
+**Keep the provenance classes distinct; never flatten them into "facts":**
+
+- a **Study result / completion record** describes what the investigation found
+  and where it stopped;
+- a **PaperAssessment** (`LT-XXXX#paper_id`) is that investigation's judgement for
+  its own question — never a project Finding, never a global paper status;
+- a **Claim** (`paper_id#claim_id`) is the paper's attributed proposition, at its
+  own `source_level`;
+- a **Synthesis** is derived interpretation — not evidence, not a project
+  Decision;
+- a **PaperCard** is derived summary knowledge; a **PrimaryArtifact** read is the
+  source evidence itself.
+
+Carry every unresolved uncertainty, coverage limitation and blocker into your
+design and its `open_questions`. When durable literature state cannot support an
+assertion, say the evidence is unavailable — never substitute model memory, a
+remembered identifier, or another session's claim for a record you could not
+read.
+
 # What you produce
 
 One design, structured exactly as the proposal contract in

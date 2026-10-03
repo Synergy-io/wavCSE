@@ -185,9 +185,12 @@ function queryArgv(params: QueryParams): string[] | undefined {
 				? [...argv, "paper-studies", params.paperId]
 				: undefined;
 		case "study_papers":
-		case "study":
 			return params.studyId
 				? [...argv, "study-papers", params.studyId]
+				: undefined;
+		case "study":
+			return params.studyId
+				? [...argv, "study", params.studyId]
 				: undefined;
 		case "assessment":
 			return params.studyId && params.paperId
@@ -435,7 +438,10 @@ const factory: CustomToolFactory = (pi) => {
 				"Enumerate retained papers and read investigation-scoped literature state as " +
 				"compact records with card and artifact pointers. Each paper assessment is " +
 				"canonical, keyed by (investigation, paper) and answers how that investigation " +
-				"assessed the paper; it is never a global paper status. synthesis_list and " +
+				"assessed the paper; it is never a global paper status. study returns one LT " +
+				"investigation's metadata, completion record and evidence pointers without " +
+				"its paper relationships; study_papers returns that investigation together " +
+				"with every paper relationship. synthesis_list and " +
 				"synthesis return the derived cross-source / theoretical synthesis layer " +
 				"(identity, kind, status, path, provenance) without loading its prose.",
 			parameters: z.object({
@@ -453,7 +459,10 @@ const factory: CustomToolFactory = (pi) => {
 						"synthesis",
 					])
 					.describe(
-						"which bounded read-only query to run; assessment returns one " +
+						"which bounded read-only query to run; study returns one LT " +
+							"investigation's metadata, completion record and evidence pointers (no " +
+							"paper relationships) and study_papers returns that investigation plus " +
+							"every paper relationship; assessment returns one " +
 							"canonical (investigation, paper) PaperAssessment record; paper_claims " +
 							"and claim return recorded source-bound literature claims (paper_claims: " +
 							"all claims for a paper, optionally filtered by claimType; claim: one " +

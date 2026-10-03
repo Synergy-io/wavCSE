@@ -121,6 +121,14 @@ class BoundedReadTests(unittest.TestCase):
             note_path="research/studies/LT-0001/NOTE.md",
             analysis_path="research/studies/LT-0001/analysis.md",
             result_path="research/studies/LT-0001/result.json",
+            question="A bounded question?",
+            scope="A bounded scope.",
+            outcome=None,
+            parent=None,
+            created_at=None,
+            started_at=None,
+            completed_at=None,
+            completion=None,
         )
 
     def reader(self, query=None, primary=None):

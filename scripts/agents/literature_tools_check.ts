@@ -242,6 +242,38 @@ check(
 		.details.kind === "INVALID_REFERENCE",
 );
 
+// 5c. query: `study` is its own operation, never an alias of `study_papers`.
+// INC-019: the adapter previously mapped both to `study-papers`, so the
+// metadata-only read was unreachable from the model surface.
+const studyView = await call("literature_query", { operation: "study", studyId: "LT-0002" });
+const studyDoc = parse(studyView);
+const studyMetadata = studyDoc.study as Record<string, unknown>;
+check(
+	"study returns investigation metadata and evidence pointers without relationships",
+	studyMetadata.study_id === "LT-0002" &&
+		studyMetadata.status === "complete" &&
+		studyMetadata.is_complete === true &&
+		studyMetadata.assessment_count === 15 &&
+		Array.isArray(studyMetadata.papers_assessed) &&
+		Array.isArray(studyMetadata.synthesis_ids) &&
+		!("relationships" in studyDoc),
+	studyMetadata,
+);
+const studyPapers = await call("literature_query", { operation: "study_papers", studyId: "LT-0002" });
+const studyPapersDoc = parse(studyPapers);
+check(
+	"study_papers returns the same investigation plus its paper relationships",
+	Array.isArray(studyPapersDoc.relationships) &&
+		(studyPapersDoc.relationships as unknown[]).length === 15 &&
+		(studyPapersDoc.study as Record<string, unknown>).study_id === "LT-0002" &&
+		!("relationships" in studyDoc),
+	(studyPapersDoc.study as Record<string, unknown>).study_id,
+);
+check(
+	"study requires a studyId",
+	(await call("literature_query", { operation: "study" })).details.kind === "INVALID_REFERENCE",
+);
+
 // 6. bounded read: card
 const card = await call("literature_read", {
 	source: "card",

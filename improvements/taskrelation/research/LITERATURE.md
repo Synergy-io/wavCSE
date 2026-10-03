@@ -3,7 +3,8 @@
 **Status: CURRENT NORMATIVE.** This is the one document that describes how the
 literature subsystem works *now*. Read it before the increment history. The
 per-increment design records (`LITERATURE_AGENT_ROADMAP.md`), the V1 evaluations
-(`LITERATURE_AGENT_V1_EVAL.md`, `RESEARCH_COMPUTER_V1_EVAL.md`) and the
+(`LITERATURE_AGENT_V1_EVAL.md`, `RESEARCH_COMPUTER_V1_EVAL.md`,
+`RESEARCH_DESIGNER_LITERATURE_HANDOFF_EVAL.md`) and the
 `weekly/` reports are **historical provenance**, not current specification.
 
 Scope of V1: a deterministic, operator-owned literature corpus with a bounded,
@@ -122,7 +123,7 @@ All run as modules from the repository root, e.g.
 | Module | Commands |
 | --- | --- |
 | `literature_catalog` | (default) validate + summary; `--lookup <identity>` |
-| `literature_query` | `list`, `resolve`, `paper-studies`, `study-papers`, `assessment`, `identify`, `syntheses`, `synthesis` |
+| `literature_query` | `list`, `resolve`, `paper-studies`, `study-papers`, `study`, `assessment`, `identify`, `syntheses`, `synthesis` |
 | `literature_discovery` | `discover` (`--doi/--arxiv/--title`), `search`, `references`, `citations`, `providers` |
 | `literature_admit` | `admit`, `validate` |
 | `literature_ingest` | `ingest` (local file + hints), `validate` |
@@ -165,9 +166,18 @@ Six tools, all defined in `.omp/tools/literature.ts` and granted to
 required evidence set; a missing discovery grant never excuses answering from
 memory. Canonical admission and acquisition are **not** model tools.
 
+The read-only subset (`literature_resolve`, `literature_query`, `literature_read`,
+`literature_primary`) is also granted to `research-designer`, which consumes a
+completed investigation by reference: it is handed `literature_investigation_ids`
+and reconstructs each one from `literature_query study` / `study-papers` /
+`assessment` / `synthesis` / `paper_claims` and the bounded reads. It is never
+granted `literature_record`, so the Literature Agent stays the scoped literature
+writer.
+
 Evidence levels and the claim/assessment/synthesis/decision distinction are
 defined in `.agents/skills/wavcse-literature-review/SKILL.md`; this document does
-not restate them.
+not restate them. The consumer-side read contract (`study` metadata, completion
+record, provenance classes) is in `.omp/agents/research-designer.md`.
 
 ---
 
@@ -190,7 +200,8 @@ focused test module. Summary of what produced V1:
 | INC-016 | capability-surface repair + drift tests |
 | INC-017 | `literature_admit` — canonical admission from discovery |
 | INC-018 | `literature_investigation` + `literature_record` — lifecycle + scoped persistence |
+| INC-019 | completed investigation → Research Designer read contract; the `study` query operation made reachable and the LT metadata (`question`/`scope`/`outcome`/`completion`) exposed |
 
-**Not yet built** (deliberately out of V1): Research Designer input from a
-completed investigation; the INC-014 paper hunter; INC-015 desktop transport;
+**Not yet built** (deliberately out of V1): proposal generation from the designer's
+literature reading (INC-020); the INC-014 paper hunter; INC-015 desktop transport;
 remote (S3) primary store behind `literature_primary`'s `fetcher` seam.

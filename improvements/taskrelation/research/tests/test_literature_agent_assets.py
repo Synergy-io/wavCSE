@@ -292,6 +292,13 @@ class ToolAdapterTests(unittest.TestCase):
         self.assertIn('"assessment", params.studyId, params.paperId', self.code)
         self.assertEqual(len(re.findall(r'name:\s*"(literature_[a-z_]+)"', self.source)), 6)
 
+    def test_adapter_keeps_study_and_study_papers_distinct(self):
+        # INC-019 defect: both operations resolved to the `study-papers` argv, so
+        # the metadata-only investigation read was unreachable from the model.
+        self.assertEqual(self.code.count('[...argv, "study-papers", params.studyId]'), 1)
+        self.assertEqual(self.code.count('[...argv, "study", params.studyId]'), 1)
+        self.assertNotIn('case "study_papers":\n\t\tcase "study":', self.code)
+
     def test_adapter_exposes_primary_read_but_never_registration(self):
         # The agent may read a retained primary artifact by page, and may never
         # register one: registration is an operator-side act.
@@ -631,6 +638,84 @@ class BoundedReadCliTests(unittest.TestCase):
 
 
 
+
+
+class InvestigationHandoffCliTests(unittest.TestCase):
+    """INC-019: one completed LT investigation is a bounded, status-explicit read.
+
+    The model-facing handoff is a reference (`investigation_id`), never the
+    Literature Agent's prose; these checks fix what the read layer actually
+    returns for it.
+    """
+
+    def test_study_and_study_papers_are_distinct_operations(self):
+        metadata = run_module("literature_query", "study", "LT-0002")
+        relationships = run_module("literature_query", "study-papers", "LT-0002")
+
+        self.assertEqual(metadata.returncode, 0, metadata.stderr)
+        self.assertEqual(relationships.returncode, 0, relationships.stderr)
+        metadata_doc = json.loads(metadata.stdout)
+        relationship_doc = json.loads(relationships.stdout)
+        self.assertEqual(set(metadata_doc), {"study"})
+        self.assertEqual(set(relationship_doc), {"study", "relationships"})
+        self.assertEqual(
+            [row["paper"]["paper_id"] for row in relationship_doc["relationships"]],
+            metadata_doc["study"]["papers_assessed"],
+        )
+
+    def test_completed_investigation_exposes_metadata_counts_and_pointers(self):
+        document = json.loads(
+            run_module("literature_query", "study", "LT-0002").stdout
+        )["study"]
+
+        self.assertEqual(document["status"], "complete")
+        self.assertTrue(document["is_complete"])
+        self.assertEqual(document["assessment_count"], 15)
+        self.assertEqual(len(document["synthesis_ids"]), 4)
+        self.assertTrue(document["analysis_path"].endswith("studies/LT-0002/analysis.md"))
+        self.assertTrue(document["plan_path"].endswith("studies/LT-0002/PLAN.md"))
+
+    def test_study_read_is_bounded(self):
+        serialized = run_module("literature_query", "study", "LT-0002").stdout
+
+        for forbidden in ("relationships", '"text"', "sha256", "locator", "card_path"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, serialized)
+
+    def test_legacy_terminal_status_is_surfaced_and_never_promoted(self):
+        document = json.loads(
+            run_module("literature_query", "study", "LT-0001").stdout
+        )["study"]
+
+        self.assertEqual(document["status"], "rejected")
+        self.assertFalse(document["is_complete"])
+        self.assertEqual(document["completion"]["decision"], "REJECTED")
+
+    def test_nonexistent_and_non_literature_investigations_fail_clearly(self):
+        missing = run_module("literature_query", "study", "LT-9999")
+        non_literature = run_module("literature_query", "study", "DG-0001")
+
+        self.assertEqual(missing.returncode, 1)
+        self.assertIn("unknown Study 'LT-9999'", missing.stderr)
+        self.assertEqual(missing.stdout.strip(), "")
+        self.assertEqual(non_literature.returncode, 1)
+        self.assertIn("not a literature Study", non_literature.stderr)
+
+    def test_designer_grant_never_includes_a_literature_writer(self):
+        designer_path = REPO_ROOT / ".omp" / "agents" / "research-designer.md"
+        entries, body = parse_frontmatter(designer_path)
+        declared = [
+            name.strip()
+            for line in entries
+            if line.partition(":")[0].strip() == "tools"
+            for name in line.partition(":")[2].split(",")
+            if name.strip()
+        ]
+
+        self.assertIn("literature_query", declared)
+        self.assertIn("literature_read", declared)
+        self.assertNotIn("literature_record", declared)
+        self.assertNotIn("literature_record", "\n".join(body))
 
 
 class EvidenceAuthorityTests(unittest.TestCase):

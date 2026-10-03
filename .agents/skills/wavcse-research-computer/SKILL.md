@@ -67,13 +67,25 @@ deterministic boundary; the prompt is not the only control.
    python -m improvements.taskrelation.research.literature_investigation complete LT-XXXX --decision ...
    ```
 
-   Then carry its `paper_id#claim_id` / `investigation#paper` / `synthesis_id`
-   references forward. If the agent needs a paper we do not retain, it returns a
-   structured request; the main session admits and acquires it operator-side
-   (`literature_admit`, `literature_acquire`) and the agent reads the resulting
-   canonical evidence — the agent never writes the catalog.
-3. **Design.** Delegate to `research-designer` with the question, the reconciled
-   evidence and any literature result. It returns the proposal body.
+   Then carry its references forward — the **investigation id** is the handle, not
+   its prose. Keep `paper_id#claim_id` / `investigation#paper` / `synthesis_id`
+   references and the `LT-*` id for the designer to resolve from durable state.
+   If the agent needs a paper we do not retain, it returns a structured request;
+   the main session admits and acquires it operator-side (`literature_admit`,
+   `literature_acquire`) and the agent reads the resulting canonical evidence —
+   the agent never writes the catalog.
+3. **Design.** Delegate to `research-designer` with the `design_question`, the
+   reconciled project context, `constraints`, and — when the question is
+   literature-bound — `literature_investigation_ids: [...]`. Pass **references,
+   never copied prose**: do not paste the Literature Agent's transcript, its final
+   answer, a summarised paper list or remembered identifiers into the prompt. The
+   designer reconstructs each investigation from durable state itself
+   (`literature_query operation=study studyId=LT-XXXX`, then progressively
+   `study_papers`, `assessment`, `synthesis`/`synthesis_list`,
+   `paper_claims`/`claim`, `literature_read`, `literature_primary`). Supply only
+   **completed** (`status: complete`) investigations; the read reports any other
+   status explicitly and the designer must not treat it as completed evidence. It
+   returns the proposal body.
 4. **Persist the draft.** Write `proposals/<STUDY-ID>_<slug>.md` from the
    proposal contract below with `status: DRAFT`.
 5. **Review.** Set `status: REVIEW_REQUIRED` and delegate to

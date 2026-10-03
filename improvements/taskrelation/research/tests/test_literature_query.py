@@ -97,6 +97,12 @@ class QueryFixture(unittest.TestCase):
                 "stage": "source_verification",
                 "decision": "CANDIDATES_FOUND",
                 "path": "research/studies/LT-0002",
+                "question": "Which published methods can be implemented faithfully?",
+                "scope": "Retained relation-learning methods only.",
+                "parent": "LT-0001",
+                "created_at": "2026-01-02T00:00:00+00:00",
+                "started_at": "2026-01-02T00:00:00+00:00",
+                "completed_at": "2026-01-03T00:00:00+00:00",
             },
             {
                 "study_id": "LT-0001",
@@ -106,13 +112,44 @@ class QueryFixture(unittest.TestCase):
                 "stage": "primary_source_review",
                 "decision": "REJECTED",
                 "path": "research/studies/LT-0001",
+                "question": "Does any published method satisfy every gate?",
+                "scope": "Explicit relation methods only.",
+                "outcome": "No reviewed method satisfied all gates.",
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "completed_at": "2026-01-01T12:00:00+00:00",
+            },
+            {
+                "study_id": "LT-0003",
+                "type": "literature",
+                "title": "Open literature question",
+                "status": "active",
+                "stage": "investigation_open",
+                "path": "research/studies/LT-0003",
+                "question": "Is the open question already settled?",
+                "scope": "Retained corpus only.",
+                "created_at": "2026-01-04T00:00:00+00:00",
+                "started_at": "2026-01-04T00:00:00+00:00",
+            },
+            {
+                "study_id": "LT-0004",
+                "type": "literature",
+                "title": "Abandoned literature question",
+                "status": "abandoned",
+                "stage": "investigation_abandoned",
+                "decision": "ABANDONED",
+                "path": "research/studies/LT-0004",
+                "question": "A question that was abandoned?",
+                "scope": "Retained corpus only.",
+                "abandon_reason": "superseded by LT-0003",
+                "created_at": "2026-01-04T00:00:00+00:00",
+                "completed_at": "2026-01-05T00:00:00+00:00",
             },
         ]
         self.studies_path.write_text(
             "".join(json.dumps(study) + "\n" for study in studies),
             encoding="utf-8",
         )
-        for study_id in ("DG-0001", "LT-0001", "LT-0002"):
+        for study_id in ("DG-0001", "LT-0001", "LT-0002", "LT-0003", "LT-0004"):
             folder = self.studies_dir / study_id
             folder.mkdir()
             for name in ("PLAN.md", "NOTE.md", "analysis.md"):
@@ -143,7 +180,27 @@ class QueryFixture(unittest.TestCase):
         self.assessments_path = self.literature_dir / "assessments.jsonl"
         self.syntheses_path = self.research_dir / "literature_survey" / "registry.jsonl"
         self.syntheses_path.parent.mkdir(parents=True, exist_ok=True)
-        self.syntheses_path.write_text("", encoding="utf-8")
+        syntheses = [
+            {
+                "schema_version": 1,
+                "synthesis_id": "first-synthesis",
+                "kind": "theory",
+                "status": "active",
+                "path": "research/literature_survey/first-synthesis.md",
+                "derives_from": ["investigation:LT-0001"],
+            },
+            {
+                "schema_version": 1,
+                "synthesis_id": "second-synthesis",
+                "kind": "comparison",
+                "status": "active",
+                "path": "research/literature_survey/second-synthesis.md",
+                "derives_from": ["investigation:LT-0002", "paper:gamma-2024-method"],
+            },
+        ]
+        self.syntheses_path.write_text(
+            "".join(json.dumps(row) + "\n" for row in syntheses), encoding="utf-8"
+        )
         assessments = [
             {
                 "schema_version": 1,
@@ -399,6 +456,152 @@ class LiteratureStudyRelationshipTests(QueryFixture):
         with self.assertRaisesRegex(
             literature_query.LiteratureQueryError,
             "duplicate paper assessment 'LT-0002#gamma-2024-method'",
+        ):
+            self.open_query()
+
+
+class InvestigationReadTests(QueryFixture):
+    """INC-019: one investigation is a bounded, provenance-carrying read."""
+
+    def test_study_exposes_the_registered_question_scope_and_lifecycle(self):
+        study = self.open_query().get_study("LT-0002")
+
+        self.assertEqual(
+            study.question, "Which published methods can be implemented faithfully?"
+        )
+        self.assertEqual(study.scope, "Retained relation-learning methods only.")
+        self.assertEqual(study.parent, "LT-0001")
+        self.assertEqual(study.status, "complete")
+        self.assertEqual(study.stage, "source_verification")
+        self.assertEqual(study.decision, "CANDIDATES_FOUND")
+        self.assertEqual(study.created_at, "2026-01-02T00:00:00+00:00")
+        self.assertEqual(study.completed_at, "2026-01-03T00:00:00+00:00")
+        self.assertEqual(study.analysis_path, "research/studies/LT-0002/analysis.md")
+        self.assertIsNone(study.completion)
+
+    def test_completion_record_is_read_from_the_investigations_own_result_file(self):
+        (self.studies_dir / "LT-0001" / "result.json").write_text(
+            json.dumps(
+                {
+                    "investigation_id": "LT-0001",
+                    "status": "complete",
+                    "decision": "REJECTED",
+                    "completed_at": "2026-01-01T12:00:00+00:00",
+                    "summary": "No reviewed method satisfied all gates.",
+                    "uncertainties": ["one method was only partially retrieved"],
+                    "coverage_limitations": ["no primary PDF for the 2024 method"],
+                    "blockers": [],
+                    "papers_assessed": ["ghost-paper"],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        completion = self.open_query().get_study("LT-0001").completion
+
+        self.assertEqual(completion.decision, "REJECTED")
+        self.assertEqual(completion.summary, "No reviewed method satisfied all gates.")
+        self.assertEqual(
+            completion.uncertainties, ("one method was only partially retrieved",)
+        )
+        self.assertEqual(
+            completion.coverage_limitations, ("no primary PDF for the 2024 method",)
+        )
+        self.assertEqual(completion.blockers, ())
+
+    def test_completion_record_membership_is_never_the_assessment_authority(self):
+        # The result file may name a paper; the canonical registry never gains it.
+        (self.studies_dir / "LT-0001" / "result.json").write_text(
+            json.dumps(
+                {
+                    "investigation_id": "LT-0001",
+                    "papers_assessed": ["ghost-paper"],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        query = self.open_query()
+
+        self.assertEqual(
+            [r.paper.paper_id for r in query.papers_for_study("LT-0001")],
+            ["beta-2020-method"],
+        )
+
+    def test_malformed_completion_record_fails_deterministically(self):
+        (self.studies_dir / "LT-0001" / "result.json").write_text(
+            "{ not json", encoding="utf-8"
+        )
+
+        with self.assertRaisesRegex(
+            literature_query.LiteratureQueryError, "is not valid JSON"
+        ):
+            self.open_query()
+
+    def test_study_evidence_points_at_registry_backed_assessments_and_syntheses(self):
+        evidence = self.open_query().study_evidence("LT-0002")
+
+        self.assertEqual(evidence["assessment_count"], 2)
+        self.assertEqual(
+            evidence["papers_assessed"],
+            ["beta-2020-method", "gamma-2024-method"],
+        )
+        self.assertEqual(evidence["synthesis_ids"], ["second-synthesis"])
+
+    def test_unknown_and_non_literature_studies_fail_clearly(self):
+        query = self.open_query()
+
+        with self.assertRaisesRegex(
+            literature_query.LiteratureQueryError, "unknown Study 'LT-9999'"
+        ):
+            query.get_study("LT-9999")
+        with self.assertRaisesRegex(
+            literature_query.LiteratureQueryError, "is not a literature Study"
+        ):
+            query.get_study("DG-0001")
+
+    def test_terminal_statuses_are_preserved_and_never_promoted(self):
+        # A bootstrap-era terminal status is surfaced verbatim; it is never
+        # rewritten to "complete" and never silently accepted as completed evidence.
+        query = self.open_query()
+        study = query.get_study("LT-0001")
+        document = literature_query._study_dict(study)
+
+        self.assertEqual(study.status, "rejected")
+        self.assertFalse(document["is_complete"])
+        self.assertTrue(
+            literature_query._study_dict(query.get_study("LT-0002"))["is_complete"]
+        )
+
+    def test_unfinished_and_abandoned_investigations_are_not_completed_evidence(self):
+        query = self.open_query()
+
+        for study_id, status in (("LT-0003", "active"), ("LT-0004", "abandoned")):
+            with self.subTest(study_id=study_id):
+                study = query.get_study(study_id)
+                document = literature_query._study_dict(study)
+                self.assertEqual(study.status, status)
+                self.assertFalse(document["is_complete"])
+                # The registered metadata is still readable — the branch is
+                # explicit, not a refusal to answer.
+                self.assertTrue(document["question"])
+
+    def test_registered_metadata_field_with_a_bad_type_is_a_clear_failure(self):
+        rows = [
+            json.loads(line)
+            for line in self.studies_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        for row in rows:
+            if row["study_id"] == "LT-0002":
+                row["question"] = 42
+        self.studies_path.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+        )
+
+        with self.assertRaisesRegex(
+            literature_query.LiteratureQueryError,
+            "question must be a non-empty trimmed string",
         ):
             self.open_query()
 

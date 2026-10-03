@@ -24,6 +24,7 @@ Usage::
     python -m improvements.taskrelation.research.literature_query identify --doi <doi>
     python -m improvements.taskrelation.research.literature_query paper-studies <identity>
     python -m improvements.taskrelation.research.literature_query study-papers LT-0001
+    python -m improvements.taskrelation.research.literature_query study LT-0002
     python -m improvements.taskrelation.research.literature_query assessment LT-0002 <paper_id>
 
 Every operation here is read-only, idempotent and deterministic. ``identify``
@@ -77,8 +78,35 @@ class PaperRecord:
 
 
 @dataclass(frozen=True)
+class CompletionRecord:
+    """The lifecycle's completion record for one closed investigation.
+
+    Read from the investigation's own ``result.json`` and only that file: it is
+    the bound source for the completion ``summary`` and for the investigation's
+    unresolved ``uncertainties``, ``coverage_limitations`` and ``blockers``. It
+    deliberately carries **no** assessment membership — which papers an
+    investigation assessed is the canonical registry's answer, never a historical
+    result file's.
+    """
+
+    decision: Optional[str]
+    completed_at: Optional[str]
+    summary: Optional[str]
+    uncertainties: Tuple[str, ...]
+    coverage_limitations: Tuple[str, ...]
+    blockers: Tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class StudyRecord:
-    """One registered literature Study; decision is Study-level only."""
+    """One registered literature Study; decision is Study-level only.
+
+    The metadata fields are the registered investigation's own, read from its
+    ``STUDIES.jsonl`` row; ``completion`` is the lifecycle's separate completion
+    record, present only once an investigation has closed through the lifecycle.
+    ``outcome`` is the completion prose a bootstrap/legacy row carries in place of
+    that record; it is exposed verbatim and never merged with ``completion``.
+    """
 
     study_id: str
     title: str
@@ -90,6 +118,14 @@ class StudyRecord:
     note_path: Optional[str]
     analysis_path: Optional[str]
     result_path: Optional[str]
+    question: Optional[str]
+    scope: Optional[str]
+    outcome: Optional[str]
+    parent: Optional[str]
+    created_at: Optional[str]
+    started_at: Optional[str]
+    completed_at: Optional[str]
+    completion: Optional[CompletionRecord]
 
 
 @dataclass(frozen=True)
@@ -331,6 +367,31 @@ class LiteratureQuery:
         study = self.get_study(study_id)
         return self._relationships_by_study.get(study.study_id, ())
 
+    def study_evidence(self, study_id):
+        """Compact, registry-derived pointers to one investigation's evidence.
+
+        Counts come from the canonical registries, never from a historical
+        result file: ``assessment_count``/``papers_assessed`` from the
+        assessment registry and ``synthesis_ids`` from the syntheses that name
+        the investigation in their provenance. This is the progressive-disclosure
+        bridge — it says *which* evidence exists without loading any of it.
+        """
+
+        study = self.get_study(study_id)
+        relationships = self._relationships_by_study.get(study.study_id, ())
+        reference = "investigation:{}".format(study.study_id)
+        return {
+            "assessment_count": len(relationships),
+            "papers_assessed": sorted(
+                {relationship.paper.paper_id for relationship in relationships}
+            ),
+            "synthesis_ids": sorted(
+                record.synthesis_id
+                for record in self._syntheses.records
+                if reference in record.derives_from
+            ),
+        }
+
     def get_assessment(self, investigation_id, paper_id):
         """Return the canonical ``(investigation_id, paper_id)`` assessment record.
 
@@ -461,6 +522,7 @@ class LiteratureQuery:
             else None
             for name in _ARTIFACT_NAMES
         }
+        result_path = artifacts["result.json"]
         return StudyRecord(
             study_id=study_id,
             title=title,
@@ -471,8 +533,101 @@ class LiteratureQuery:
             plan_path=artifacts["PLAN.md"],
             note_path=artifacts["NOTE.md"],
             analysis_path=artifacts["analysis.md"],
-            result_path=artifacts["result.json"],
+            result_path=result_path,
+            question=self._optional_text(raw, "question", line_number),
+            scope=self._optional_text(raw, "scope", line_number),
+            outcome=self._optional_text(raw, "outcome", line_number),
+            parent=self._optional_text(raw, "parent", line_number),
+            created_at=self._optional_text(raw, "created_at", line_number),
+            started_at=self._optional_text(raw, "started_at", line_number),
+            completed_at=self._optional_text(raw, "completed_at", line_number),
+            completion=self._completion_record(study_id, result_path),
         )
+
+    @staticmethod
+    def _optional_text(raw, field, line_number):
+        """One optional registered metadata field, or ``None`` when absent."""
+
+        value = raw.get(field)
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value.strip() or value != value.strip():
+            raise LiteratureQueryError(
+                "Study registry line {} {} must be a non-empty trimmed string".format(
+                    line_number, field
+                )
+            )
+        return value
+
+    def _completion_record(self, study_id, result_path):
+        """Parse the lifecycle's completion record, or ``None`` when it has none.
+
+        A closed investigation carries ``result.json``; its completion fields are
+        read here rather than reconstructed, and a malformed file fails
+        deterministically instead of being silently ignored.
+        """
+
+        if not result_path:
+            return None
+        path = self._repo_root / result_path
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            raise LiteratureQueryError(
+                "cannot read Study {} completion record {}: {}".format(
+                    study_id, result_path, exc
+                )
+            ) from exc
+        except ValueError as exc:
+            raise LiteratureQueryError(
+                "Study {} completion record {} is not valid JSON: {}".format(
+                    study_id, result_path, exc
+                )
+            ) from exc
+        if not isinstance(raw, dict):
+            raise LiteratureQueryError(
+                "Study {} completion record {} must be an object".format(
+                    study_id, result_path
+                )
+            )
+        return CompletionRecord(
+            decision=self._completion_text(raw, "decision", result_path),
+            completed_at=self._completion_text(raw, "completed_at", result_path),
+            summary=self._completion_text(raw, "summary", result_path),
+            uncertainties=self._completion_list(raw, "uncertainties", result_path),
+            coverage_limitations=self._completion_list(
+                raw, "coverage_limitations", result_path
+            ),
+            blockers=self._completion_list(raw, "blockers", result_path),
+        )
+
+    @staticmethod
+    def _completion_text(raw, field, result_path):
+        value = raw.get(field)
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value.strip():
+            raise LiteratureQueryError(
+                "completion record {} {} must be a non-empty string".format(
+                    result_path, field
+                )
+            )
+        return value
+
+    @staticmethod
+    def _completion_list(raw, field, result_path):
+        value = raw.get(field)
+        if value is None:
+            return ()
+        if not isinstance(value, (list, tuple)) or not all(
+            isinstance(item, str) and item.strip() for item in value
+        ):
+            raise LiteratureQueryError(
+                "completion record {} {} must be a list of non-empty strings".format(
+                    result_path, field
+                )
+            )
+        return tuple(value)
 
     def _resolve_study_folder(self, study_id, path):
         candidate = Path(path)
@@ -552,18 +707,43 @@ def _paper_dict(paper):
     }
 
 
+def _completion_dict(completion):
+    if completion is None:
+        return None
+    return {
+        "decision": completion.decision,
+        "completed_at": completion.completed_at,
+        "summary": completion.summary,
+        "uncertainties": list(completion.uncertainties),
+        "coverage_limitations": list(completion.coverage_limitations),
+        "blockers": list(completion.blockers),
+    }
+
+
 def _study_dict(study):
     return {
         "study_id": study.study_id,
         "title": study.title,
         "status": study.status,
+        # The normal-handoff predicate: only an investigation the lifecycle closed
+        # as ``complete`` is completed literature evidence. ``status`` stays
+        # verbatim so ``active`` / ``abandoned`` / a legacy ``rejected`` is visible.
+        "is_complete": study.status == "complete",
         "stage": study.stage,
         "decision": study.decision,
+        "question": study.question,
+        "scope": study.scope,
+        "outcome": study.outcome,
+        "parent": study.parent,
+        "created_at": study.created_at,
+        "started_at": study.started_at,
+        "completed_at": study.completed_at,
         "path": study.path,
         "plan_path": study.plan_path,
         "note_path": study.note_path,
         "analysis_path": study.analysis_path,
         "result_path": study.result_path,
+        "completion": _completion_dict(study.completion),
     }
 
 
@@ -622,6 +802,11 @@ def _build_parser():
         "study-papers", help="list paper relationships for one LT Study"
     )
     study_papers.add_argument("study_id")
+    study = commands.add_parser(
+        "study",
+        help="read one LT Study's metadata, completion record and evidence pointers",
+    )
+    study.add_argument("study_id")
     assessment = commands.add_parser(
         "assessment", help="return one canonical (investigation, paper) assessment"
     )
@@ -696,6 +881,13 @@ def main(argv=None):
             }
         elif args.command == "synthesis":
             document = {"synthesis": _synthesis_dict(query.get_synthesis(args.synthesis_id))}
+        elif args.command == "study":
+            study = query.get_study(args.study_id)
+            document = {
+                "study": dict(
+                    _study_dict(study), **query.study_evidence(args.study_id)
+                )
+            }
         else:
             relationships = query.papers_for_study(args.study_id)
             study = query.get_study(args.study_id)

@@ -99,6 +99,50 @@ class AgentBoundaryTests(unittest.TestCase):
             self.assertEqual(parse_frontmatter(path)["name"], name)
 
 
+class DesignerLiteratureHandoffTests(unittest.TestCase):
+    """INC-019: a completed LT investigation is a reference the designer reads.
+
+    The durable record must be sufficient; the Literature Agent's transcript is
+    not required and not evidence.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.body = DESIGNER.read_text(encoding="utf-8")
+        cls.normalized = " ".join(cls.body.split()).lower()
+
+    def test_designer_holds_only_the_read_only_literature_surface(self):
+        tools = tools_of(parse_frontmatter(DESIGNER))
+
+        for name in (
+            "literature_resolve", "literature_query", "literature_read",
+            "literature_primary",
+        ):
+            self.assertIn(name, tools)
+        self.assertNotIn("literature_record", tools)
+        self.assertNotIn("literature_record", self.body)
+
+    def test_designer_consumes_an_investigation_by_reference_not_by_prose(self):
+        self.assertIn("literature_investigation_ids", self.body)
+        self.assertIn("transcript", self.normalized)
+
+    def test_designer_verifies_status_before_treating_it_as_completed(self):
+        for needle in ("is_complete", "abandoned", "active", "status"):
+            self.assertIn(needle, self.normalized)
+
+    def test_designer_read_path_is_progressive_and_provenance_preserving(self):
+        for needle in (
+            "operation=study", "study_papers", "assessment", "synthesis_ids",
+            "paper_claims", "literature_primary", "uncertainties",
+            "coverage_limitations", "blockers", "never substitute",
+        ):
+            self.assertIn(needle, self.normalized)
+
+    def test_designer_keeps_assessments_and_syntheses_distinct_from_project_records(self):
+        self.assertIn("never a project finding", self.normalized)
+        self.assertIn("not a project decision", self.normalized)
+
+
 class SkillAndCommandTests(unittest.TestCase):
     def test_skill_frontmatter(self):
         fields = parse_frontmatter(SKILL)

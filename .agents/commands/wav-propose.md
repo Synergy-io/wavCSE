@@ -29,9 +29,14 @@ say so and stop rather than manufacturing work.
 2. Frame the open question and its evidence basis; name the framework row or
    backlog entry.
 3. If and only if the question is literature-bound, delegate to the
-   `literature-reviewer` agent and carry its claim references forward.
-4. Delegate the design to the `research-designer` agent, giving it the question,
-   the reconciled evidence and any literature result.
+   `literature-reviewer` agent, then keep the `LT-*` investigation id and its
+   claim/assessment/synthesis references — not its prose — as the literature
+   evidence handle.
+4. Delegate the design to the `research-designer` agent, giving it the
+   `design_question`, the reconciled project context, any constraints, and
+   `literature_investigation_ids: [...]` for completed investigations only. Do not
+   paste the Literature Agent's transcript, answer or a summarised paper list; the
+   designer reads the durable investigation itself.
 5. Write `improvements/taskrelation/research/proposals/<ID>_<slug>.md` as
    `DRAFT` per the contract in `proposals/README.md`.
 6. Set `REVIEW_REQUIRED` and delegate to the `research-reviewer` agent.
