@@ -1,0 +1,39 @@
+# Committed non-secret template. Bootstrap copies this file to
+# ~/.config/wavcse-infra/config.toml once and never overwrites that user file.
+# Keep credentials and tokens out of TOML; see .env.example for environment variables.
+
+[aws]
+region = "us-east-1"
+
+[controller]
+expect_omp = true
+github_url = "https://github.com"
+# mlflow_url = "https://dagshub.com/<owner>/<repository>.mlflow"
+
+[paths]
+wavcse = "~/projects/wavCSE"
+
+[runpod]
+api_url = "https://api.runpod.io/v2"
+api_key_parameter = "/wavcse-infra/runpod/api-key"
+request_timeout_seconds = 10.0
+max_read_attempts = 3
+retry_backoff_seconds = 0.5
+lifecycle_timeout_seconds = 300.0
+poll_interval_seconds = 2.0
+max_poll_interval_seconds = 10.0
+create_reconcile_attempts = 3
+
+[storage]
+bucket = "CHANGE_ME"
+prefix = "wavcse"
+
+[ssh]
+private_key = "~/.ssh/wavcse_worker"
+known_hosts_file = "~/.local/state/wavcse-infra/known_hosts"
+connect_timeout_seconds = 10.0
+command_timeout_seconds = 300.0
+bootstrap_timeout_seconds = 900.0
+readiness_timeout_seconds = 180.0
+poll_interval_seconds = 2.0
+max_poll_interval_seconds = 10.0
