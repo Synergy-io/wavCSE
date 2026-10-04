@@ -38,7 +38,7 @@ reversible stop.
 import json
 from decimal import Decimal
 
-from improvements.compute import ledger, state as state_module
+from improvements.compute import ledger, providers, state as state_module
 from improvements.compute import sweep as sweep_module
 from improvements.compute.errors import BusyError
 
@@ -89,6 +89,7 @@ def reconcile_intents(scope, workers, *, now=None):
                 envelope_digest=intent.get("envelope_digest"),
                 deadline=intent.get("deadline"),
                 request=intent.get("request"),
+                provider=providers.normalize_provider(intent.get("provider")),
             )
             redeemed.append(worker.get("id"))
             state_module.append_event(
@@ -99,12 +100,15 @@ def reconcile_intents(scope, workers, *, now=None):
             continue
         age = _age_hours(intent.get("created_at"), now)
         if age is not None and age >= INTENT_ABANDON_AFTER_HOURS:
+            provider = providers.normalize_provider(intent.get("provider"))
             ledger.abandon_create(
                 scope,
                 "reaper: no worker ever appeared for a create intent older than {} "
                 "hours".format(INTENT_ABANDON_AFTER_HOURS),
+                provider=provider,
             )
-            abandoned.append(intent.get("request_name"))
+            abandoned.append(intent.get("request_name") or
+                             "{}:{}".format(provider, intent.get("created_at")))
             state_module.append_event(
                 {"scope": scope, "action": "reaper-abandoned-create-intent",
                  "request_name": intent.get("request_name"), "age_hours": str(age)},

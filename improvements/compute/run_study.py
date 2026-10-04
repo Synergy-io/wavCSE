@@ -23,7 +23,7 @@ from decimal import Decimal
 
 from improvements.compute import envelope as envelope_module
 from improvements.compute import evidence
-from improvements.compute import failures, jobspec, ledger, remote_commit
+from improvements.compute import failures, jobspec, ledger, providers, remote_commit
 from improvements.compute import state as state_module
 from improvements.compute import worker as worker_module
 from improvements.compute.errors import (
@@ -273,9 +273,11 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
                 "submission for {} remains ambiguous; reconcile the infra job record "
                 "before issuing another request".format(key), action="submit-job")
 
+        provider = jobspec.plan_provider(plan)
         decision = envelope_module.check(
             view, envelope_module.ACTION_SUBMIT_JOB,
             ledger.derive_spend(infra.worker_list(), scope).facts(),
+            requested={"provider": provider},
         )
         if not decision.allowed:
             decision.require()
@@ -295,7 +297,8 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
         if dry_run:
             continue
 
-        worker_id = entry.get("worker_id") or _worker_id_for(infra, scope)
+        worker_id = entry.get("worker_id") or _worker_id_for(
+            infra, scope, jobspec.plan_provider(plan))
         known_jobs = infra.job_list()
         match = _match_provider_job(known_jobs, spec, entry.get("previous_job_ids") or ())
         if match is not None:
@@ -322,7 +325,13 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
         entry["worker_id"] = worker_id
         entry["submission_pending"] = True
         save_record(scope, record)
-        result = infra.job_submit(path, entry["worker_id"])
+        provider = jobspec.plan_provider(plan)
+        if provider == providers.RUNPOD:
+            # Keep the legacy adapter/caller contract byte-for-byte for RunPod.
+            result = infra.job_submit(path, entry["worker_id"])
+        else:
+            result = infra.job_submit(
+                path, entry["worker_id"], provider=provider)
         record_view = result.payload if isinstance(result.payload, dict) else None
         if record_view and record_view.get("job_id"):
             entry["job_id"] = record_view["job_id"]
@@ -368,28 +377,41 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
     return {"planned": planned, "submitted": submitted, "warnings": warnings}
 
 
-def available_worker_id(infra, scope):
-    """The newest scope worker this controller could submit to, or None."""
+def available_worker_id(infra, scope, provider=providers.DEFAULT_PROVIDER):
+    """Newest owned READY-capable resource for one provider, or None."""
 
-    workers = infra.worker_list()
-    candidates = [
-        worker for worker in workers
-        if ledger.worker_belongs_to(worker.get("name"), scope)
-        and str(worker.get("state") or "").upper() not in ("DESTROYED", "TERMINATING")
-    ]
-    candidates.sort(key=lambda worker: str(worker.get("created_at") or ""), reverse=True)
-    if not candidates:
-        return None
-    return candidates[0].get("id")
+    provider = providers.normalize_provider(provider)
+    workers = (infra.worker_list() if provider == providers.RUNPOD
+               else infra.worker_list(provider=provider))
+    leases = {
+        lease.get("worker_id"): lease
+        for lease in ledger.leases_for(scope)
+        if lease.get("worker_id") and lease.get("state") == "active"
+        and ledger.lease_provider(lease) == provider
+    }
+    candidates = []
+    for worker in workers:
+        if str(worker.get("state") or "").upper() in ("DESTROYED", "TERMINATING"):
+            continue
+        lease = leases.get(worker.get("id"))
+        exact = lease is not None and ledger.worker_matches_lease(worker, lease)
+        legacy = (provider == providers.RUNPOD
+                  and ledger.worker_belongs_to(worker.get("name"), scope))
+        if exact or legacy:
+            candidates.append(worker)
+    candidates.sort(
+        key=lambda worker: (str(worker.get("created_at") or ""), str(worker.get("id") or "")),
+        reverse=True,
+    )
+    return candidates[0].get("id") if candidates else None
 
 
-def _worker_id_for(infra, scope):
-    worker_id = available_worker_id(infra, scope)
+def _worker_id_for(infra, scope, provider):
+    worker_id = available_worker_id(infra, scope, provider=provider)
     if worker_id is None:
         raise UsageError(
-            "no worker is available for {}; run the worker-ensure transition first".format(
-                scope
-            )
+            "no owned {} worker is available for scope {}; run worker-ensure first"
+            .format(provider, scope)
         )
     return worker_id
 
@@ -568,18 +590,21 @@ def finish(scope, plan, *, infra, view, record):
     actions = []
     for lease in ledger.active_leases(scope):
         worker_id = lease.get("worker_id")
-        if stop_policy.get("destroy_on_completion"):
+        provider = ledger.lease_provider(lease)
+        if stop_policy.get("destroy_on_completion") or provider == providers.COLAB:
             result = worker_module.destroy_worker(infra, worker_id, reason="stage complete")
             if result.returncode != 0:
                 raise ReconcilableError("worker {} destroy failed; cleanup remains pending"
                                         .format(worker_id), action="destroy-worker")
-            actions.append({"worker_id": worker_id, "action": "destroy"})
+            actions.append({"worker_id": worker_id, "provider": provider,
+                            "action": "destroy"})
         elif int(stop_policy.get("retain_for_reuse_hours", 0)) == 0:
             result = worker_module.stop_worker(infra, worker_id, reason="stage complete")
             if result.returncode != 0:
                 raise ReconcilableError("worker {} stop failed; cleanup remains pending"
                                         .format(worker_id), action="stop-worker")
-            actions.append({"worker_id": worker_id, "action": "stop"})
+            actions.append({"worker_id": worker_id, "provider": provider,
+                            "action": "stop"})
     return {"finished": True, "actions": actions}
 
 
@@ -610,18 +635,21 @@ def advance(scope, plan, stage, *, infra, record=None, view=None, dry_run=False)
         ledger.reconcile_absent_leases(scope, workers)
         spend = ledger.derive_spend(workers, scope)
         budget = view.envelope["budget"]
+        unit = envelope_module.cost_unit(view.envelope)
         violation = None
         if envelope_module.is_expired(view.envelope):
             violation = "authorization expired"
         elif not spend.bounded:
-            violation = "provider cost facts are unbounded"
-        elif spend.estimated_spend_usd >= Decimal(str(budget["max_total_gpu_usd"])):
-            violation = "total GPU budget exhausted"
+            violation = "provider allocation facts are unbounded"
+        elif unit == providers.USD_PER_HOUR and \
+                spend.estimated_spend_usd >= Decimal(str(budget["max_total_gpu_usd"])):
+            violation = "total RunPod USD budget exhausted"
         elif spend.estimated_wall_clock_hours >= Decimal(str(budget["max_wall_clock_hours"])):
-            violation = "paid wall-clock budget exhausted"
-        elif any(item["hourly_cost"] is None or item["hourly_cost"] >
-                 Decimal(str(budget["max_gpu_hourly_usd"])) for item in spend.billable):
-            violation = "provider price is unknown or above the hourly ceiling"
+            violation = "allocation wall-clock budget exhausted"
+        elif unit == providers.USD_PER_HOUR and any(
+                item["hourly_cost"] is None or item["hourly_cost"] >
+                Decimal(str(budget["max_gpu_hourly_usd"])) for item in spend.billable):
+            violation = "RunPod price is unknown or above the hourly ceiling"
         if violation:
             for lease in ledger.active_leases(scope):
                 if any(item["id"] == lease.get("worker_id") and item["billable"]
@@ -654,7 +682,8 @@ def advance(scope, plan, stage, *, infra, record=None, view=None, dry_run=False)
     if in_flight:
         step = "monitor"
     elif submittable and not dry_run:
-        if available_worker_id(infra, scope) is None:
+        if available_worker_id(
+                infra, scope, provider=jobspec.plan_provider(plan)) is None:
             # Nothing to submit to: the previous worker is gone. Report it rather than
             # raising from inside the submission, so the cycle's next step is the
             # worker-ensure transition it already knows how to take.

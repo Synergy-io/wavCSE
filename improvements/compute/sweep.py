@@ -38,8 +38,14 @@ def classify(worker, *, scope, lease, jobs=(), now=None,
 
     now = now or state_module.utc_now()
     name = str(worker.get("name") or "")
-    if not ledger.worker_belongs_to(name, scope):
-        return UNKNOWN_WORKER, "name does not match any known scope"
+    if lease is not None:
+        if lease.get("scope") != scope or not ledger.worker_matches_lease(worker, lease):
+            return UNKNOWN_WORKER, "provider identity does not match the recorded lease"
+    elif not ledger.worker_belongs_to(name, scope):
+        # Only legacy RunPod resources can be attributed from a scope-prefixed
+        # name without a lease. Colab identities are provider-owned and require
+        # an exact lease before automation may touch them.
+        return UNKNOWN_WORKER, "no exact lease and name does not match the scope"
     state = str(worker.get("state") or "UNKNOWN").upper()
     if state in ("DESTROYED",):
         return STOPPED, "provider reports the worker destroyed"
@@ -96,6 +102,7 @@ def plan_actions(scope, *, workers, leases, jobs_by_worker, now=None,
         entry = {
             "worker_id": worker_id,
             "name": name,
+            "provider": ledger.lease_provider(lease) if lease else "runpod",
             "state": str(worker.get("state") or "UNKNOWN"),
             "classification": klass,
             "reason": reason,
