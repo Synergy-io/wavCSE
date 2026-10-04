@@ -387,6 +387,40 @@ blocker. It passed every prerequisite and failed inside readiness; full record i
 No second session was attempted: the authorization bounds this run to one worker,
 no replacements and no second Colab session. IN-0001 is not closed.
 
+## Controller-side record — IN-0001 smoke RETRY 2 (2026-10-04): PASSED
+
+The one additional authorized session completed the smoke end to end. Full
+evidence: `execution/IN-0001/SMOKE_RESULT.md`, section "Retry 2".
+
+- Retry grant: digest `a743ab57…13a`, commit `4522ee2`, window
+  `14:45:17Z–20:45:17Z`; the first grant (`5f91a876…27a7`, commit `95dbb87`) was
+  consumed by attempt 1 and is preserved, not extended.
+- One change, on the operator configuration surface only:
+  `colab.command_timeout_seconds` `300 -> 600` s in the controller TOML, because
+  four earlier free-tier T4 sessions had reached READY under the same code with
+  the 300 s default and attempt 1 exceeded it on a cold start.
+- Session `wavcse-e14e1496396e4df8`: allocated, READY in ~83 s, observed
+  in-environment GPU `Tesla T4`, billing `FREE_TIER` (balance `0.00 CU`).
+- Job `job-8d23d42086ea497c`: `SUCCEEDED`, exit `0`, requested == executed
+  commit `4522ee2c1e78f5556294f8078feaf63639dfbbd3`, run over the non-SSH
+  `colab_exec` transport; `_require_colab_job_budget` exercised on the submit
+  path (READY, no active job, baseline/observed assignment accounting,
+  FREE_TIER permission).
+- Artifact `IN-0001/smoke_s00/smoke_probe.txt`, sha256
+  `2a7de24fb7bb2d55c87f753f3bcbc648d3f5dafa2f62b917e01bc5c3d68e8540` (295 B),
+  persisted to S3 and independently read back digest-bound; its bytes name the
+  executed commit, GPU, provider, worker and job.
+- Terminal release at `14:49:42Z`; provider sessions `[]`, `assignments 0`,
+  rate `0.00 CU/hour`; no pending intent, no open job, one attempt, entry
+  `collected`. wavcse-infra remained
+  `fc85441d020386b7e18bb3df2e60585b19b4be48`.
+- **The two previously unvalidated integration paths are now exercised for real**
+  (`_job_context_for` → `colab_exec` dispatch, and the Colab job-budget gate),
+  and the smoke's purpose is met. IN-0001 is successfully executed; the retry
+  grant is spent and no further session may be allocated for it.
+
+No DG-0008 work was performed, and the benchmark was not started.
+
 ## Live-validation requirement
 
 Deterministic, zero-cost coverage of the Colab path is strong (`make check`,
