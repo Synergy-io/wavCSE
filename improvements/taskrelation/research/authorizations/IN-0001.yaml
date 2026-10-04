@@ -1,0 +1,41 @@
+# IN-0001 — compute authorization (INFRASTRUCTURE VALIDATION ONLY)
+#
+# Granted by the researcher in the session of 2026-10-04. It authorizes exactly
+# one bounded Colab infrastructure-validation smoke test under the committed
+# plan `improvements/taskrelation/research/execution/IN-0001/smoke_plan.json`,
+# and nothing else: no DG-0008 execution, no DG-0008 benchmark, no research
+# training, no embedding download, no RunPod allocation, no second Colab
+# session, and no paid Colab execution.
+#
+# BILLING: FREE_TIER ONLY. The CU ceilings below are the safety bounds the
+# existing contract requires; they are NOT permission to spend paid CU. If the
+# execution path reports PAID_CU, or would consume paid CU, the session is
+# released and the run stops.
+#
+# IN-0001 is an execution scope of kind `infrastructure_validation`: it is not a
+# Study, it confers no scientific authority, and it never authorizes DG-0008.
+# An agent must not widen this grant; a change to any field is a new human grant.
+schema_version: 1
+scope: IN-0001
+scope_kind: infrastructure_validation
+provider: colab
+granted_by: Kevin Sanjula (human grant)
+granted_at: "2026-10-04T13:22:01+00:00"
+expires_at: "2026-10-04T19:22:01+00:00"
+
+budget:
+  cost_unit: CU
+  max_wall_clock_hours: 2
+  allow_free_tier: true
+  max_incremental_rate_cu_per_hour: 3
+  max_job_cu: 10
+
+concurrency:
+  max_simultaneous_workers: 1
+  replacement_workers_allowed: false
+
+resources: {}
+
+stop_policy:
+  destroy_on_completion: true
+  retain_for_reuse_hours: 0
