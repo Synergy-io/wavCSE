@@ -9,5 +9,5 @@ packages:
 
 runcmd:
   - [install, -d, -o, ubuntu, -g, ubuntu, /home/ubuntu/projects]
-  - [bash, -c, 'if [[ ! -d /home/ubuntu/projects/wavcse-infra/.git ]]; then runuser --user ubuntu -- git clone --branch main --single-branch https://github.com/Ke-vin-S/wavcse-infra.git /home/ubuntu/projects/wavcse-infra; fi']
-  - [env, WAVCSE_INFRA_CONTROLLER_USER=ubuntu, /home/ubuntu/projects/wavcse-infra/controller/bootstrap.sh]
+  - [bash, -c, 'if [[ ! -d /home/ubuntu/projects/wavCSE/.git ]]; then runuser --user ubuntu -- git clone --branch main --single-branch https://github.com/Synergy-io/wavCSE.git /home/ubuntu/projects/wavCSE; fi']
+  - [env, WAVCSE_INFRA_CONTROLLER_USER=ubuntu, /home/ubuntu/projects/wavCSE/infra/controller/bootstrap.sh]

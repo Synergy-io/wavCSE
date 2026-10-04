@@ -45,11 +45,12 @@ Exit codes: `0` proceed, `2` usage or configuration failure, `3` refused by poli
 
 ## Where the control plane is found
 
-Resolution order, first validated candidate wins: an explicit checkout
-(`WAVCSE_INFRA_CHECKOUT`) or CLI (`WAVCSE_INFRA_CLI`), then the `infra`
-executable on `PATH` resolved through its symlink, then a sibling checkout. When
-nothing validates, compute steps stay blocked with an explicit reason — never
-silently skipped, never substituted.
+Resolution order, first validated candidate wins: an explicit subsystem
+(`WAVCSE_INFRA_CHECKOUT`) or CLI (`WAVCSE_INFRA_CLI`), then the canonical
+`infra/` directory in this repository, then an `infra` executable on `PATH`.
+A legacy sibling checkout remains a temporary controller-cutover fallback only.
+When nothing validates, compute steps stay blocked with an explicit reason —
+never silently skipped, never substituted.
 
 ## Runtime state (never committed)
 

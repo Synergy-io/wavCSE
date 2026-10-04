@@ -16,12 +16,13 @@ UV := uv run --locked
 RESEARCH_TESTS := improvements/taskrelation/research/tests
 COMPUTE_TESTS := improvements/compute/tests
 
-.PHONY: agents-sync agents-check check compute-check literature-tools-check research-check research-check-all help
+.PHONY: agents-sync agents-check check compute-check infra-check literature-tools-check research-check research-check-all help
 
 help:
 	@echo "agents-sync               materialize .omp/AGENTS.md"
 	@echo "agents-check              validate agent assets (no mutation)"
 	@echo "compute-check             compute-backend tests (offline, fixtures)"
+	@echo "infra-check               infra subsystem checks (run with infra's Python 3.12 environment)"
 	@echo "literature-tools-check    exercise the model-facing literature tool adapter (needs bun; not part of 'check')"
 	@echo "research-check            research tests"
 	@echo "research-check-all        alias of research-check (kept for callers)"
@@ -41,6 +42,9 @@ literature-tools-check:
 
 compute-check:
 	$(UV) python -m unittest discover -s $(COMPUTE_TESTS) -t .
+
+infra-check:
+	$(MAKE) -C infra check
 
 research-check:
 	$(UV) python -m unittest discover -s $(RESEARCH_TESTS) -t $(RESEARCH_TESTS)

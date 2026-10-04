@@ -558,15 +558,11 @@ High-level recovery:
         ->
     supply SSH access
         ->
-    cloud-init/bootstrap
+    clone wavCSE
         ->
-    clone wavcse-infra
-        ->
-    bootstrap controller
+    run infra/controller/bootstrap.sh
         ->
     authenticate external services
-        ->
-    clone wavCSE
         ->
     infra doctor
 

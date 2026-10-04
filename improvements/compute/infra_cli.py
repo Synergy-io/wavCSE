@@ -1,4 +1,4 @@
-"""Thin, typed wrapper around the wavcse-infra CLI.
+"""Thin, typed wrapper around the ``infra`` subsystem CLI.
 
 The backend's only infrastructure dependency is this module: everything else in
 ``improvements/compute`` speaks in terms of these methods, so no provider, SSH,

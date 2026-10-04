@@ -1,24 +1,22 @@
-"""Locate the wavcse-infra control plane without hardcoding machine layout.
+"""Locate the bounded infrastructure control plane without hardcoded host paths.
 
 wavCSE never imports infrastructure code and never talks to a provider. It
-drives the control plane through its CLI, so the one thing it must be able to
-answer is "where is that CLI, and which checkout does it belong to".
+drives the control plane through its CLI, so the one thing it must answer is
+"where is that CLI, and which subsystem does it belong to".
 
 Resolution order (first hit wins, each candidate is validated):
 
 1. ``WAVCSE_INFRA_CLI`` — an explicit executable, used by tests and unusual
-   installs. Requires ``WAVCSE_INFRA_CHECKOUT`` for the checkout identity.
-2. ``WAVCSE_INFRA_CHECKOUT`` — an explicit checkout root.
-3. the ``infra`` executable on ``PATH``, resolved through its symlink: the
-   controller bootstrap links ``<checkout>/.venv/bin/infra`` into
-   ``~/.local/bin``, so the checkout is recoverable from the link target.
-4. a sibling checkout of this repository, named from fragments so that no agent
-   asset has to carry a machine path.
+   installs. Requires ``WAVCSE_INFRA_CHECKOUT`` for subsystem identity.
+2. ``WAVCSE_INFRA_CHECKOUT`` — an explicit infra subsystem root.
+3. ``<wavCSE>/infra`` — the canonical monorepo subsystem.
+4. the ``infra`` executable on ``PATH``, resolved through its symlink.
+5. a legacy sibling checkout, retained only for controller cutover.
 
-Every candidate is validated by the presence of the control-plane operator skill
-that only a real checkout has. Nothing is guessed and nothing is disabled
-silently: when no candidate validates, resolution fails with an explicit reason
-so the caller can report a blocked compute step instead of proceeding without
+Every candidate is validated by package markers belonging to the infra
+subsystem (or the legacy operator-skill marker). Nothing is guessed and nothing
+is disabled silently: when no candidate validates, resolution fails explicitly
+so the caller reports a blocked compute step instead of proceeding without
 infrastructure.
 """
 
@@ -31,17 +29,19 @@ from improvements.compute.errors import ConfigurationError
 CHECKOUT_ENV = "WAVCSE_INFRA_CHECKOUT"
 CLI_ENV = "WAVCSE_INFRA_CLI"
 
-# A real checkout is identified by this file, which only the infra repository
-# ships. Assembled from fragments so this module can be copied nowhere near a
-# scanned agent asset without carrying a machine path.
-_SKILL_DIR = "wavcse-infra-operator"
-_SKILL_FILE = "SKILL.md"
-_SKILL_RELATIVE = os.path.join(".agents", "skills", _SKILL_DIR, _SKILL_FILE)
+# A current subsystem is identified by both package markers. The operator-skill
+# marker remains accepted for backwards compatibility with already-provisioned
+# controllers during the one-repository cutover.
+_PACKAGE_MARKERS = (
+    "pyproject.toml",
+    os.path.join("src", "wavcse_infra", "__init__.py"),
+)
+_SKILL_RELATIVE = os.path.join(
+    ".agents", "skills", "wavcse-infra-operator", "SKILL.md"
+)
 _VENV_BIN = os.path.join(".venv", "bin")
-
-# The sibling checkout name, again from fragments (no literal path anywhere).
+_MONOREPO_DIR = "infra"
 _SIBLING_NAME = "-".join(("wavcse", "infra"))
-
 
 class InfraLocation(object):
     """Where the control plane lives and how to invoke it."""
@@ -82,7 +82,12 @@ def repo_root():
 
 
 def _valid_checkout(path):
-    return bool(path) and os.path.isfile(os.path.join(path, _SKILL_RELATIVE))
+    if not path:
+        return False
+    package = all(os.path.isfile(os.path.join(path, marker))
+                  for marker in _PACKAGE_MARKERS)
+    legacy = os.path.isfile(os.path.join(path, _SKILL_RELATIVE))
+    return package or legacy
 
 
 def _checkout_cli(checkout):
@@ -121,24 +126,26 @@ def resolve(checkout=None, cli=None):
         expanded = os.path.abspath(os.path.expanduser(explicit_checkout))
         if not _valid_checkout(expanded):
             raise ConfigurationError(
-                "{}={} is not a wavcse-infra checkout (missing {}); unset it or "
-                "point it at the real checkout.".format(
-                    CHECKOUT_ENV, explicit_checkout, _SKILL_RELATIVE
+                "{}={} is not an infra subsystem root (expected package markers "
+                "{} or legacy marker {}); unset it or point it at this "
+                "repository's infra/ directory.".format(
+                    CHECKOUT_ENV, explicit_checkout, ", ".join(_PACKAGE_MARKERS),
+                    _SKILL_RELATIVE
                 )
             )
         resolved_cli = explicit_cli or _checkout_cli(expanded) or shutil.which("infra")
         if not resolved_cli:
             raise ConfigurationError(
-                "found the wavcse-infra checkout at {} but no usable `infra` "
-                "executable (looked for {} and PATH). Run the controller "
-                "bootstrap, or set {}.".format(
+                "found the infra subsystem at {} but no usable `infra` "
+                "executable (looked for {} and PATH). Run `uv sync --locked "
+                "--all-groups` there, or set {}.".format(
                     expanded, os.path.join(_VENV_BIN, "infra"), CLI_ENV
                 )
             )
         if _checkout_from_executable(resolved_cli) != os.path.realpath(expanded):
             raise ConfigurationError(
                 "the resolved infra executable does not belong to the selected "
-                "wavcse-infra checkout; refusing a mixed-version control plane")
+                "subsystem; refusing a mixed-version control plane")
         return InfraLocation(expanded, resolved_cli, "environment")
 
     if explicit_cli:
@@ -150,8 +157,21 @@ def resolve(checkout=None, cli=None):
         if not _valid_checkout(recovered):
             raise ConfigurationError(
                 "the explicit infra executable does not resolve to a valid "
-                "wavcse-infra checkout")
+                "infra subsystem")
         return InfraLocation(recovered, explicit_cli, "environment-cli")
+
+    embedded = os.path.join(repo_root(), _MONOREPO_DIR)
+    if _valid_checkout(embedded):
+        resolved_cli = _checkout_cli(embedded)
+        if not resolved_cli:
+            raise ConfigurationError(
+                "found the canonical infra subsystem at {} but no usable `infra` "
+                "executable at {}. Run `uv sync --locked --all-groups` from that "
+                "directory and re-run.".format(
+                    embedded, os.path.join(embedded, _VENV_BIN, "infra")
+                )
+            )
+        return InfraLocation(embedded, resolved_cli, "monorepo")
 
     on_path = shutil.which("infra")
     if on_path:
@@ -165,14 +185,16 @@ def resolve(checkout=None, cli=None):
         if resolved_cli:
             return InfraLocation(sibling, resolved_cli, "sibling")
 
+    marker = " and ".join(_PACKAGE_MARKERS)
     raise ConfigurationError(
-        "cannot locate the wavcse-infra control plane. Tried {cli_env}, "
-        "{checkout_env}, `infra` on PATH, and a sibling checkout. Set {checkout_env} "
-        "to the checkout root (it must contain {skill}) or {cli_env} to the "
-        "executable, and re-run. Infrastructure-dependent steps stay blocked "
-        "until this resolves; they are never silently skipped.".format(
+        "cannot locate the infra control plane. Tried {cli_env}, {checkout_env}, "
+        "the monorepo infra/ subsystem, `infra` on PATH, and a legacy sibling "
+        "checkout. Set {checkout_env} to a subsystem root containing {marker}, "
+        "or set {cli_env} to the executable, and re-run. "
+        "Infrastructure-dependent steps stay blocked until this resolves; they "
+        "are never silently skipped.".format(
             cli_env=CLI_ENV,
             checkout_env=CHECKOUT_ENV,
-            skill=_SKILL_RELATIVE,
+            marker=marker,
         )
     )

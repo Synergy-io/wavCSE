@@ -40,6 +40,40 @@ class ResolutionTests(ComputeTestCase):
             os.chmod(binary, 0o755)
         return root
 
+    def fake_embedded_subsystem(self, *, with_cli=True):
+        root = os.path.join(self.home, "infra")
+        package = os.path.join(root, "src", "wavcse_infra", "__init__.py")
+        os.makedirs(os.path.dirname(package), exist_ok=True)
+        with open(package, "w", encoding="utf-8") as handle:
+            handle.write('"""fake embedded infra"""\n')
+        with open(os.path.join(root, "pyproject.toml"), "w", encoding="utf-8") as handle:
+            handle.write('[project]\nname = "wavcse-infra"\n')
+        if with_cli:
+            binary = os.path.join(root, ".venv", "bin", "infra")
+            os.makedirs(os.path.dirname(binary), exist_ok=True)
+            with open(binary, "w", encoding="utf-8") as handle:
+                handle.write("#!/bin/sh\nexit 0\n")
+            os.chmod(binary, 0o755)
+        return root
+
+    def test_embedded_subsystem_resolves_by_default(self):
+        root = self.fake_embedded_subsystem()
+
+        location = resolve_module.resolve()
+
+        self.assertEqual(location.checkout, root)
+        self.assertEqual(location.source, "monorepo")
+        self.assertTrue(location.cli.endswith(os.path.join(".venv", "bin", "infra")))
+
+    def test_embedded_subsystem_without_cli_fails_loudly(self):
+        root = self.fake_embedded_subsystem(with_cli=False)
+
+        with self.assertRaises(ConfigurationError) as caught:
+            resolve_module.resolve()
+
+        self.assertIn(root, str(caught.exception))
+        self.assertIn("uv sync", str(caught.exception))
+
     def test_explicit_checkout_resolves(self):
         root = self.fake_checkout()
         os.environ[resolve_module.CHECKOUT_ENV] = root

@@ -2,17 +2,18 @@
 
 ## Boundaries
 
-`wavcse-infra` owns infrastructure bootstrap, provider communication, controller
-diagnostics, Pod lifecycle, SSH readiness, and worker bootstrap. Later phases add
-exact-commit execution and artifact transport. It does not own research code,
-experiment semantics, model dependencies, or MLflow instrumentation.
+`infra/` owns infrastructure bootstrap, provider communication, controller
+diagnostics, Pod lifecycle, SSH readiness and worker bootstrap. Later phases add
+exact-commit execution and artifact transport. It shares a Git repository with
+research code but does not own experiment semantics, model dependencies or
+MLflow instrumentation.
 
 The components are:
 
 - **AWS EC2 controller:** persistent but stoppable; authoritative writable environment
   containing OMP, Codex CLI, and AGF.
-- **wavCSE repository:** research code and experiment source of truth.
-- **wavcse-infra repository:** infrastructure CLI and machine bootstrap.
+- **wavCSE repository:** canonical development repository and research source of truth.
+- **`infra/` subsystem:** infrastructure CLI and machine bootstrap, with its own package/environment boundary.
 - **RunPod Pods:** disposable GPU execution environments.
 - **GitHub:** immutable code distribution after changes are committed and pushed.
 - **Private S3:** canonical large-artifact and embedding storage.

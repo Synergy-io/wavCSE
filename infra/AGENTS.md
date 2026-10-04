@@ -1,17 +1,19 @@
-# AGENTS.md — wavcse-infra
+# AGENTS.md — `infra/` subsystem
 
 ## Purpose
 
-`wavcse-infra` is the infrastructure and orchestration repository for running reproducible wavCSE research workloads across persistent controller infrastructure and ephemeral GPU workers.
+`infra/` is the strongly bounded infrastructure and orchestration subsystem for
+running reproducible wavCSE research workloads across persistent controller
+infrastructure and ephemeral GPU workers.
 
-This repository is NOT the wavCSE research repository.
+It shares the wavCSE Git repository but not the research software boundary:
 
-The repositories have separate responsibilities:
+- repository-root code owns models, experiments, research state and evidence;
+- `infra/` owns machine bootstrap, worker lifecycle, remote execution, storage
+  transfer, environment diagnostics and infrastructure orchestration.
 
-- `wavCSE`: research code, models, experiment definitions, research state, tests, study documentation.
-- `wavcse-infra`: machine bootstrap, worker lifecycle, remote execution, storage transfer, environment diagnostics, and infrastructure orchestration.
-
-Do not move research logic into this repository.
+Do not move research logic into this subsystem or infrastructure mechanics into
+research modules.
 
 ---
 
@@ -36,8 +38,7 @@ It contains:
 - Codex when needed
 - tmux
 - Git
-- `wavCSE`
-- `wavcse-infra`
+- the `wavCSE` repository, including this `infra/` subsystem
 - AWS CLI/SDK access through an EC2 IAM role
 - RunPod credentials
 - orchestration CLI
@@ -48,8 +49,8 @@ Expected layout:
 
 ```
 ~/projects/
-├── wavCSE/
-└── wavcse-infra/
+└── wavCSE/
+    └── infra/
 ```
 
 OMP normally runs from:
@@ -61,7 +62,7 @@ OMP normally runs from:
 The infrastructure CLI normally runs from:
 
 ```
-~/projects/wavcse-infra
+~/projects/wavCSE/infra
 ```
 
 ## GPU workers
@@ -293,10 +294,10 @@ Never commit real credentials.
 
 # Repository layout
 
-Target layout:
+Subsystem layout:
 
 ```
-wavcse-infra/
+infra/
 ├── AGENTS.md
 ├── README.md
 ├── Makefile
@@ -772,9 +773,9 @@ Preferred relationship:
 ```
 cloud-init
     ->
-fetch/clone wavcse-infra
+fetch/clone wavCSE
     ->
-controller/bootstrap.sh
+infra/controller/bootstrap.sh
 ```
 
 Do not duplicate the full bootstrap implementation inside cloud-init.

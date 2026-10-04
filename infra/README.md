@@ -1,13 +1,13 @@
-# wavcse-infra
+# wavCSE infrastructure subsystem
 
-`wavcse-infra` is the infrastructure control plane for reproducible wavCSE
-research workloads. It prepares a persistent AWS EC2 controller, inspects disposable
-RunPod GPU workers, prepares them through SSH, and will later coordinate exact-commit
-execution and durable S3 artifact transfer.
+`infra/` is the strongly bounded infrastructure control plane inside the
+wavCSE repository. It prepares a persistent AWS EC2 controller, inspects
+disposable RunPod GPU workers, prepares them through SSH, and will later
+coordinate exact-commit execution and durable S3 artifact transfer.
 
-It is not the wavCSE research repository. Model code, experiments, research
-configuration, tests, and MLflow integration remain in the separate `wavCSE`
-repository.
+Repository consolidation changes the Git ownership boundary only. Model code,
+experiments, research configuration, research tests and MLflow integration
+remain outside this subsystem.
 
 ## Delivery status
 
@@ -36,15 +36,16 @@ runs, and jobs remain unimplemented.
 
 ## Architecture
 
-The persistent/stoppable EC2 controller is the writable development environment. It
-contains OMP, Codex CLI, AGF, the `wavCSE` checkout, this repository, and the `infra`
-CLI. AWS access comes from an EC2 instance profile. The RunPod API key comes from the
-`RUNPOD_API_KEY` environment variable for local/temporary use or, on the controller,
-from an AWS Systems Manager Parameter Store `SecureString` resolved at runtime.
+The persistent/stoppable EC2 controller is the writable development environment.
+It contains OMP, Codex CLI, AGF, the `wavCSE` checkout, and this subsystem's
+`infra` CLI. AWS access comes from an EC2 instance profile. The RunPod API key
+comes from the `RUNPOD_API_KEY` environment variable for local/temporary use
+or, on the controller, from an AWS Systems Manager Parameter Store
+`SecureString` resolved at runtime.
 
-Disposable GPU workers execute immutable wavCSE commits. GitHub distributes code, a
-private S3 bucket is the canonical store for large artifacts, and wavCSE retains
-ownership of MLflow/DagsHub reporting.
+Disposable GPU workers execute immutable wavCSE commits. GitHub distributes
+code, a private S3 bucket is the canonical store for large artifacts, and
+wavCSE retains ownership of MLflow/DagsHub reporting.
 
 See [Architecture](docs/ARCHITECTURE.md), [Security](docs/SECURITY.md), and the
 [decision log](docs/DECISIONS.md) for boundaries and rationale.
@@ -68,11 +69,11 @@ make check
 On a supported Ubuntu EC2 controller:
 
 ```bash
-git clone https://github.com/Ke-vin-S/wavcse-infra.git
-cd wavcse-infra
+git clone https://github.com/Synergy-io/wavCSE.git
+cd wavCSE/infra
 ./controller/bootstrap.sh
 nano ~/.config/wavcse-infra/config.toml
-# Configure runpod.api_key_parameter, authenticate OMP/Codex, and clone wavCSE, then:
+# Configure runpod.api_key_parameter and authenticate OMP/Codex, then:
 infra doctor
 ```
 
@@ -239,10 +240,11 @@ See [Security](docs/SECURITY.md) for the threat assumptions and IAM guidance.
 
 ## Recovery
 
-A controller can be reconstructed by launching supported Ubuntu, attaching the scoped
-instance profile, applying the thin cloud-init configuration, cloning both repositories,
-restoring user-managed authentication, and running `infra doctor`. Source remains in
-GitHub, large artifacts remain in S3, and experiment metadata remains in MLflow/DagsHub.
+A controller can be reconstructed by launching supported Ubuntu, attaching the
+scoped instance profile, applying the thin cloud-init configuration, cloning
+the wavCSE repository, restoring user-managed authentication, and running
+`infra doctor`. Source remains in GitHub, large artifacts remain in S3, and
+experiment metadata remains in MLflow/DagsHub.
 Local operational state is never the sole source of truth.
 
 Detailed steps are in [Operations](docs/OPERATIONS.md).
