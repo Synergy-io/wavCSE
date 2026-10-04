@@ -148,3 +148,23 @@ The retry grant is spent; it remains committed and unexpired until
 `2026-10-04T20:45:17Z` but must not be drawn on again, and no further session may
 be allocated for it.
 
+### Post-release counter settlement (bounded read-only window)
+
+The aggregate `usage` counter lagged again after release while the authoritative
+listing was empty, so it was re-read on the documented bounded procedure rather
+than treated as proof of a live worker:
+
+| Sample (UTC) | Authoritative `sessions` | observed rate | assignments |
+| --- | --- | --- | --- |
+| 14:52:12Z | `[]` | 1.07 CU/hour | 1 |
+| 14:53:39Z | `[]` | 1.07 CU/hour | 1 |
+| 14:55:04Z | `[]` | 0.00 CU/hour | **0** |
+| 14:56:31Z | `[]` | 0.00 CU/hour | 0 |
+| 14:57:59Z | `[]` | 0.00 CU/hour | 0 |
+
+It settled to `assignments 0` ~5.4 min after release — the same order as the
+first attempt's lag — and held for three consecutive samples with the listing
+empty throughout. Nothing was allocated, and no release was needed, in that
+window; the lag is aggregate-report latency, not a live session.
+
+
