@@ -328,6 +328,36 @@ Performed on the controller, in this order, with no provider call:
 Nothing here authorizes compute; no Colab or RunPod resource, job or
 authorization was created, and no DG-0008 work was run.
 
+## Controller-side record — IN-0001 smoke attempt (2026-10-04): BLOCKED, wavcse-infra defect
+
+The authorized IN-0001 smoke was attempted and **did not reach allocation**
+(`IN0001_SOURCE_DEFECT`). Full attempt record:
+`execution/IN-0001/SMOKE_ATTEMPT.md`. In brief:
+
+- Prerequisites succeeded: `379173c…`/`95dbb87…` published and anonymously
+  reachable; `WAVCSE_INFRA_CHECKOUT` bound to
+  `540b617f66d4fc8c11419fb606a64047f085d529` (`resolved_by: environment`); the
+  human's `authorizations/IN-0001.yaml` committed and published (digest
+  `5f91a876…27a7`, expiring `2026-10-04T19:22:01Z`).
+- `improvements.compute worker-ensure --scope IN-0001` was refused by
+  `wavcse-infra` **before any provider call**: an abandoned Colab creation
+  intent from **2026-10-01** (`wavcse-7f8888cdffb84331`, `create_pending: true`,
+  `provider_absent: false`, `PROVISIONING`) blocks every Colab allocation.
+- No live resource existed before or after: zero provider sessions,
+  `assignments 0`, paid balance `0.00 CU`. Nothing was allocated, billed,
+  submitted or released; no artifact or job was produced.
+- The blocker is a `wavcse-infra` reconciliation deadlock, not a wavCSE defect:
+  `worker list` (reconcile) skips a `create_pending` record missing from a
+  *successful* provider listing, while `worker destroy`/`bootstrap`/`show` and
+  `ColabLifecycle._release_confirmed` all refuse a `create_pending` record — so
+  an intent whose exact identity a successful read shows absent can never be
+  retired by any supported verb, and permanently blocks Colab. Fixing it is a
+  `wavcse-infra` maintenance increment; nothing was patched during the live run.
+- Residual wavCSE state: one bounded, non-ambiguous pending create intent for
+  `IN-0001`, self-cleaned by `improvements.compute reap --execute` after
+  `INTENT_ABANDON_AFTER_HOURS = 1`. No DG-0008 work was performed and the
+  DG-0008 benchmark was not started.
+
 ## Live-validation requirement
 
 Deterministic, zero-cost coverage of the Colab path is strong (`make check`,
