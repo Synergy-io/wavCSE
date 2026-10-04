@@ -23,6 +23,7 @@ import os
 import re
 from decimal import Decimal, InvalidOperation
 
+from improvements.compute import providers
 from improvements.compute import state as state_module
 from improvements.compute.errors import (
     AuthorizationError,
@@ -51,9 +52,17 @@ _COSTLY_ACTIONS = (ACTION_CREATE_WORKER, ACTION_SUBMIT_JOB, ACTION_ATTACH_VOLUME
 
 _TOP_LEVEL_KEYS = {
     "schema_version", "scope", "granted_by", "granted_at", "expires_at",
-    "budget", "concurrency", "resources", "stop_policy",
+    "budget", "concurrency", "resources", "stop_policy", "provider",
 }
-_BUDGET_KEYS = {"max_gpu_hourly_usd", "max_total_gpu_usd", "max_wall_clock_hours"}
+# `provider` is optional only for legacy envelopes, which are deterministically
+# RunPod. New Colab authorizations state it explicitly.
+_TOP_LEVEL_REQUIRED = _TOP_LEVEL_KEYS - {"provider"}
+_BUDGET_COMMON_KEYS = {"cost_unit", "max_wall_clock_hours"}
+_BUDGET_RUNPOD_KEYS = {"max_gpu_hourly_usd", "max_total_gpu_usd"}
+_BUDGET_COLAB_KEYS = {
+    "allow_free_tier", "max_incremental_rate_cu_per_hour", "max_job_cu",
+}
+_BUDGET_KEYS = _BUDGET_COMMON_KEYS | _BUDGET_RUNPOD_KEYS | _BUDGET_COLAB_KEYS
 _CONCURRENCY_KEYS = {"max_simultaneous_workers", "replacement_workers_allowed"}
 _RESOURCES_KEYS = {
     "existing_network_volume_allowed", "network_volume_selector",
@@ -131,12 +140,45 @@ def _scan_for_secrets(payload, path=""):
                 )
 
 
+def envelope_provider(envelope):
+    """Provider bound by the grant; a missing value is legacy RunPod."""
+
+    try:
+        return providers.normalize_provider(envelope.get("provider"))
+    except providers.ProviderValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+
+
+def cost_unit(envelope):
+    """Native provider cost unit; no CU-to-USD conversion is representable."""
+
+    provider = envelope_provider(envelope)
+    value = envelope.get("budget", {}).get("cost_unit")
+    if value is None and "provider" not in envelope:
+        return providers.USD_PER_HOUR
+    if value not in providers.COST_UNITS:
+        raise ConfigurationError(
+            "envelope budget.cost_unit must be one of {}, got {!r}".format(
+                ", ".join(providers.COST_UNITS), value
+            )
+        )
+    expected = providers.provider_cost_unit(provider)
+    if value != expected:
+        raise ConfigurationError(
+            "envelope provider {} uses cost unit {}, not {}".format(
+                provider, expected, value
+            )
+        )
+    return value
+
+
 def validate(envelope):
     """Validate one parsed envelope. Raises on the first problem."""
 
     _require_mapping(envelope, "envelope")
     _scan_for_secrets(envelope)
-    missing = _require_keys(envelope, _TOP_LEVEL_KEYS, "envelope")
+    _require_keys(envelope, _TOP_LEVEL_KEYS, "envelope")
+    missing = sorted(_TOP_LEVEL_REQUIRED - set(envelope))
     if missing:
         raise ConfigurationError(
             "envelope is missing required key(s): {}".format(", ".join(missing))
@@ -160,19 +202,52 @@ def validate(envelope):
                 "envelope field {} must be a non-empty string".format(field)
             )
 
+    provider = envelope_provider(envelope)
+    unit = cost_unit(envelope)
     budget = _require_mapping(envelope["budget"], "budget")
-    missing = _require_keys(budget, _BUDGET_KEYS, "budget")
+    _require_keys(budget, _BUDGET_KEYS, "budget")
+    required = {"max_wall_clock_hours"}
+    if "provider" in envelope:
+        required.add("cost_unit")
+    if unit == providers.USD_PER_HOUR:
+        required.update(_BUDGET_RUNPOD_KEYS)
+        forbidden = sorted(set(budget) & _BUDGET_COLAB_KEYS)
+    else:
+        required.update(_BUDGET_COLAB_KEYS)
+        forbidden = sorted(set(budget) & _BUDGET_RUNPOD_KEYS)
+    missing = sorted(required - set(budget))
     if missing:
         raise ConfigurationError(
             "envelope budget is missing key(s): {}".format(", ".join(missing))
         )
-    hourly = _decimal(budget["max_gpu_hourly_usd"], "budget.max_gpu_hourly_usd")
-    total = _decimal(budget["max_total_gpu_usd"], "budget.max_total_gpu_usd")
-    wall_clock = _decimal(budget["max_wall_clock_hours"], "budget.max_wall_clock_hours")
-    if hourly <= 0 or total <= 0 or wall_clock <= 0:
+    if forbidden:
         raise ConfigurationError(
-            "envelope budget limits must all be positive (hourly, total, wall clock)"
+            "envelope provider {} cannot use budget field(s): {}".format(
+                provider, ", ".join(forbidden)
+            )
         )
+    wall_clock = _decimal(budget["max_wall_clock_hours"], "budget.max_wall_clock_hours")
+    if wall_clock <= 0:
+        raise ConfigurationError("budget.max_wall_clock_hours must be positive")
+    if unit == providers.USD_PER_HOUR:
+        hourly = _decimal(budget["max_gpu_hourly_usd"], "budget.max_gpu_hourly_usd")
+        total = _decimal(budget["max_total_gpu_usd"], "budget.max_total_gpu_usd")
+        if hourly <= 0 or total <= 0:
+            raise ConfigurationError(
+                "RunPod USD budget limits must be positive (hourly and total)"
+            )
+    else:
+        if not isinstance(budget["allow_free_tier"], bool):
+            raise ConfigurationError("budget.allow_free_tier must be a boolean")
+        rate = _decimal(
+            budget["max_incremental_rate_cu_per_hour"],
+            "budget.max_incremental_rate_cu_per_hour",
+        )
+        job = _decimal(budget["max_job_cu"], "budget.max_job_cu")
+        if rate <= 0 or job <= 0:
+            raise ConfigurationError(
+                "Colab CU budget limits must be positive (incremental rate and max job CU)"
+            )
 
     concurrency = _require_mapping(envelope["concurrency"], "concurrency")
     missing = _require_keys(concurrency, _CONCURRENCY_KEYS, "concurrency")
@@ -196,27 +271,34 @@ def validate(envelope):
         raise ConfigurationError(
             "envelope resources has unknown key(s): {}".format(", ".join(unknown))
         )
-    missing = sorted(_RESOURCES_REQUIRED - set(resources))
-    if missing:
-        raise ConfigurationError(
-            "envelope resources is missing key(s): {}".format(", ".join(missing))
-        )
-    for field in ("existing_network_volume_allowed", "new_persistent_resources"):
-        if not isinstance(resources[field], bool):
-            raise ConfigurationError("resources.{} must be a boolean".format(field))
-    selector = resources.get("network_volume_selector")
-    if selector is not None:
-        _require_mapping(selector, "resources.network_volume_selector")
-        unknown = sorted(set(selector) - _SELECTOR_KEYS)
-        if unknown:
+    if provider == providers.COLAB:
+        if resources:
             raise ConfigurationError(
-                "resources.network_volume_selector has unknown key(s): {}".format(
-                    ", ".join(unknown)
-                )
+                "Colab authorization resources must be empty; RunPod volume, disk "
+                "and placement policy is meaningless to Colab"
             )
-    disk_max = resources["container_disk_gb_max"]
-    if not isinstance(disk_max, int) or isinstance(disk_max, bool) or disk_max < 1:
-        raise ConfigurationError("resources.container_disk_gb_max must be an integer >= 1")
+    else:
+        missing = sorted(_RESOURCES_REQUIRED - set(resources))
+        if missing:
+            raise ConfigurationError(
+                "envelope resources is missing key(s): {}".format(", ".join(missing))
+            )
+        for field in ("existing_network_volume_allowed", "new_persistent_resources"):
+            if not isinstance(resources[field], bool):
+                raise ConfigurationError("resources.{} must be a boolean".format(field))
+        selector = resources.get("network_volume_selector")
+        if selector is not None:
+            _require_mapping(selector, "resources.network_volume_selector")
+            unknown = sorted(set(selector) - _SELECTOR_KEYS)
+            if unknown:
+                raise ConfigurationError(
+                    "resources.network_volume_selector has unknown key(s): {}".format(
+                        ", ".join(unknown)
+                    )
+                )
+        disk_max = resources["container_disk_gb_max"]
+        if not isinstance(disk_max, int) or isinstance(disk_max, bool) or disk_max < 1:
+            raise ConfigurationError("resources.container_disk_gb_max must be an integer >= 1")
 
     stop_policy = _require_mapping(envelope["stop_policy"], "stop_policy")
     missing = _require_keys(stop_policy, _STOP_KEYS, "stop_policy")
@@ -456,6 +538,21 @@ def check(view, action, facts, requested=None):
     budget = envelope["budget"]
     concurrency = envelope["concurrency"]
     resources = envelope["resources"]
+    provider = envelope_provider(envelope)
+    unit = cost_unit(envelope)
+    if action in _COSTLY_ACTIONS:
+        try:
+            requested_provider = providers.normalize_provider(requested.get("provider"))
+        except providers.ProviderValueError as exc:
+            return Decision(False, "AUTHORIZATION", str(exc), action=action)
+        if requested_provider != provider:
+            return Decision(
+                False, "AUTHORIZATION",
+                "the authorization is for {} but the requested action targets {}".format(
+                    provider, requested_provider
+                ),
+                action=action,
+            )
 
     if view.modified_in_tree:
         return Decision(False, "AUTHORIZATION",
@@ -508,73 +605,103 @@ def check(view, action, facts, requested=None):
                             "concurrent-worker limit of {} for {}".format(
                                 maximum, view.scope), action=action)
 
-        disk = requested.get("container_disk_gb")
-        if disk is not None and int(disk) > int(resources["container_disk_gb_max"]):
+        if unit == providers.USD_PER_HOUR:
+            disk = requested.get("container_disk_gb")
+            if disk is not None and int(disk) > int(resources["container_disk_gb_max"]):
+                return Decision(False, "COST",
+                                "requested container disk {} GB exceeds the envelope's "
+                                "limit of {} GB".format(
+                                    disk, resources["container_disk_gb_max"]),
+                                action=action)
+
+            hourly = requested.get("hourly_usd")
+            if hourly is None:
+                return Decision(False, "COST",
+                                "the provider did not report a price for the requested "
+                                "resource, so the RunPod envelope cannot be enforced; "
+                                "refusing to spend unverifiable money", action=action)
+            hourly = _decimal(hourly, "requested.hourly_usd")
+            ceiling = _decimal(budget["max_gpu_hourly_usd"], "budget.max_gpu_hourly_usd")
+            if hourly > ceiling:
+                return Decision(False, "COST",
+                                "provider price ${}/hour exceeds the authorized hourly "
+                                "ceiling ${}/hour".format(hourly, ceiling), action=action)
+        elif requested.get("hourly_usd") is not None:
             return Decision(False, "COST",
-                            "requested container disk {} GB exceeds the envelope's "
-                            "limit of {} GB".format(
-                                disk, resources["container_disk_gb_max"]),
+                            "Colab uses compute units; an USD/hour request is invalid",
                             action=action)
 
-        hourly = requested.get("hourly_usd")
-        if hourly is None:
-            return Decision(False, "COST",
-                            "the provider did not report a price for the requested "
-                            "resource, so the envelope cannot be enforced; refusing "
-                            "to spend unverifiable money", action=action)
-        hourly = _decimal(hourly, "requested.hourly_usd")
-        ceiling = _decimal(budget["max_gpu_hourly_usd"], "budget.max_gpu_hourly_usd")
-        if hourly > ceiling:
-            return Decision(False, "COST",
-                            "provider price ${}/hour exceeds the authorized hourly "
-                            "ceiling ${}/hour".format(hourly, ceiling), action=action)
-
     if action == ACTION_ATTACH_VOLUME:
+        if provider != providers.RUNPOD:
+            return Decision(False, "AUTHORIZATION",
+                            "Colab has no RunPod network-volume operation",
+                            action=action)
         if not resources["existing_network_volume_allowed"]:
             return Decision(False, "AUTHORIZATION",
                             "the envelope does not allow using an existing network "
                             "volume", action=action)
 
     if action == ACTION_CREATE_VOLUME:
+        if provider != providers.RUNPOD:
+            return Decision(False, "AUTHORIZATION",
+                            "Colab has no RunPod persistent-volume operation",
+                            action=action)
         if not resources["new_persistent_resources"]:
             return Decision(False, "AUTHORIZATION",
                             "the envelope forbids creating new persistent "
                             "(storage-billing) resources", action=action)
 
     if action in _COSTLY_ACTIONS:
-        spend = _decimal(facts.get("estimated_spend_usd", 0), "facts.estimated_spend_usd")
-        total = _decimal(budget["max_total_gpu_usd"], "budget.max_total_gpu_usd")
-        projected = spend
-        hourly = requested.get("hourly_usd")
-        horizon = requested.get("projected_hours")
-        if hourly is not None and horizon is not None:
-            projected = spend + (_decimal(hourly, "requested.hourly_usd")
-                                 * _decimal(horizon, "requested.projected_hours"))
-        if projected > total:
-            return Decision(False, "COST",
-                            "projected spend ${} would exceed the authorized total "
-                            "of ${} for {}".format(projected, total, view.scope),
-                            action=action)
+        if unit == providers.USD_PER_HOUR:
+            spend = _decimal(facts.get("estimated_spend_usd", 0),
+                             "facts.estimated_spend_usd")
+            total = _decimal(budget["max_total_gpu_usd"], "budget.max_total_gpu_usd")
+            projected = spend
+            hourly = requested.get("hourly_usd")
+            horizon = requested.get("projected_hours")
+            if hourly is not None and horizon is not None:
+                projected = spend + (_decimal(hourly, "requested.hourly_usd")
+                                     * _decimal(horizon, "requested.projected_hours"))
+            if projected > total:
+                return Decision(False, "COST",
+                                "projected spend ${} would exceed the authorized total "
+                                "of ${} for {}".format(projected, total, view.scope),
+                                action=action)
 
         wall = _decimal(facts.get("estimated_wall_clock_hours", 0),
                         "facts.estimated_wall_clock_hours")
         wall_limit = _decimal(budget["max_wall_clock_hours"], "budget.max_wall_clock_hours")
         if wall >= wall_limit:
             return Decision(False, "COST",
-                            "{} paid wall-clock hours already consumed of the "
+                            "{} allocation wall-clock hours already consumed of the "
                             "authorized {}".format(wall, wall_limit), action=action)
 
-    remaining = _remaining_usd(view, facts)
+    details = {
+        "provider": provider,
+        "cost_unit": unit,
+        "max_simultaneous_workers": maximum,
+        "live_workers": live_count,
+        "digest": view.digest,
+    }
+    if unit == providers.USD_PER_HOUR:
+        details.update({
+            "estimated_spend_usd": str(facts.get("estimated_spend_usd", "0")),
+            "remaining_usd": str(_remaining_usd(view, facts)),
+        })
+    else:
+        # CU enforcement belongs to canonical wavcse-infra: its Colab lifecycle
+        # observes the billing mode/rate and its job submit path enforces
+        # `max_job_cu`. The envelope binds the human's allowed policy and wall
+        # clock; it never invents a CU-to-USD conversion.
+        details.update({
+            "allow_free_tier": budget["allow_free_tier"],
+            "max_incremental_rate_cu_per_hour": str(
+                budget["max_incremental_rate_cu_per_hour"]),
+            "max_job_cu": str(budget["max_job_cu"]),
+        })
     return Decision(True, "AUTONOMOUS",
                     "within the authorization for {}".format(view.scope),
-                    action=action,
-                    details={
-                        "estimated_spend_usd": str(facts.get("estimated_spend_usd", "0")),
-                        "remaining_usd": str(remaining),
-                        "max_simultaneous_workers": maximum,
-                        "live_workers": live_count,
-                        "digest": view.digest,
-                    })
+                    action=action, details=details)
 
 
 def _remaining_usd(view, facts):

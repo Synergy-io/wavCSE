@@ -23,7 +23,7 @@ import shutil
 import sys
 
 from improvements.compute import cli_support, envelope as envelope_module, jobspec
-from improvements.compute import ledger, run_study, state as state_module, status as status_module
+from improvements.compute import ledger, providers, run_study, state as state_module, status as status_module
 from improvements.compute import sweep as sweep_module
 from improvements.compute import worker as worker_module
 from improvements.compute.errors import ComputeError, ConfigurationError, UsageError
@@ -199,13 +199,15 @@ def _run(args):
             return _emit(args, {"allowed": False, "class": "TRANSIENT_INFRA",
                                 "reason": "provider facts unavailable: {}".format(exc),
                                 "action": args.action}, EXIT_REFUSED)
-        requested = None
+        provider = envelope_module.envelope_provider(view.envelope)
+        requested = {"provider": provider}
         if args.action == envelope_module.ACTION_CREATE_WORKER:
-            requested = {
-                "hourly_usd": str(view.envelope["budget"]["max_gpu_hourly_usd"]),
-                "projected_hours": "1",
-                "container_disk_gb": view.envelope["resources"]["container_disk_gb_max"],
-            }
+            requested["projected_hours"] = "1"
+            if provider == providers.RUNPOD:
+                requested.update({
+                    "hourly_usd": str(view.envelope["budget"]["max_gpu_hourly_usd"]),
+                    "container_disk_gb": view.envelope["resources"]["container_disk_gb_max"],
+                })
         decision = envelope_module.check(view, args.action, facts, requested=requested)
         return _emit(args, decision.as_dict(),
                      EXIT_OK if decision.allowed else EXIT_REFUSED)
