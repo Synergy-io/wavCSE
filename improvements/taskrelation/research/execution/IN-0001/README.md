@@ -49,6 +49,18 @@ envelope's.
   demanding MLflow here would put a research credential on a job that trains
   nothing and reaches no tracker.
 
+## Prerequisite: the exact commit must be published
+
+A recorded job is checked out from the anonymous HTTPS remote the spec names, so
+the commit being executed must already be **on the remote** — not merely in this
+checkout. `worker-ensure` and `advance` both refuse an unpublished commit with an
+actionable `RepositoryConflictError`, and no substitute commit is chosen
+automatically: publishing is a developer action. Before running anything above:
+
+```bash
+git -C . push origin <branch>          # publish the exact commit the smoke will run
+```
+
 ## Running it (only after the envelope is committed)
 
 The control plane must be bound **explicitly** — a merely discovered one is
