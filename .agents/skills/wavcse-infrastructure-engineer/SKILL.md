@@ -9,6 +9,36 @@ Use this skill for the infrastructure half of Execution Plane V1. Read
 `infra/AGENTS.md` before consequential infrastructure work. The normative plane
 contract is `improvements/taskrelation/research/execution/README.md`.
 
+## Providers and the canonical control plane
+
+`wavcse-infra` — the separate infrastructure repository — owns the deterministic
+implementation: provider integrations, worker/session lifecycle, execution
+transport, artifact movement and infrastructure operations. wavCSE owns only the
+consumption contract (`improvements/compute` and this plane). Never reimplement
+provider mechanics here. Never assume the `infra/` copy committed inside wavCSE
+represents the current `wavcse-infra`: establish the canonical repository, branch
+and commit first, and read exact commands, options and version-dependent
+behaviour from the compatible installed `wavcse-infra` interface rather than from
+prose.
+
+Provider priority is a project decision:
+
+- **PRIMARY: Colab.**
+- **SECONDARY: RunPod.**
+
+Provider-neutral semantics — allocation, bootstrap, execution, status, artifact
+handling, reconciliation, release — belong in the common contract. Provider-
+specific semantics stay provider-specific: do not force Colab through RunPod
+concepts such as a network-volume requirement, RunPod offer discovery or direct
+SSH, and do not remove RunPod behaviour merely because Colab is primary.
+
+**Known discrepancy (recorded 2026-10-04).** The canonical `wavcse-infra`
+checkout inspected on this machine (`main`) exposes only the RunPod provider; no
+Colab provider, runtime or transport was present. Do not assert Colab
+availability from this skill. Treat "which repository and commit carries Colab"
+as a controller-side preflight check, and if it cannot be established, a human
+decision — not something to invent.
+
 ## OPERATE
 
 1. Validate the workload, proposal digest and negotiation state from durable

@@ -194,8 +194,10 @@ construction while preserving byte-identical canonical JSON and digest rules.
 The final assessment is `BLOCKED`, correctly, because DG-0008 is unregistered,
 has no authorization, lacks lawful raw-corpus restoration/identity evidence,
 has no implemented/validated compute plan, has unknown benchmark/runtime/cost,
-and the currently resolved embedded infra checkout lacks the job/storage/volume
-surface expected by `improvements.compute`.
+and the control plane it resolved to was not the canonical `wavcse-infra`. That
+last claim is now corrected: the canonical `wavcse-infra` `main` implements the
+`job`, `storage` and network-volume surfaces `improvements.compute` calls, and the
+remaining work is a controller-side binding to it (see `CONTROLLER_HANDOFF.md`).
 
 Validate it with:
 
@@ -205,3 +207,16 @@ uv run --locked python -m improvements.taskrelation.research.execution_contract 
 ```
 
 No live resource was created and no scientific endpoint was read.
+
+## Handoff and preflight lifecycle
+
+The deterministic development→controller handoff is
+[`CONTROLLER_HANDOFF.md`](CONTROLLER_HANDOFF.md): identities, the `wavcse-infra`
+commit to bind, the controller-only checks and the unresolved Colab question.
+
+A preflight instance is terminal once its negotiation reaches a terminal state;
+`DP-0008-N01` is `BLOCKED` and must never be rewritten. A fresh attempt is a new
+**instance** — a new preflight directory with a new negotiation id created
+through `execution_contract.new_negotiation` — never an edit of the sealed one,
+because `check_directory` requires exactly one negotiation per directory. History
+is preserved, not reopened.
