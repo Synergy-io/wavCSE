@@ -37,25 +37,40 @@ this skill stated that the canonical `wavcse-infra` `main` exposed only the
 RunPod provider. That was true of the history visible at the time
 (`63c61af1ed70cd283b03438ec9ec11cf4166541b`): controller-side commits had not
 been pushed. They have since been pushed and pulled, and the canonical `main` is
-now `2d7640c7c6454b662ab92c6744beff946bc111fa` — version `0.1.0`, unchanged —
-with the Colab provider, the `colab_exec` execution transport and Colab
-session/job support reachable from the canonical branch. Do not repeat the
-earlier "Colab absent" claim as current state. Because a capability change need
-not carry a version bump, inspect the exact bound checkout for commands, options
-and version-dependent behaviour rather than reading them from this skill.
+now `540b617f66d4fc8c11419fb606a64047f085d529` — version `0.1.0`, unchanged;
+`2d7640c7c6454b662ab92c6744beff946bc111fa` was the earlier verified binding and
+remains an ancestor — with the Colab provider, the `colab_exec` execution
+transport and Colab session/job support reachable from the canonical branch. Do
+not repeat the earlier "Colab absent" claim as current state. Because a capability
+change need not carry a version bump, inspect the exact bound checkout for
+commands, options and version-dependent behaviour rather than reading them from
+this skill.
 
-**Known wavCSE-side integration gap (recorded 2026-10-04).** The consumption
-seam (`improvements/compute`) is RunPod-shaped and cannot express or address a
-Colab worker: `validate_plan` requires `worker.{gpu_type,cloud,image}` and has no
-provider field; `infra_cli.worker_create` always sends RunPod options
-(`--cloud`, `--gpu-count`, `--container-disk`, `--start-ssh`,
-`--require-direct-ssh`); worker ownership is attributed by a
-`wavcse-<scope>-<nonce>` name while the Colab provider allocates its own
-`wavcse-<hex>` identity and rejects `--name`; and the envelope budget is
-USD/hour while Colab free tier bills no CU and paid CU is never converted to
-USD. The job, storage, status and list surfaces are provider-neutral and match.
-Do not assert that wavCSE can drive Colab until a separate bounded increment
-extends this seam; that gap is wavCSE's, not a wavcse-infra defect.
+**wavCSE-side integration gap (recorded 2026-10-04; superseded, not erased).**
+The consumption seam (`improvements/compute`) was RunPod-shaped and could not
+express or address a Colab worker: `validate_plan` required
+`worker.{gpu_type,cloud,image}` and had no provider field;
+`infra_cli.worker_create` always sent RunPod options (`--cloud`, `--gpu-count`,
+`--container-disk`, `--start-ssh`, `--require-direct-ssh`); worker ownership was
+attributed by a `wavcse-<scope>-<nonce>` name while the Colab provider allocates
+its own `wavcse-<hex>` identity and rejects `--name`; and the envelope budget was
+USD/hour while Colab free tier bills no CU and paid CU is never converted to USD.
+
+That gap was **closed on the wavCSE side**, and wavCSE can now drive Colab
+through `improvements.compute`. The record above is chronology, not current
+state: the seam is provider-neutral (an explicit plan `provider`, a
+provider-dispatched acquisition ladder, exact-lease ownership, and a
+cost-unit-aware envelope), and the execution-scope-kind contract
+(`study` | `infrastructure_validation`) keeps a non-Study scope such as `IN-0001`
+first-class without borrowing a Study's authority. See
+`improvements/compute/README.md` §"Execution scope" and
+`improvements/taskrelation/research/execution/CONTROLLER_HANDOFF.md`.
+
+The one remaining seam rule is operational: a provider-mutating verb requires the
+control plane to be **explicitly bound** (`WAVCSE_INFRA_CHECKOUT` or
+`WAVCSE_INFRA_CLI`). A merely discovered control plane — in particular this
+repository's embedded `infra/` subsystem — is refused rather than operated.
+Cleanup verbs are never gated that way.
 
 ## Provider semantics (stable concepts, not CLI flags)
 

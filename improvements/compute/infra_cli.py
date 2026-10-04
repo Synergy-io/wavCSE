@@ -248,10 +248,11 @@ class InfraCli(object):
     def worker_health(self, worker_id, json_output=True):
         """Return the readiness-ladder result, not its payload.
 
-        Canonical RunPod health has a JSON report. At wavcse-infra commit
-        ``2d7640c``, the Colab branch accepts ``--json`` but still emits a plain
-        READY line; Colab callers therefore use ``json_output=False`` and rely on
-        its exit status. Provider/transport identity comes from ``worker list``.
+        Canonical RunPod health has a JSON report. At the pinned wavcse-infra
+        commit (``540b617``, and ``2d7640c`` before it), the Colab branch accepts
+        ``--json`` but still emits a plain READY line; Colab callers therefore use
+        ``json_output=False`` and rely on its exit status. Provider/transport
+        identity comes from ``worker list``.
         """
 
         return self.run("worker", "health", worker_id, json_output=json_output)

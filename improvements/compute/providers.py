@@ -1,7 +1,9 @@
 """Provider vocabulary shared with canonical ``wavcse-infra``.
 
 Canonical interface: ``wavcse-infra`` commit
-``2d7640c7c6454b662ab92c6744beff946bc111fa``. Keep these values byte-for-byte
+``540b617f66d4fc8c11419fb606a64047f085d529`` (the earlier verified binding
+``2d7640c7c6454b662ab92c6744beff946bc111fa`` remains an ancestor, and the
+vocabulary is unchanged between them). Keep these values byte-for-byte
 compatible with its ``ProviderKind``, ``CostUnit`` and ``ExecutionTransport``
 enums. This module owns vocabulary only — provider implementation remains in
 ``wavcse-infra``.

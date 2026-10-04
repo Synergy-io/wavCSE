@@ -196,14 +196,17 @@ has no authorization, lacks lawful raw-corpus restoration/identity evidence,
 has no implemented/validated compute plan, has unknown benchmark/runtime/cost,
 and the control plane it resolved to was not the canonical `wavcse-infra`. That
 last claim is now corrected: the canonical `wavcse-infra` `main`
-(`2d7640c7c6454b662ab92c6744beff946bc111fa`, version `0.1.0`) implements the
+(`540b617f66d4fc8c11419fb606a64047f085d529`, version `0.1.0`) implements the
 `job`, `storage` and network-volume surfaces `improvements.compute` calls **and**
 a Colab provider — the approved primary — alongside RunPod as secondary, over a
-new `COLAB_EXEC` execution transport. Two wavCSE-side items remain, both recorded
-in `CONTROLLER_HANDOFF.md`: the controller must bind the control plane explicitly
-to that checkout (the embedded `wavCSE/infra` fork otherwise wins resolution),
-and the compute backend's worker-acquisition seam is still RunPod-shaped, so the
-Colab path is not drivable through `improvements.compute` yet.
+new `COLAB_EXEC` execution transport. Both wavCSE-side items recorded at the time
+are now closed and recorded in `CONTROLLER_HANDOFF.md`: the control plane is
+bound explicitly, and a provider-mutating verb refuses a merely discovered one
+(the embedded `wavCSE/infra` fork otherwise wins resolution) instead of relying
+on the convention; and the compute seam is provider-neutral, so the Colab path
+is drivable through `improvements.compute`. The execution-scope-kind contract
+(`study` | `infrastructure_validation`) is what the `IN-0001` smoke scope uses;
+see `../../../compute/README.md` §"Execution scope".
 
 Validate it with:
 

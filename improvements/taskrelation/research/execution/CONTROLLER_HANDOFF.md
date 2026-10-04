@@ -57,14 +57,16 @@ and an authorization is not a submission.
 | Item | Value |
 | --- | --- |
 | Canonical repository | `https://github.com/Ke-vin-S/wavcse-infra.git` |
-| Branch / commit | `main` @ `2d7640c7c6454b662ab92c6744beff946bc111fa` (verified `origin/main`, clean tree) |
+| Branch / commit | `main` @ `540b617f66d4fc8c11419fb606a64047f085d529` (verified `origin/main`, clean tree). `2d7640c7c6454b662ab92c6744beff946bc111fa` was the earlier verified binding and remains an ancestor of it; the record advanced on the controller when `540b617` was verified against the same compatibility checks. |
 | Version | `0.1.0` — **unchanged** across the Colab commits; do not judge capability from the version string |
 | Required compatibility | that exact commit, or a later verified `main` for which the compatibility checks there pass; bind it explicitly (see below) |
 | Provider capability | **Colab (primary)** and **RunPod (secondary)** both implemented. Colab: ephemeral session, `colab_exec` transport, FREE_TIER / PAID_CU modes, guarded allocate/bootstrap/release, recorded jobs, GPU-driver `LD_LIBRARY_PATH` seeding. RunPod (REST v2): worker lifecycle, network volumes, S3 artifact storage, exact-commit jobs, direct SSH — unchanged. |
 
-Zero-cost validation of that commit on the development machine: `make check`
+Zero-cost validation on the development machine was at `2d7640c`: `make check`
 green (1100 unit tests, ruff format/lint, cloud-init schema, agent assets) and
-`git diff --check` clean. No live provider call was made.
+`git diff --check` clean. The controller re-validated the advanced binding at
+`540b617` the same way: `make check` green (1141 tests) plus ruff, cloud-init and
+agent assets. No live provider call was made in either case.
 
 ### Colab semantics verified at this commit
 
@@ -229,9 +231,11 @@ None of these can be performed on the development machine.
    that `task.isolation.enabled` is in place **before** OMP starts (a mid-session
    change does not reach an already-built task schema).
 3. Resolve and verify the canonical `wavcse-infra` checkout by **exact commit**
-   `2d7640c7c6454b662ab92c6744beff946bc111fa` (version `0.1.0`), not by version
+   `540b617f66d4fc8c11419fb606a64047f085d529` (version `0.1.0`), not by version
    string and not by "`63c61af` or later": confirm `git -C <checkout> rev-parse
-   HEAD` and a clean tree.
+   HEAD` and a clean tree. (The earlier required commit was
+   `2d7640c7c6454b662ab92c6744beff946bc111fa`; it is an ancestor of this one, and
+   the controller record advanced to `540b617` after it passed the same checks.)
 4. Bind the control plane explicitly — set `WAVCSE_INFRA_CHECKOUT` (or
    `WAVCSE_INFRA_CLI`) to that checkout so `python -m improvements.compute
    resolve --json` reports `resolved_by: environment` and never selects the
@@ -280,6 +284,49 @@ the Colab question open. That finding is superseded, not erased:
 
 The remaining question is not whether Colab exists but whether wavCSE can drive
 it — see *wavCSE ↔ wavcse-infra integration status* (`WAVCSE_ADAPTER_MISMATCH`).
+
+## Controller-side record — execution-scope increment (2026-10-04, no live action)
+
+Performed on the controller, in this order, with no provider call:
+
+1. **Bindings verified.** wavCSE HEAD `6c99692d06fdeed8bdf12b6e07b0909102f2a032`
+   on `feature/mssl-task-relation-study` (pushed; the handoff-bearing commit),
+   clean tree. `wavcse-infra` `main` @
+   `540b617f66d4fc8c11419fb606a64047f085d529`, clean, version `0.1.0`, a verified
+   descendant of `2d7640c`. Bound with `WAVCSE_INFRA_CHECKOUT`; `resolve --json`
+   reports `resolved_by: environment`.
+2. **Preflight.** `make check` green at both repositories (wavCSE 780 tests;
+   wavcse-infra 1141). All 15 digest-pinned DG-0008 inputs exist in S3 with the
+   declared sizes. `doctor` reports Colab `READY` (ADC, CLI 0.7.4, free tier,
+   balance 0.00 CU, assignments 0). `worker list --read-only` shows no workers
+   and `reap` (dry-run) no attributable compute. `DP-0008-N01` still validates as
+   `BLOCKED`; DG-0008 still has no plan and no authorization.
+3. **Two contract facts confirmed.**
+   - `WAVCSE_INFRA_CHECKOUT` is **not persisted** on the controller, and the
+     embedded `infra/` (v0.1.1) wins resolution ahead of `PATH` whenever its
+     virtual environment exists. Without the explicit binding, resolution
+     currently fails closed rather than silently selecting the fork — and the
+     smoke procedure must not depend on that accident.
+   - Every authorized execution scope was assumed to be a Study id. That is now
+     corrected by the execution-scope-kind contract (below).
+4. **Execution-scope kinds implemented (wavCSE side only).** A scope is an
+   identity plus a kind: `study` (default, legacy-compatible) or
+   `infrastructure_validation`. Plans carry `scope` + `scope_kind` for the
+   non-Study kind; envelopes may carry `scope_kind`; identity and kind are
+   compared together and a mismatch fails closed. Provider-mutating verbs
+   (`worker-ensure`, non-dry `advance`) now require an explicitly bound control
+   plane; cleanup verbs are deliberately never gated this way. Full contract:
+   `../../../compute/README.md` §"Execution scope".
+5. **IN-0001 added.** `execution/IN-0001/{README.md,smoke_plan.json}` — an
+   infrastructure-validation scope that exercises
+   `improvements.compute → external wavcse-infra → provider=colab → one T4 →
+   bootstrap → one trivial recorded exact-commit job → one tiny artifact → S3
+   read-back → release`. It uses no DG-0008 data, no embeddings, no corpus and no
+   MLflow credential, and it confers no scientific authority. Run it only after a
+   human commits `authorizations/IN-0001.yaml`.
+
+Nothing here authorizes compute; no Colab or RunPod resource, job or
+authorization was created, and no DG-0008 work was run.
 
 ## Live-validation requirement
 

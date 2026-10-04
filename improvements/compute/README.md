@@ -52,13 +52,26 @@ A legacy sibling checkout remains a temporary controller-cutover fallback only.
 When nothing validates, compute steps stay blocked with an explicit reason —
 never silently skipped, never substituted.
 
+Resolution only *finds* a control plane; a provider-mutating verb (`worker-ensure`,
+and `advance` without `--dry-run`) additionally requires it to be **explicitly
+bound** (`resolved_by: environment` / `environment-cli`) and refuses a merely
+discovered one. That is deliberate: the embedded `infra/` subsystem wins
+resolution ahead of `PATH` when it has a virtual environment, and a recorded run
+must never validate a superseded control plane. Cleanup is never gated this way —
+`stop`, `finish`, `sweep` and `reap` still reconcile and release a scope whose
+control plane was merely discovered, because blocking cleanup is worse than
+operating a stale read.
+
 ### Providers — Colab (primary) and RunPod (secondary)
 
 The control plane implements two providers over two execution transports:
 Colab on `colab_exec`, RunPod on SSH. This backend drives both through one
 provider-neutral seam; provider implementation stays in `wavcse-infra`
-(canonical commit `2d7640c7c6454b662ab92c6744beff946bc111fa`, version `0.1.0` —
-bind the exact commit, never the version string).
+(canonical commit `540b617f66d4fc8c11419fb606a64047f085d529`, version `0.1.0` —
+bind the exact commit, never the version string. `2d7640c7c6454b662ab92c6744beff946bc111fa`
+was the earlier verified binding and remains an ancestor of it; the controller
+record moved forward to `540b617` when that controller-side commit was verified
+against the same compatibility checks).
 
 | Concern | RunPod | Colab |
 | --- | --- | --- |
@@ -81,11 +94,42 @@ Colab branch accepts `--json` but still prints a plain READY line, so Colab
 readiness is read from the exit status and provider/transport identity from
 `worker list`.
 
+### Execution scope — Study and infrastructure validation
+
+An authorization, a plan, a lease and a job are all named by an **execution
+scope**: a short identity plus an explicit **kind**.
+
+| Kind | Plan field | Meaning |
+| --- | --- | --- |
+| `study` (default) | `study` | A research Study. The scope identity *is* the Study id; jobs run the committed research wrapper and carry the registered protocol's evidence. |
+| `infrastructure_validation` | `scope` | A first-class non-Study scope. It needs no Study registration and never borrows, implies or confers a Study's scientific authority. Its jobs run the plan's own command and stage no research evidence. |
+
+A plan or envelope written before kinds existed carries none and is
+deterministically a Study, so every legacy artifact keeps its exact meaning.
+Nothing else changes for a Study: same wrapper, same `MANIFEST.json` evidence,
+same metadata, same 201-job DG-0008 topology.
+
+The two halves of the isolation are checked together wherever a plan meets its
+authorization: the identity must match the envelope's `scope`, and the kind must
+match the envelope's `scope_kind`. A mismatch fails closed (`AuthorizationError`)
+before any provider call, at `worker-ensure`, at `advance`, and inside
+`envelope.check` when the caller passes `scope_kind`. An unrecognised kind is
+refused rather than defaulted, in both a plan and an envelope.
+
+An infrastructure-validation job declares `environment_secrets: []`: the control
+plane requires only the secrets a spec names, so demanding MLflow for a job that
+trains nothing would put a research credential on the wrong workload. Its
+`collect` path verifies what the seam promises — the declared artifact persisted,
+and the bytes read back are the bytes the control plane verified — instead of the
+research protocol's metric vocabulary.
+
 **Architectural debt.** This repository also carries an embedded `infra/`
 subsystem (v0.1.1) that predates the standalone implementation and implements
 only the worker phases; it must never be the resolved control plane for a
 recorded run. Bind `WAVCSE_INFRA_CHECKOUT` (or `WAVCSE_INFRA_CLI`) to the
-canonical checkout. See
+canonical checkout. A provider-mutating verb now refuses a merely discovered
+control plane instead of relying on that convention; the embedded subsystem
+itself is deliberately neither repaired nor synchronized. See
 `../taskrelation/research/execution/CONTROLLER_HANDOFF.md`.
 
 ## Runtime state (never committed)
