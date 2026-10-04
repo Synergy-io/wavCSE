@@ -52,6 +52,22 @@ A legacy sibling checkout remains a temporary controller-cutover fallback only.
 When nothing validates, compute steps stay blocked with an explicit reason —
 never silently skipped, never substituted.
 
+### Provider shape — known limitation (recorded 2026-10-04)
+
+The control plane implements two providers, Colab (primary) and RunPod
+(secondary), over a `colab_exec` transport alongside SSH. This backend can drive
+**RunPod** only. `validate_plan` requires `worker.{gpu_type,cloud,image}`;
+`InfraCli.worker_create` always sends RunPod options (`--cloud`,
+`--gpu-count`, `--container-disk`, `--start-ssh`, `--require-direct-ssh`);
+worker ownership is attributed by a `wavcse-<scope>-<nonce>` worker name; and
+the envelope budget is USD/hour. Colab allocates its own `wavcse-<hex>` session
+identity, rejects `--name`/`--cloud`/`--image`/SSH/volume options, and prices in
+compute units that are deliberately never converted to USD. Colab's `job`,
+`storage` and status surfaces are provider-neutral and already match this
+backend. Driving Colab through this backend needs a provider-neutral
+plan/create/ownership seam and a CU-mode envelope; it is not implemented. See
+`../taskrelation/research/execution/CONTROLLER_HANDOFF.md`.
+
 ## Runtime state (never committed)
 
 Everything under `~/.local/state/wavcse-research/` (override with

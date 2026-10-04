@@ -2,10 +2,12 @@
 
 Deterministic handoff from the development computer to the controller. It
 records only identities and unresolved bindings; it copies no artifact, carries
-no credential, and grants no authority. Written on the development machine on
-2026-10-04, on top of wavCSE commit `91a8f2edbdbba8060bba7eac381735889a4df14b`;
-the controller must check out the commit that contains this file (resolve it with
-`git log -1 --format=%H -- improvements/taskrelation/research/execution/CONTROLLER_HANDOFF.md`).
+no credential, and grants no authority. Rewritten on the development machine on
+2026-10-04 in the Colab-reconciliation increment (see *wavcse-infra side*), on
+top of wavCSE commit `3c996802a3ab3fce8f5f8c2178c52d7d6bbb0582`; the controller
+must check out the commit that contains this file — that commit or a descendant
+— resolved with
+`git log -1 --format=%H -- improvements/taskrelation/research/execution/CONTROLLER_HANDOFF.md`.
 
 Nothing here authorizes compute. A preflight acceptance is not an authorization,
 and an authorization is not a submission.
@@ -20,7 +22,7 @@ and an authorization is not a submission.
 | Registered Study | `DG-0008` — `research/studies/DG-0008/PLAN.md`, `NOTE.md`; registration commit `fa326fc39ca1bc2977d30a0964b80c493571e02b` |
 | Implementation identity | `research/dg0008/` plus `studies/DG-0008/{run_dg0008.py,generate_opportunity_manifest.py,evaluate_dg0008.py,check_validity_gate.py,analyze_dg0008.py,configs/dg0008.yaml}` — commit `d9675688cdb3759778214509d3f6e7fa3348f429` |
 | Compute inputs | `research/studies/DG-0008/compute/inputs.json` — 15 digest-pinned requirements (5 speechcommand, 9 voxceleb, 1 iemocap), validated by `improvements.compute.artifacts` |
-| Compute plan | **Not authored.** Every static field is known, but `worker.gpu_type`/`worker.cloud`/`worker.image` and a bounded `timeout_seconds` are controller-time bindings and must not be invented on the development machine. |
+| Compute plan | **Not authored.** Every static field is known, but `worker.gpu_type`/`worker.cloud`/`worker.image` and a bounded `timeout_seconds` are controller-time bindings and must not be invented on the development machine. Note the schema itself is RunPod-shaped (requires `cloud`/`image`, carries no provider field); see *wavCSE ↔ wavcse-infra integration status*. |
 | JobSpec schema | `improvements/compute/jobspec.py`, `SCHEMA_VERSION = 1`; stages may select an arm subset, so the approved 200 + 1 topology is expressible (`improvements/compute/tests/test_stage_arms.py`) |
 | Scientific invariants | The sealed workload `execution/preflights/DP-0008/workload.v2.json` (26 invariants, one flexible choice `IF-MANIFEST-IO=STREAM_CANONICAL_BYTES`). Not duplicated here. |
 | Execution contract | `improvements/taskrelation/research/execution/README.md`; validator `python -m improvements.taskrelation.research.execution_contract check <dir>` |
@@ -52,9 +54,48 @@ and an authorization is not a submission.
 | Item | Value |
 | --- | --- |
 | Canonical repository | `https://github.com/Ke-vin-S/wavcse-infra.git` |
-| Branch / commit | `main` @ `63c61af1ed70cd283b03438ec9ec11cf4166541b` (implementation Phases 0–6.2) |
-| Required compatibility | that commit or a later `main`; `improvements.compute` was reconciled against it |
-| Provider capability | **RunPod** implemented (REST v2): worker lifecycle, network volumes, S3 artifact storage, exact-commit jobs. **Colab: not present in this commit** — see open decision below. |
+| Branch / commit | `main` @ `2d7640c7c6454b662ab92c6744beff946bc111fa` (verified `origin/main`, clean tree) |
+| Version | `0.1.0` — **unchanged** across the Colab commits; do not judge capability from the version string |
+| Required compatibility | that exact commit, or a later verified `main` for which the compatibility checks there pass; bind it explicitly (see below) |
+| Provider capability | **Colab (primary)** and **RunPod (secondary)** both implemented. Colab: ephemeral session, `colab_exec` transport, FREE_TIER / PAID_CU modes, guarded allocate/bootstrap/release, recorded jobs, GPU-driver `LD_LIBRARY_PATH` seeding. RunPod (REST v2): worker lifecycle, network volumes, S3 artifact storage, exact-commit jobs, direct SSH — unchanged. |
+
+Zero-cost validation of that commit on the development machine: `make check`
+green (1100 unit tests, ruff format/lint, cloud-init schema, agent assets) and
+`git diff --check` clean. No live provider call was made.
+
+### Colab semantics verified at this commit
+
+Read from the implementation, not from prose:
+
+- **One provider, two modes.** Colab is `ProviderKind.COLAB` over
+  `ExecutionTransport.COLAB_EXEC`; `ColabBillingMode` is derived from the paid
+  balance (`> 0` → `PAID_CU`, `== 0` → `FREE_TIER`), never a second provider.
+- **Zero paid balance is not zero entitlement.** `balance == 0` selects
+  best-effort free tier; allocation is permitted when `colab.allow_free_tier` is
+  true (default). `allow_free_tier = false` rejects a zero balance before
+  allocation. The observed CU/hour in free tier is recorded as metering, never
+  treated as a paid cost or a rate ceiling.
+- **Cost guards.** `PAID_CU` enforces `minimum_balance_cu`, an observed
+  incremental rate in `(0, max_incremental_rate_cu_per_hour]`, and
+  `max_job_cu` projected from declared runtime; `FREE_TIER` applies no rate or
+  paid-balance gate. No CU→USD conversion is invented.
+- **Allocation.** Pinned `google-colab-cli==0.7.4` over ADC; a unique
+  `wavcse-<hex>` identity is recorded before `new`, then a
+  `usage_after − usage_before` assignment-count check; ambiguous creation is
+  reconciled by exact identity and never repeated; failed cost/bootstrap checks
+  release the confirmed session.
+- **Bootstrap / readiness.** Non-SSH health check (Python, Git, uv, physical GPU
+  model, CUDA, scratch disk, network) plus installation of the SHA-verified
+  runner; RUNNING is not READY.
+- **Execution / jobs.** `colab_exec` runs the same reviewed `worker/job_runner.py`
+  and Phase 5 transfer module: exact-commit detached checkout, SHA-256 input
+  verification, presigned PUT outputs, controller-side S3 read-back and digest.
+  `LD_LIBRARY_PATH` is seeded with `/usr/lib64-nvidia`; a spec may override it.
+- **Placement.** `colab` before `runpod` unless `--provider` restricts or
+  `--worker` pins. A research failure never triggers a cross-provider rerun.
+- **Boundaries.** Colab has no SSH, no network volume, no data-center selection;
+  `worker stop/start` are unsupported and release is terminal. RunPod keeps its
+  USD/hour ceiling, SSH, volumes and lifecycle.
 
 ### Interface assumptions wavCSE makes
 
@@ -77,39 +118,97 @@ parses `--json` output. It assumes:
   `outputs[{path,artifact,required,overwrite}]`, `tracking{metadata}`.
 
 Resolution order is `WAVCSE_INFRA_CLI` → `WAVCSE_INFRA_CHECKOUT` → `<repo>/infra`
-→ `infra` on `PATH` → legacy sibling `wavcse-infra`. Two hazards:
+→ `infra` on `PATH` → legacy sibling `wavcse-infra`. Because `<repo>/infra`
+precedes both `PATH` and the sibling fallback, a stale embedded copy can win
+silently. Two hazards therefore remain:
 
 - the `infra/` **committed inside wavCSE is a superseded fork** at v0.1.1 that
-  implements only Phases 0–4 and cannot serve a job; it must not be the resolved
-  control plane for DG-0008;
-- the local standalone checkout on the development machine
-  (`/home/kevin/projects/wavcse-infra` @ `df748a0`, v0.1.0) is **stale**; it also
-  predates Phases 5–6.2. Refresh it, or bind explicitly to a verified checkout.
+  implements only Phases 0–4 and cannot serve a job — and it is recognised as an
+  ordinary monorepo subsystem, so `resolve()` selects it whenever its `.venv` is
+  present. It must never be the resolved control plane for DG-0008. This is
+  architectural debt to report, not to repair by mirroring it (no approved
+  deprecation/removal path exists in this increment).
+- the control plane must be **bound explicitly** to the standalone `wavcse-infra`
+  checkout at the commit above; do not rely on `PATH` or a sibling fallback.
+  Verified here: `resolve` with `WAVCSE_INFRA_CHECKOUT=<standalone checkout>`
+  reports `resolved_by: environment` and the Colab-capable CLI, whereas without
+  it the embedded fork is selected (and currently fails only because its `.venv`
+  is absent).
+
+### wavCSE ↔ wavcse-infra integration status
+
+**Classification: `WAVCSE_ADAPTER_MISMATCH`** (with a second, independent
+`STALE_RESOLUTION_ONLY` concern — the embedded-fork preference above).
+
+The provider-neutral surfaces match: `job submit/status/logs/cancel/list`,
+`storage read/verify/list/download`, `worker list --read-only`, and the
+version-1 JobSpec schema are satisfied by the Colab-capable CLI.
+
+The **worker-acquisition path is RunPod-shaped and cannot address a Colab
+worker**. This is wavCSE's seam, not a wavcse-infra defect, and it is not
+repaired in this increment:
+
+- `improvements/compute/jobspec.py::validate_plan` requires non-empty
+  `worker.{gpu_type,cloud,image}` and has no provider field, so a plan cannot
+  express a Colab worker request; `cloud`/`image` are RunPod-only and Colab
+  rejects them;
+- `improvements/compute/infra_cli.py::worker_create` always sends RunPod options
+  (`--cloud`, `--gpu-count`, `--container-disk`, `--start-ssh`,
+  `--require-direct-ssh`) and never `--provider colab`; the Colab provider raises
+  `ConfigurationError` on any of those options;
+- worker ownership is attributed by a `wavcse-<scope>-<nonce>` name
+  (`improvements/compute/ledger.py`), but the Colab provider allocates its own
+  `wavcse-<hex>` identity and rejects `--name`, so `available_worker_id` /
+  `worker_belongs_to` never match a Colab session and `advance` cannot pick one;
+- the readiness ladder calls `worker start` / `wait-ssh` / `bootstrap`, which
+  Colab does not support, and the envelope budget is USD/hour while Colab free
+  tier bills no CU and paid CU is deliberately never converted to USD.
+
+Consequence: the RunPod path through `improvements.compute` is intact, and the
+Colab path is **not drivable through the compute backend yet**. Resolving it is
+either a bounded wavCSE integration increment (provider-neutral plan/create/
+ownership plus a CU-mode envelope) or an explicit human decision to drive Colab
+outside `improvements.compute`. It is deliberately not decided here.
 
 ## Controller-only checks
 
 None of these can be performed on the development machine.
 
 1. Check out the exact wavCSE commit that contains this handoff, and confirm
-   `make check` is green there.
+   `make check` is green there. (Development machine, on the commit that adds
+   this note: green — 780 tests, 2 skipped, `agents-check` and
+   `candidate-gate-check` included; `pdftotext`/`poppler-utils` must be
+   installed for `test_literature_primary_text`.)
 2. Confirm the project-local Research Computer resolves from the repository —
    agents `.omp/agents/*`, skills `.agents/skills/*`, commands
    `.agents/commands/*`, tools `.omp/tools/*`, policy `.agents/policies/*` — and
    that `task.isolation.enabled` is in place **before** OMP starts (a mid-session
    change does not reach an already-built task schema).
-3. Resolve and verify the canonical `wavcse-infra` checkout; confirm `infra
-   doctor`, `infra worker list --read-only --json` and `infra job list --json`.
-4. **Decide the Colab question.** The human's architecture is Colab primary,
-   RunPod secondary, but no Colab provider exists in `wavcse-infra` `main`.
-   Establish which repository/commit carries it, or that it is still to be built.
-5. Private S3 availability and canonical embedded-object verification against
+3. Resolve and verify the canonical `wavcse-infra` checkout by **exact commit**
+   `2d7640c7c6454b662ab92c6744beff946bc111fa` (version `0.1.0`), not by version
+   string and not by "`63c61af` or later": confirm `git -C <checkout> rev-parse
+   HEAD` and a clean tree.
+4. Bind the control plane explicitly — set `WAVCSE_INFRA_CHECKOUT` (or
+   `WAVCSE_INFRA_CLI`) to that checkout so `python -m improvements.compute
+   resolve --json` reports `resolved_by: environment` and never selects the
+   embedded `wavCSE/infra` fork; then confirm `infra doctor`, `infra worker list
+   --read-only --json` and `infra job list --json` against it.
+5. Colab account/runtime state: ADC authentication present; `infra doctor`
+   reports pinned CLI 0.7.4, session access, the current paid-CU balance and
+   observed usage rate, and the current billing mode (FREE_TIER at balance 0
+   when `colab.allow_free_tier`, otherwise the PAID_CU policy); confirm whether a
+   free T4 is currently allocatable and the current paid cost if any. **Allocate
+   nothing in preflight.**
+6. Private S3 availability and canonical embedded-object verification against
    `studies/DG-0008/compute/inputs.json`.
-6. Lawful raw-corpus availability (Speech Commands, VoxCeleb1, licence-gated
+7. Lawful raw-corpus availability (Speech Commands, VoxCeleb1, licence-gated
    IEMOCAP) and the independent raw-metadata identity extraction.
-7. MLflow/DagsHub credentials; Colab runtime/account state and current resource
-   availability; current RunPod price/availability if used.
-8. Authorization envelope, compatible-GPU benchmark, and a fresh accepted
+8. MLflow/DagsHub credentials; current RunPod price/availability only if the
+   secondary provider is used.
+9. Authorization envelope, compatible-GPU benchmark, and a fresh accepted
    execution preflight before any submission.
+10. A bounded **live Colab smoke test** (see below), which cannot be performed on
+    the development machine.
 
 ## What the controller must not need to copy
 
@@ -120,12 +219,45 @@ capability policy, the candidate gate, and the execution contract. Machine-local
 state stays machine-local: credentials, `wavcse-infra` configuration,
 authentication and provider/SSH state.
 
-## Open decision
+## Superseded finding (chronology preserved)
 
-**Colab capability is unresolved.** The approved architecture makes Colab the
-primary execution plane, and this handoff cannot verify it: the canonical
-`wavcse-infra` `main` (`63c61af`) contains no Colab provider, and no other
-reachable repository implements one. Until a human resolves whether Colab exists
-elsewhere (private/unpushed) or is still to be implemented, any Colab-first plan
-rests on an unverified premise. Carry out every other controller-side check
-first; those are independent of this decision.
+The previous version of this handoff recorded, correctly for the history visible
+at the time, that the canonical `wavcse-infra` `main` at
+`63c61af1ed70cd283b03438ec9ec11cf4166541b` contained no Colab provider, and left
+the Colab question open. That finding is superseded, not erased:
+
+- **then (previous audit):** `main @ 63c61af`; Colab absent from the visible
+  history, because controller-side commits were unpushed.
+- **event:** those controller commits were pushed and pulled.
+- **now (this audit):** `main @
+  2d7640c7c6454b662ab92c6744beff946bc111fa`; Colab is implemented and reachable
+  from the canonical branch (commits `ff3125e` … `2d7640c`). The open decision is
+  therefore **resolved by evidence**: Colab is implemented and now canonical.
+
+The remaining question is not whether Colab exists but whether wavCSE can drive
+it — see *wavCSE ↔ wavcse-infra integration status* (`WAVCSE_ADAPTER_MISMATCH`).
+
+## Live-validation requirement
+
+Deterministic, zero-cost coverage of the Colab path is strong (`make check`,
+1100 tests: provider selection and placement order, free-tier vs paid-CU gates,
+zero-balance behaviour, allocation identity/usage-delta/ambiguity, bootstrap,
+release, failure cleanup, `colab_exec` recorded jobs, `LD_LIBRARY_PATH` seeding,
+RunPod non-regression). Two residual coverage gaps were identified: the CLI
+`_job_context_for` → `colab_exec` dispatch is exercised only with that selection
+monkeypatched away, and the `_require_colab_job_budget` pre-cost gates lack a
+direct test. No test allocates a live session.
+
+A bounded **controller-side live Colab smoke test** is therefore still required
+before any Colab-first execution claim: allocate one ephemeral T4 under the
+configured policy, bootstrap to READY, run one trivial recorded job through the
+`infra` CLI, verify the S3 read-back, and release — recording the exact
+`wavcse-infra` commit and the observed billing mode. It is **not** performed in
+this increment, and no live provider work is authorized by this handoff.
+
+Because of the integration mismatch above, that smoke test must be driven through
+the `infra` CLI directly; `improvements.compute` cannot yet acquire or address a
+Colab worker.
+
+A compatible-GPU five-epoch benchmark remains the next paid/live scientific
+action; it is neither authorized nor performed here.

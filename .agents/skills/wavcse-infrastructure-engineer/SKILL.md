@@ -32,12 +32,57 @@ specific semantics stay provider-specific: do not force Colab through RunPod
 concepts such as a network-volume requirement, RunPod offer discovery or direct
 SSH, and do not remove RunPod behaviour merely because Colab is primary.
 
-**Known discrepancy (recorded 2026-10-04).** The canonical `wavcse-infra`
-checkout inspected on this machine (`main`) exposes only the RunPod provider; no
-Colab provider, runtime or transport was present. Do not assert Colab
-availability from this skill. Treat "which repository and commit carries Colab"
-as a controller-side preflight check, and if it cannot be established, a human
-decision — not something to invent.
+**Colab capability is canonical (corrected 2026-10-04).** An earlier record on
+this skill stated that the canonical `wavcse-infra` `main` exposed only the
+RunPod provider. That was true of the history visible at the time
+(`63c61af1ed70cd283b03438ec9ec11cf4166541b`): controller-side commits had not
+been pushed. They have since been pushed and pulled, and the canonical `main` is
+now `2d7640c7c6454b662ab92c6744beff946bc111fa` — version `0.1.0`, unchanged —
+with the Colab provider, the `colab_exec` execution transport and Colab
+session/job support reachable from the canonical branch. Do not repeat the
+earlier "Colab absent" claim as current state. Because a capability change need
+not carry a version bump, inspect the exact bound checkout for commands, options
+and version-dependent behaviour rather than reading them from this skill.
+
+**Known wavCSE-side integration gap (recorded 2026-10-04).** The consumption
+seam (`improvements/compute`) is RunPod-shaped and cannot express or address a
+Colab worker: `validate_plan` requires `worker.{gpu_type,cloud,image}` and has no
+provider field; `infra_cli.worker_create` always sends RunPod options
+(`--cloud`, `--gpu-count`, `--container-disk`, `--start-ssh`,
+`--require-direct-ssh`); worker ownership is attributed by a
+`wavcse-<scope>-<nonce>` name while the Colab provider allocates its own
+`wavcse-<hex>` identity and rejects `--name`; and the envelope budget is
+USD/hour while Colab free tier bills no CU and paid CU is never converted to
+USD. The job, storage, status and list surfaces are provider-neutral and match.
+Do not assert that wavCSE can drive Colab until a separate bounded increment
+extends this seam; that gap is wavCSE's, not a wavcse-infra defect.
+
+## Provider semantics (stable concepts, not CLI flags)
+
+- **Selection.** Provider selection follows configured placement (Colab primary,
+  RunPod secondary); a job may be restricted to one provider or pinned to one
+  exact worker. Never hardcode a provider into a wavCSE consumer.
+- **Allocation / session lifecycle.** Colab is an ephemeral, non-resumable
+  session (allocate → observe → bootstrap → run → release); RunPod is a Pod with
+  a reversible stop and network-volume persistence. `worker stop/start` are
+  unsupported for Colab; release is terminal.
+- **Bootstrap.** Readiness is proven by inspection, not by lifecycle state:
+  Python, Git, uv, physical GPU model, GPU library visibility, scratch disk and
+  network are checked before a worker is READY.
+- **Execution transport.** Transport is chosen per worker identity, independently
+  of provider: RunPod uses SSH, Colab uses `colab_exec` (upload, execute, collect).
+- **Status.** Worker and job state are read from the provider as authoritative;
+  local records are reconciled against it, never trusted alone.
+- **Artifact handling.** Inputs are digest-verified before launch; outputs are
+  persisted through the storage layer and read back before success.
+- **Cleanup / reconciliation.** Ownership is tracked; an ambiguous create is
+  reconciled by exact identity, never blindly repeated; absence is marked only
+  after provider confirmation.
+- **Authorization.** The envelope and `authorizations/<SCOPE>.yaml` gate spend;
+  the compute backend is the only agent-facing paid-operation seam.
+- **DEV vs CONTROLLER.** The development machine holds no provider credential and
+  performs no live provider action; controller-only state (credentials, config,
+  account/runtime facts) is bound there and never copied into Git.
 
 ## OPERATE
 

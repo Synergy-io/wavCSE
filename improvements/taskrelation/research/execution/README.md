@@ -195,9 +195,15 @@ The final assessment is `BLOCKED`, correctly, because DG-0008 is unregistered,
 has no authorization, lacks lawful raw-corpus restoration/identity evidence,
 has no implemented/validated compute plan, has unknown benchmark/runtime/cost,
 and the control plane it resolved to was not the canonical `wavcse-infra`. That
-last claim is now corrected: the canonical `wavcse-infra` `main` implements the
-`job`, `storage` and network-volume surfaces `improvements.compute` calls, and the
-remaining work is a controller-side binding to it (see `CONTROLLER_HANDOFF.md`).
+last claim is now corrected: the canonical `wavcse-infra` `main`
+(`2d7640c7c6454b662ab92c6744beff946bc111fa`, version `0.1.0`) implements the
+`job`, `storage` and network-volume surfaces `improvements.compute` calls **and**
+a Colab provider — the approved primary — alongside RunPod as secondary, over a
+new `COLAB_EXEC` execution transport. Two wavCSE-side items remain, both recorded
+in `CONTROLLER_HANDOFF.md`: the controller must bind the control plane explicitly
+to that checkout (the embedded `wavCSE/infra` fork otherwise wins resolution),
+and the compute backend's worker-acquisition seam is still RunPod-shaped, so the
+Colab path is not drivable through `improvements.compute` yet.
 
 Validate it with:
 
