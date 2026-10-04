@@ -167,6 +167,14 @@ the `embedding_layout` that turns the declared inputs into the loader's tree. It
 committed with the study, so the job spec is derived from committed state and is
 byte-identical when regenerated.
 
+A stage declares the seeds it runs and may also select a subset of the plan's
+arms. A stage with no `arms` list expands every declared arm — the behaviour
+every pre-extension plan relied on — while a stage that names `arms` runs only
+those, under its own seeds. That is how a plan expresses "200 matrix trainings
+plus exactly one same-arm repeat" without multiplying the repeat across the
+stage's seeds and without using worker concurrency to describe experiment
+topology.
+
 ### Declared inputs reach the loader
 
 `embedding_layout` names, for each dataset the protocol loads, the declared artifact that

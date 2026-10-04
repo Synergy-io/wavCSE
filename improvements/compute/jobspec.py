@@ -44,6 +44,10 @@ _PLAN_KEYS = {"schema_version", "study", "repository", "task_type",
 _LAYOUT_KEYS = {"root", "datasets"}
 _LAYOUT_DATASET_KEYS = {"dataset", "input", "inputs"}
 _ARM_KEYS = {"arm", "method", "argv", "config", "labels"}
+# A stage always declares the seeds it runs. It may also select a subset of the
+# plan's arms; a stage that declares no `arms` keeps the original behaviour and
+# expands every declared arm, so a pre-extension plan expands exactly as before.
+_STAGE_KEYS = {"seeds", "arms"}
 _WORKER_KEYS = {"gpu_type", "cloud", "gpu_count", "image", "template",
                 "container_disk_gb", "volume_gb", "network_volume",
                 "data_centers"}
@@ -121,17 +125,6 @@ def validate_plan(plan):
     _require(isinstance(device_index, int) and not isinstance(device_index, bool)
              and device_index >= 0, "device_index", "must be a non-negative integer")
 
-    stages = plan.get("stages")
-    _require(isinstance(stages, dict) and stages, "stages", "must be a non-empty mapping")
-    for stage, spec in stages.items():
-        _require(isinstance(spec, dict), "stages.{}".format(stage), "must be a mapping")
-        seeds = spec.get("seeds")
-        _require(isinstance(seeds, list) and seeds, "stages.{}.seeds".format(stage),
-                 "must be a non-empty list")
-        for seed in seeds:
-            _require(isinstance(seed, int) and not isinstance(seed, bool),
-                     "stages.{}.seeds".format(stage), "seeds must be integers")
-
     arms = plan.get("arms")
     _require(isinstance(arms, list) and arms, "arms", "must be a non-empty list")
     seen = set()
@@ -160,6 +153,35 @@ def validate_plan(plan):
         if "{config}" in " ".join(argv):
             _require(isinstance(arm.get("config"), str) and arm["config"],
                      field + ".config", "is required because argv uses {config}")
+
+    # Stages are validated after arms so a stage's optional `arms` list can be
+    # checked against the names the plan actually declares. A stage that omits
+    # `arms` keeps the original behaviour: every declared arm under that stage's
+    # seeds. A stage that selects a subset runs only those arms — the bounded
+    # extension that lets a plan say "200 matrix jobs plus exactly one repeat"
+    # without encoding experiment topology in worker concurrency.
+    stages = plan.get("stages")
+    _require(isinstance(stages, dict) and stages, "stages", "must be a non-empty mapping")
+    for stage, spec in stages.items():
+        field = "stages.{}".format(stage)
+        _require(isinstance(spec, dict), field, "must be a mapping")
+        unknown = sorted(set(spec) - _STAGE_KEYS)
+        _require(not unknown, field, "has unknown key(s): {}".format(", ".join(unknown)))
+        seeds = spec.get("seeds")
+        _require(isinstance(seeds, list) and seeds, field + ".seeds", "must be a non-empty list")
+        for seed in seeds:
+            _require(isinstance(seed, int) and not isinstance(seed, bool),
+                     field + ".seeds", "seeds must be integers")
+        selected = spec.get("arms")
+        if selected is not None:
+            _require(isinstance(selected, list) and selected, field + ".arms",
+                     "must be a non-empty list of arm names")
+            for name in selected:
+                _require(isinstance(name, str) and name in seen, field + ".arms",
+                         "references unknown arm {!r}; arms are {}".format(
+                             name, ", ".join(sorted(seen))))
+            _require(len(set(selected)) == len(selected), field + ".arms",
+                     "must not repeat an arm name")
 
     outputs = plan.get("outputs")
     _require(isinstance(outputs, list) and outputs, "outputs", "must be a non-empty list")
@@ -285,6 +307,35 @@ def stage_seeds(plan, stage):
     return list(spec["seeds"])
 
 
+def stage_arm_names(plan, stage):
+    """The arm names one stage expands.
+
+    A stage without an explicit `arms` selection runs every declared arm, which
+    is exactly the behaviour every pre-extension plan relied on. A stage that
+    declares `arms` runs only those, so a plan can say "200 matrix jobs plus
+    exactly one same-arm repeat" without multiplying the repeat across the
+    stage's seeds or inventing worker concurrency to express topology.
+    """
+
+    spec = plan["stages"].get(stage)
+    if spec is None:
+        raise ConfigurationError(
+            "plan declares no stage {!r}; stages are {}".format(
+                stage, ", ".join(sorted(plan["stages"]))
+            )
+        )
+    selected = spec.get("arms")
+    if selected is None:
+        return arm_names(plan)
+    return list(selected)
+
+
+def stage_arms(plan, stage):
+    """The arm specifications one stage expands, in declared order."""
+
+    return [arm_by_name(plan, name) for name in stage_arm_names(plan, stage)]
+
+
 def arm_names(plan):
     return [arm["arm"] for arm in plan["arms"]]
 
@@ -391,6 +442,12 @@ def build_spec(plan, *, stage, arm, seed, commit, scope, envelope_digest,
         raise ConfigurationError(
             "seed {} is not in the pre-registered set for stage {} ({})".format(
                 seed, stage, ", ".join(str(value) for value in stage_seeds(plan, stage))
+            )
+        )
+    if arm_spec["arm"] not in stage_arm_names(plan, stage):
+        raise ConfigurationError(
+            "arm {!r} is not selected by stage {!r}; that stage runs {}".format(
+                arm_spec["arm"], stage, ", ".join(stage_arm_names(plan, stage))
             )
         )
 

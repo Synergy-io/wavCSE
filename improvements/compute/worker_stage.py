@@ -207,6 +207,15 @@ def main(argv=None):
             file=sys.stderr,
         )
         return 2
+    if args.arm not in jobspec.stage_arm_names(plan, args.stage):
+        print(
+            "arm {} is not selected by stage {} of {} (stage runs: {})".format(
+                args.arm, args.stage, plan["study"],
+                ", ".join(jobspec.stage_arm_names(plan, args.stage)),
+            ),
+            file=sys.stderr,
+        )
+        return 2
 
     job_directory = _job_directory()
     outputs_dir = os.path.join(job_directory, args.outputs_root)

@@ -73,10 +73,16 @@ def spec_path(scope, spec):
 
 
 def plan_jobs(plan, stage):
-    """The pre-registered (arm, seed) pairs for one stage."""
+    """The pre-registered (arm, seed) pairs for one stage.
+
+    A stage expands the arms it selects (all declared arms when it names no
+    subset) under its own seed set. A repeat stage therefore expands only the
+    repeat arm under only its seed, instead of every global arm.
+    """
 
     seeds = jobspec.stage_seeds(plan, stage)
-    return [(arm["arm"], seed) for arm in plan["arms"] for seed in seeds]
+    return [(arm["arm"], seed) for arm in jobspec.stage_arms(plan, stage)
+            for seed in seeds]
 
 
 def _entry(record, key, *, arm, seed, plan, stage):
