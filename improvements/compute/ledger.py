@@ -24,6 +24,7 @@ import uuid
 from functools import wraps
 from decimal import Decimal
 
+from improvements.compute import providers
 from improvements.compute import state as state_module
 from improvements.compute.errors import ConfigurationError
 
@@ -70,6 +71,32 @@ def name_prefix_for(scope):
 
 def worker_belongs_to(worker_name, scope):
     return bool(worker_name) and str(worker_name).startswith(name_prefix_for(scope))
+
+
+def lease_provider(lease):
+    """Provider carried by a lease; a legacy lease is RunPod."""
+
+    try:
+        return providers.normalize_provider((lease or {}).get("provider"))
+    except providers.ProviderValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+
+
+def worker_matches_lease(worker, lease):
+    """Exact provider-owned identity is the ownership proof after creation.
+
+    RunPod discovery still uses a scope-prefixed generated name before the lease
+    exists. Once redeemed, both providers are attributed by the exact provider
+    worker id plus provider kind. Colab deliberately does not carry a scope in
+    its infra-generated ``wavcse-<nonce>`` identity.
+    """
+
+    if not worker or not lease or not lease.get("worker_id"):
+        return False
+    return (
+        worker.get("id") == lease.get("worker_id")
+        and providers.worker_provider(worker) == lease_provider(lease)
+    )
 
 
 def leases_path():
@@ -146,27 +173,36 @@ def known_scopes():
 
 
 @_serialized_lease_write
-def begin_create(scope, *, purpose, envelope_digest, request, deadline):
-    """Record a creation intent *before* the billable request.
+def begin_create(scope, *, purpose, envelope_digest, request, deadline,
+                 provider=providers.DEFAULT_PROVIDER, existing_worker_ids=()):
+    """Record a creation intent *before* the provider mutation.
 
-    Refuses while an earlier intent for the same prefix is unresolved: two
-    overlapping creates would otherwise both reach the provider and open two
-    billable Pods, which is exactly the failure this record exists to prevent.
+    RunPod can be reconciled by the generated scope-prefixed name it is asked to
+    create. Colab rejects caller-supplied names, so its intent records the exact
+    pre-create provider inventory and is redeemed only when one new Colab-owned
+    identity appears. Neither path blindly retries an ambiguous allocation.
     """
 
+    try:
+        provider = providers.normalize_provider(provider)
+    except providers.ProviderValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
     path, document = _leases_document()
-    prefix = name_prefix_for(scope)
     for intent in document["pending_creates"]:
-        if str(intent.get("name_prefix") or "").startswith(prefix) and intent.get("status") == "pending":
+        if intent.get("scope") == scope and intent.get("status") == "pending":
             raise ConfigurationError(
                 "an earlier worker create for {} is still unresolved (intent "
                 "started {}); reconcile it with `sweep` before requesting another "
-                "paid resource".format(scope, intent.get("created_at"))
+                "provider resource".format(scope, intent.get("created_at"))
             )
     nonce = uuid.uuid4().hex[:12]
+    prefix = name_prefix_for(scope) + nonce + "-" if provider == providers.RUNPOD else None
+    request_name = scope + "-" + nonce if provider == providers.RUNPOD else None
     intent = {
-        "name_prefix": prefix + nonce + "-",
-        "request_name": scope + "-" + nonce,
+        "provider": provider,
+        "name_prefix": prefix,
+        "request_name": request_name,
+        "existing_worker_ids": sorted(str(item) for item in existing_worker_ids),
         "scope": scope,
         "purpose": purpose,
         "envelope_digest": envelope_digest,
@@ -179,36 +215,56 @@ def begin_create(scope, *, purpose, envelope_digest, request, deadline):
     _save(path, document)
     state_module.append_event(
         {"scope": scope, "action": "worker-create-intent", "purpose": purpose,
-         "envelope_digest": envelope_digest, "deadline": deadline},
+         "provider": provider, "envelope_digest": envelope_digest,
+         "deadline": deadline},
         kind="worker-create-intent",
     )
     return intent
 
 
 def find_worker_for_intent(intent, workers):
-    """Reconcile a create intent against provider state by generated identity."""
+    """Reconcile a create intent against provider-authoritative state."""
 
-    prefix = intent["name_prefix"]
+    provider = providers.normalize_provider(intent.get("provider"))
+    if provider == providers.COLAB:
+        before = set(str(item) for item in intent.get("existing_worker_ids") or ())
+        matches = [
+            worker for worker in workers
+            if providers.worker_provider(worker) == providers.COLAB
+            and worker.get("id") not in before
+            and str(worker.get("state") or "").upper() not in ("DESTROYED", "TERMINATING")
+        ]
+        if len(matches) > 1:
+            raise ConfigurationError(
+                "Colab create intent for {} sees multiple new session identities; "
+                "ownership is ambiguous and no session may be claimed".format(
+                    intent.get("scope"))
+            )
+        return matches[0] if matches else None
+
+    prefix = intent.get("name_prefix") or ""
     matches = [
         worker for worker in workers
-        if str(worker.get("name") or "").startswith(prefix)
+        if providers.worker_provider(worker) == providers.RUNPOD
+        and str(worker.get("name") or "").startswith(prefix)
     ]
     if not matches:
         return None
-    # Newest wins if an earlier stray exists; the caller records the ambiguity.
     matches.sort(key=lambda worker: str(worker.get("created_at") or ""), reverse=True)
     return matches[0]
 
 
 @_serialized_lease_write
-def redeem_create(scope, *, worker_id, purpose, envelope_digest, deadline, request=None):
-    """Convert a resolved intent into an active lease."""
+def redeem_create(scope, *, worker_id, purpose, envelope_digest, deadline,
+                  request=None, provider=providers.DEFAULT_PROVIDER):
+    """Convert a resolved provider intent into an active owned lease."""
 
+    provider = providers.normalize_provider(provider)
     path, document = _leases_document()
-    prefix = name_prefix_for(scope)
     document["pending_creates"] = [
         intent for intent in document["pending_creates"]
-        if not (str(intent.get("name_prefix") or "").startswith(prefix)
+        if not (intent.get("scope") == scope
+                and providers.normalize_provider(intent.get("provider")) == provider
                 and intent.get("status") == "pending")
     ]
     existing = [lease for lease in document["leases"]
@@ -217,8 +273,9 @@ def redeem_create(scope, *, worker_id, purpose, envelope_digest, deadline, reque
         _save(path, document)
         return existing[0]
     lease = {
+        "provider": provider,
         "scope": scope,
-        "name_prefix": prefix,
+        "name_prefix": name_prefix_for(scope) if provider == providers.RUNPOD else None,
         "worker_id": worker_id,
         "purpose": purpose,
         "envelope_digest": envelope_digest,
@@ -236,7 +293,8 @@ def redeem_create(scope, *, worker_id, purpose, envelope_digest, deadline, reque
     _save(path, document)
     state_module.append_event(
         {"scope": scope, "action": "worker-leased", "worker_id": worker_id,
-         "purpose": purpose, "deadline": deadline, "envelope_digest": envelope_digest},
+         "provider": provider, "purpose": purpose, "deadline": deadline,
+         "envelope_digest": envelope_digest},
         kind="worker-leased",
     )
     return lease
@@ -256,15 +314,18 @@ def reopen_lease(worker_id):
 
 
 @_serialized_lease_write
-def abandon_create(scope, reason):
+def abandon_create(scope, reason, provider=None):
     """Drop an intent whose create provably did not happen."""
 
+    normalized = None if provider is None else providers.normalize_provider(provider)
     path, document = _leases_document()
-    prefix = name_prefix_for(scope)
     kept = []
     dropped = []
     for intent in document["pending_creates"]:
-        if str(intent.get("name_prefix") or "").startswith(prefix) and intent.get("status") == "pending":
+        matches = intent.get("scope") == scope and intent.get("status") == "pending"
+        if normalized is not None:
+            matches = matches and providers.normalize_provider(intent.get("provider")) == normalized
+        if matches:
             dropped.append(intent)
         else:
             kept.append(intent)
@@ -272,7 +333,9 @@ def abandon_create(scope, reason):
     _save(path, document)
     for intent in dropped:
         state_module.append_event(
-            {"scope": scope, "action": "worker-create-abandoned", "reason": reason},
+            {"scope": scope, "action": "worker-create-abandoned",
+             "provider": providers.normalize_provider(intent.get("provider")),
+             "reason": reason},
             kind="worker-create-abandoned",
         )
     return dropped
@@ -280,22 +343,19 @@ def abandon_create(scope, reason):
 
 @_serialized_lease_write
 def adopt_worker(worker, *, scope, deadline, envelope_digest=None):
-    """Record a matching but unleased worker without claiming authority over it.
+    """Record a matching but unleased worker without claiming creation authority."""
 
-    An adopted lease is a bookkeeping fact, not a claim that this session
-    created the resource: it may be stopped (reversible, and it ends the spend)
-    but never destroyed by the sweep.
-    """
-
+    provider = providers.worker_provider(worker)
     path, document = _leases_document()
     for lease in document["leases"]:
         if lease.get("worker_id") == worker.get("id"):
             return lease
     lease = {
+        "provider": provider,
         "scope": scope,
-        "name_prefix": name_prefix_for(scope),
+        "name_prefix": name_prefix_for(scope) if provider == providers.RUNPOD else None,
         "worker_id": worker.get("id"),
-        "purpose": "adopted: matched the scope name prefix with no creation record",
+        "purpose": "adopted: attributed provider identity with no creation record",
         "envelope_digest": envelope_digest,
         "deadline": deadline,
         "request": {},
@@ -311,7 +371,7 @@ def adopt_worker(worker, *, scope, deadline, envelope_digest=None):
     _save(path, document)
     state_module.append_event(
         {"scope": scope, "action": "worker-adopted", "worker_id": worker.get("id"),
-         "reason": "scope prefix without a creation record"},
+         "provider": provider, "reason": "provider identity without a creation record"},
         kind="worker-adopted",
     )
     return lease
@@ -387,29 +447,35 @@ def observe_workers(workers, *, scope=None, now=None):
         if lease.get("state") not in ("active",):
             continue
         worker = by_id.get(lease.get("worker_id"))
-        if worker is None:
+        if worker is None or not worker_matches_lease(worker, lease):
             continue
-        if not worker_belongs_to(worker.get("name"), lease.get("scope")):
-            continue
-        hourly = _decimal_or_none(worker.get("hourly_cost"))
+        provider = lease_provider(lease)
         previous = lease.get("observation") or {}
-        highest = _decimal_or_none(previous.get("max_hourly_cost"))
-        if hourly is not None and (highest is None or hourly > highest):
-            highest = hourly
         started = _latest_of(
             state_module.parse_timestamp(previous.get("billing_started_at")),
             state_module.parse_timestamp(worker.get("last_started_at")),
             state_module.parse_timestamp(worker.get("created_at")),
+            state_module.parse_timestamp(lease.get("created_at")),
         )
-        lease["observation"] = {
+        observation = {
+            "provider": provider,
+            "cost_unit": providers.provider_cost_unit(provider),
             "observed_at": state_module.isoformat(now),
             "state": str(worker.get("state") or "UNKNOWN").upper(),
-            "hourly_cost": None if hourly is None else str(hourly),
-            "max_hourly_cost": None if highest is None else str(highest),
             "billing_started_at": (
                 None if started is None else state_module.isoformat(started)
             ),
         }
+        if provider == providers.RUNPOD:
+            hourly = _decimal_or_none(worker.get("hourly_cost"))
+            highest = _decimal_or_none(previous.get("max_hourly_cost"))
+            if hourly is not None and (highest is None or hourly > highest):
+                highest = hourly
+            observation.update({
+                "hourly_cost": None if hourly is None else str(hourly),
+                "max_hourly_cost": None if highest is None else str(highest),
+            })
+        lease["observation"] = observation
         observed.append(lease.get("worker_id"))
     if observed:
         _save(path, document)
@@ -468,16 +534,23 @@ def reconcile_absent_leases(scope, workers, *, now=None):
         else:
             target_state = "vanished"
             reason = "the worker is absent from provider inventory"
-        entry = _finalize_from_observation(lease, state=target_state, now=now,
-                                           reason=reason)
+        provider = lease_provider(lease)
+        if provider == providers.COLAB:
+            entry = _finalize_colab_lease(lease, state=target_state, now=now,
+                                          reason=reason)
+        else:
+            entry = _finalize_from_observation(lease, state=target_state, now=now,
+                                               reason=reason)
         if entry is None:
             observation = lease.get("observation") or {}
             missing = []
-            if _decimal_or_none(observation.get("max_hourly_cost")) is None and \
+            if provider == providers.RUNPOD and \
+                    _decimal_or_none(observation.get("max_hourly_cost")) is None and \
                     _decimal_or_none(observation.get("hourly_cost")) is None:
                 missing.append("no observed hourly price")
-            if state_module.parse_timestamp(observation.get("billing_started_at")) is None:
-                missing.append("no observed billing start")
+            if state_module.parse_timestamp(observation.get("billing_started_at")) is None and \
+                    state_module.parse_timestamp(lease.get("created_at")) is None:
+                missing.append("no observed allocation start")
             if not observation:
                 missing.append("the worker was never observed while it was visible")
             unbounded.append({
@@ -499,6 +572,43 @@ def reconcile_absent_leases(scope, workers, *, now=None):
     if changed:
         _save(path, document)
     return {"finalized": finalized, "unbounded": unbounded}
+
+
+def _finalize_colab_lease(lease, *, state, now, reason):
+    """Close one Colab lease in its native CU domain without inventing USD."""
+
+    observation = lease.get("observation") or {}
+    started = (
+        state_module.parse_timestamp(observation.get("billing_started_at"))
+        or state_module.parse_timestamp(lease.get("created_at"))
+    )
+    if started is None:
+        return None
+    hours = _elapsed_hours(started, now)
+    prior_wall = _decimal_or_none(lease.get("closed_wall_clock_hours")) or Decimal(0)
+    lease["state"] = state
+    lease["closed_at"] = state_module.isoformat(now)
+    lease["closed_wall_clock_hours"] = str(prior_wall + hours)
+    lease["closed_cost_usd"] = None
+    lease["finalization"] = "provider_native_cu_guard"
+    lease["finalization_basis"] = {
+        "cost_unit": providers.COMPUTE_UNITS,
+        "allocation_started_at": state_module.isoformat(started),
+        "last_observed_at": observation.get("observed_at"),
+        "last_observed_state": observation.get("state"),
+        "absent_observed_at": state_module.isoformat(now),
+    }
+    lease["finalization_reason"] = reason
+    state_module.append_event(
+        {"scope": lease.get("scope"), "action": "lease-cost-finalized",
+         "worker_id": lease.get("worker_id"), "provider": providers.COLAB,
+         "state": state, "reason": reason,
+         "cost_unit": providers.COMPUTE_UNITS,
+         "wall_clock_hours": lease["closed_wall_clock_hours"],
+         "precision": "provider_native_cu_guard"},
+        kind="lease-cost-finalized",
+    )
+    return lease
 
 
 def _finalize_from_observation(lease, *, state, now, reason):
@@ -594,6 +704,8 @@ class SpendReport(object):
                 {
                     "id": entry["id"],
                     "name": entry["name"],
+                    "provider": entry["provider"],
+                    "cost_unit": entry["cost_unit"],
                     "state": entry["state"],
                     "hourly_cost": (
                         None if entry["hourly_cost"] is None
@@ -605,6 +717,7 @@ class SpendReport(object):
             "estimated_spend_usd": str(self.estimated_spend_usd),
             "estimated_wall_clock_hours": str(self.estimated_wall_clock_hours),
             "estimated_hourly_exposure_usd": str(self.estimated_hourly_exposure_usd),
+            "cost_units": sorted({entry["cost_unit"] for entry in self.live}),
             "accounting_bounded": self.bounded,
             "unknowns": list(self.unknowns),
             "precision": PRECISION,
@@ -624,6 +737,9 @@ class SpendReport(object):
                 {
                     "id": entry["id"],
                     "name": entry["name"],
+                    "provider": entry["provider"],
+                    "cost_unit": entry["cost_unit"],
+                    "execution_transport": entry["execution_transport"],
                     "state": entry["state"],
                     "billable": entry["billable"],
                     "hourly_cost": (
@@ -664,7 +780,14 @@ def _elapsed_hours(start, end):
 
 
 def derive_spend(workers, scope, leases=None, now=None):
-    """Estimate what this scope has consumed, from provider facts."""
+    """Estimate exposure in native provider units without cross-unit conversion.
+
+    RunPod retains the historical USD/hour accounting. Colab has no machine-
+    readable CU rate on the worker JSON surface: canonical wavcse-infra enforces
+    its free-tier/paid-CU policy at allocation and job submission, while this
+    ledger accounts the exact owned session and its bounded wall-clock lifetime.
+    It never writes a fake USD value for CU.
+    """
 
     now = now or state_module.utc_now()
     leases = all_leases() if leases is None else leases
@@ -678,11 +801,17 @@ def derive_spend(workers, scope, leases=None, now=None):
     for lease in leases:
         if lease.get("scope") != scope:
             continue
-        if lease.get("state") in _CLOSED_LEASE_STATES and \
-                (lease.get("closed_cost_usd") is None or
-                 lease.get("closed_wall_clock_hours") is None):
-            unknowns.append("closed lease {} has no verified accrued cost or time"
-                            .format(lease.get("worker_id")))
+        provider = lease_provider(lease)
+        if lease.get("state") in _CLOSED_LEASE_STATES:
+            missing_wall = lease.get("closed_wall_clock_hours") is None
+            missing_cost = provider == providers.RUNPOD and lease.get("closed_cost_usd") is None
+            if missing_wall or missing_cost:
+                unknowns.append(
+                    "closed lease {} has no verified {}".format(
+                        lease.get("worker_id"),
+                        "accrued cost or time" if missing_cost else "wall-clock time",
+                    )
+                )
         if lease.get("closed_cost_usd") is not None:
             closed_cost += _decimal_or_none(lease["closed_cost_usd"]) or Decimal(0)
         if lease.get("closed_wall_clock_hours") is not None:
@@ -693,51 +822,67 @@ def derive_spend(workers, scope, leases=None, now=None):
     entries = []
     seen = set()
     for worker in workers:
-        name = str(worker.get("name") or "")
-        if not worker_belongs_to(name, scope):
-            continue
         worker_id = worker.get("id")
-        seen.add(worker_id)
+        if not worker_id:
+            continue
+        provider = providers.worker_provider(worker)
         lease = lease_by_worker.get(worker_id)
+        leased_to_scope = (
+            lease is not None
+            and lease.get("scope") == scope
+            and worker_matches_lease(worker, lease)
+        )
+        legacy_runpod_match = (
+            provider == providers.RUNPOD
+            and worker_belongs_to(worker.get("name"), scope)
+        )
+        if not leased_to_scope and not legacy_runpod_match:
+            continue
+        seen.add(worker_id)
         state = str(worker.get("state") or "UNKNOWN").upper()
         billable = state not in _NON_BILLING_STATES
-        hourly = _decimal_or_none(worker.get("hourly_cost"))
-        # The provider's own most-recent start is the honest basis for the
-        # current billing period: a worker stopped and started again does not
-        # bill from its original creation.
-        if lease and lease.get("closed_cost_usd") is not None:
+        hourly = (
+            _decimal_or_none(worker.get("hourly_cost"))
+            if provider == providers.RUNPOD else None
+        )
+        if provider == providers.RUNPOD and lease and lease.get("closed_cost_usd") is not None:
             created = state_module.parse_timestamp(worker.get("last_started_at"))
             if billable and created is None:
-                unknowns.append("restarted worker {} has no provider last-start time"
-                                .format(worker_id))
+                unknowns.append(
+                    "restarted worker {} has no provider last-start time".format(worker_id)
+                )
         else:
-            created = state_module.parse_timestamp(worker.get("created_at"))
+            created = (
+                state_module.parse_timestamp(worker.get("created_at"))
+                or state_module.parse_timestamp((lease or {}).get("created_at"))
+            )
         end = now
         if not billable and lease and lease.get("closed_at"):
             end = state_module.parse_timestamp(lease.get("closed_at")) or now
         elapsed = _elapsed_hours(created, end) if created else None
         accrued = None
         if billable:
-            if hourly is None:
+            if provider == providers.RUNPOD and hourly is None:
                 unknowns.append(
                     "worker {} has no provider-reported hourly price".format(worker_id)
                 )
             if elapsed is None:
                 unknowns.append(
-                    "worker {} has no provider-reported creation time".format(worker_id)
+                    "worker {} has no attributable allocation start".format(worker_id)
                 )
-            if hourly is not None and elapsed is not None:
+            if provider == providers.RUNPOD and hourly is not None and elapsed is not None:
                 accrued = hourly * elapsed
-        elif not (lease and lease.get("closed_cost_usd") is not None):
-            # It billed until it stopped, and nothing here recorded when that
-            # was, so the scope's total is a lower bound rather than a guess.
+        elif lease and lease.get("closed_wall_clock_hours") is None:
             unknowns.append(
-                "worker {} is {} without a recorded close time; its accrued cost "
-                "is unknown".format(worker_id, state)
+                "worker {} is {} without a recorded close time; its allocation "
+                "duration is unknown".format(worker_id, state)
             )
         entries.append({
             "id": worker_id,
-            "name": name,
+            "name": str(worker.get("name") or ""),
+            "provider": provider,
+            "cost_unit": providers.provider_cost_unit(provider),
+            "execution_transport": providers.worker_transport(worker),
             "state": state,
             "billable": billable,
             "hourly_cost": hourly,
@@ -748,8 +893,6 @@ def derive_spend(workers, scope, leases=None, now=None):
             "provenance": (lease or {}).get("provenance", "unrecorded"),
         })
 
-    # Leases whose worker the provider no longer lists, but which were never
-    # closed by this backend: the spend happened, so keep counting it.
     for lease in leases:
         if lease.get("scope") != scope:
             continue
@@ -758,15 +901,15 @@ def derive_spend(workers, scope, leases=None, now=None):
         if lease.get("worker_id") in seen:
             continue
         unknowns.append(
-            "lease {} has no matching provider worker; its accrued cost is "
-            "unknown".format(lease.get("worker_id"))
+            "lease {} has no matching provider worker; its allocation accounting "
+            "is unknown".format(lease.get("worker_id"))
         )
 
     return SpendReport(scope, entries, closed_cost, closed_wall_clock, unknowns, now)
 
 
 def scope_is_busy(scope, workers=None):
-    """True while the scope has live compute or an unresolved create intent."""
+    """True while the scope has a live resource or unresolved create intent."""
 
     if pending_creates(scope):
         return True
@@ -775,8 +918,10 @@ def scope_is_busy(scope, workers=None):
         return False
     if workers is None:
         return True
-    for worker in workers:
-        if worker_belongs_to(worker.get("name"), scope):
+    by_id = {worker.get("id"): worker for worker in workers if worker.get("id")}
+    for lease in leases:
+        worker = by_id.get(lease.get("worker_id"))
+        if worker is not None and worker_matches_lease(worker, lease):
             if str(worker.get("state") or "").upper() not in _TERMINAL_STATES:
                 return True
     return False

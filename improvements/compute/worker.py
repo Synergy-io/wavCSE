@@ -17,7 +17,7 @@ Two safety properties are load-bearing:
 
 from decimal import Decimal
 
-from improvements.compute import ledger, state as state_module
+from improvements.compute import ledger, providers, state as state_module
 from improvements.compute import envelope as envelope_module
 from improvements.compute import jobspec, remote_commit
 from improvements.compute.errors import (
@@ -59,6 +59,24 @@ def _deadline_for(view, horizon_hours=None, spend=None):
         ))
     )
     return min(candidates)
+
+
+def _colab_deadline_for(view, horizon_hours=None, spend=None):
+    """Bound a Colab lease without pretending CU has an USD exchange rate."""
+
+    from datetime import timedelta
+
+    now = state_module.utc_now()
+    wall_clock_limit = Decimal(str(view.envelope["budget"]["max_wall_clock_hours"]))
+    consumed = Decimal(0) if spend is None else spend.estimated_wall_clock_hours
+    remaining_wall = max(Decimal(0), wall_clock_limit - consumed)
+    return min(
+        envelope_module.expiry(view.envelope),
+        now + timedelta(seconds=float(remaining_wall * 3600)),
+        now + timedelta(seconds=float(
+            Decimal(str(horizon_hours or DEFAULT_DEADLINE_HOURS)) * 3600
+        )),
+    )
 
 
 def _facts(scope, workers):
@@ -127,8 +145,26 @@ def resolve_network_volume(view, volumes, selector):
 
 
 def _worker_request(plan, scope):
+    """Provider-neutral resource intent derived from one validated plan."""
+
+    provider = jobspec.plan_provider(plan)
     worker = plan["worker"]
+    if provider == providers.COLAB:
+        return {
+            "provider": provider,
+            "name": None,
+            "gpu": worker.get("gpu_type"),
+            "cloud": None,
+            "image": None,
+            "template": None,
+            "gpu_count": 1,
+            "container_disk_gb": None,
+            "volume_gb": 0,
+            "data_centers": (),
+            "network_volume_selector": None,
+        }
     return {
+        "provider": provider,
         "name": scope,
         "gpu": worker["gpu_type"],
         "cloud": worker["cloud"],
@@ -137,12 +173,195 @@ def _worker_request(plan, scope):
         "gpu_count": int(worker.get("gpu_count", 1)),
         "container_disk_gb": int(worker.get("container_disk_gb", 20)),
         "volume_gb": int(worker.get("volume_gb", 0)),
+        "volume_mount_path": worker.get("volume_mount_path"),
         "data_centers": tuple(worker.get("data_centers") or ()),
         "network_volume_selector": worker.get("network_volume"),
     }
 
 
 def ensure_worker(plan, view, *, infra, purpose=None, projected_hours=None):
+    """Acquire one provider resource without leaking provider mechanics upward."""
+
+    provider = jobspec.plan_provider(plan)
+    authorized = envelope_module.envelope_provider(view.envelope)
+    if provider != authorized:
+        raise CostError(
+            "compute plan provider {} does not match authorization provider {}".format(
+                provider, authorized
+            )
+        )
+    if provider == providers.COLAB:
+        return _ensure_colab_worker(
+            plan, view, infra=infra, purpose=purpose, projected_hours=projected_hours)
+    return _ensure_runpod_worker(
+        plan, view, infra=infra, purpose=purpose, projected_hours=projected_hours)
+
+
+def _ensure_colab_worker(plan, view, *, infra, purpose=None, projected_hours=None):
+    """Return one owned READY Colab session, creating it exactly once if needed.
+
+    wavcse-infra owns allocation identity, CU guards, bootstrap, readiness and
+    release. This layer owns the human authorization, the scope lease, exact-
+    commit availability, attempt accounting and cleanup attribution.
+    """
+
+    scope = plan["study"]
+    actions = []
+    infra.job_list()
+    workers = infra.worker_list(provider=providers.COLAB)
+    ledger.observe_workers(workers, scope=scope)
+    ledger.reconcile_absent_leases(scope, workers)
+    spend = ledger.derive_spend(workers, scope)
+    if view.modified_in_tree or view.uncommitted:
+        raise CostError("compute authorization must match a committed grant")
+    commit = jobspec.git_state()["head"]
+    remote_commit.require_plan_commit(plan, commit)
+    actions.append("proved commit {} is available on the worker's remote".format(commit[:12]))
+    for lease in ledger.active_leases(scope):
+        if lease.get("state") == "active" and lease.get("envelope_digest") != view.digest:
+            raise CostError("active worker {} belongs to a different authorization digest"
+                            .format(lease.get("worker_id")))
+        if ledger.lease_provider(lease) != providers.COLAB:
+            raise CostError("scope {} already owns a non-Colab lease".format(scope))
+    for intent in ledger.pending_creates(scope):
+        if intent.get("envelope_digest") != view.digest:
+            raise CostError("unresolved create intent belongs to a different authorization digest")
+        if providers.normalize_provider(intent.get("provider")) != providers.COLAB:
+            raise CostError("scope {} has an unresolved non-Colab create intent".format(scope))
+    envelope_module.record_snapshot(view, busy=ledger.scope_is_busy(scope, workers))
+
+    intents = ledger.pending_creates(scope)
+    recovered = None
+    if intents:
+        if len(intents) != 1:
+            raise ReconcilableError("multiple unresolved create intents for {}".format(scope),
+                                    action="create-worker")
+        intent = intents[0]
+        recovered = ledger.find_worker_for_intent(intent, workers)
+        if recovered is None:
+            raise ReconcilableError(
+                "Colab allocation for {} remains unresolved; no second provider "
+                "request is safe".format(scope), action="create-worker")
+        ledger.redeem_create(
+            scope, worker_id=recovered["id"], purpose=intent["purpose"],
+            envelope_digest=intent["envelope_digest"], deadline=intent["deadline"],
+            request=intent["request"], provider=providers.COLAB,
+        )
+        actions.append("reconciled Colab create intent for {}".format(recovered["id"]))
+
+    existing = recovered or _select_existing_colab(workers, scope)
+    if existing is not None:
+        lease = _lease_for(existing["id"])
+        if lease is None or lease.get("scope") != scope or lease.get("provenance") != "arc":
+            raise ReconcilableError(
+                "Colab session {} has no wavCSE creation lease".format(existing["id"]),
+                action="worker-ensure",
+            )
+        decision = envelope_module.check(
+            view, envelope_module.ACTION_SUBMIT_JOB, spend.facts(),
+            requested={"provider": providers.COLAB,
+                       "projected_hours": str(projected_hours or 1)},
+        )
+        if not decision.allowed:
+            release = destroy_worker(
+                infra, existing["id"], reason=decision.reason, worker=existing)
+            if release.returncode != 0:
+                raise ReconcilableError(
+                    "Colab session {} could not be released after authorization refusal"
+                    .format(existing["id"]), action="destroy-worker")
+            decision.require()
+        actions.append("reused Colab session {}".format(existing["id"]))
+        try:
+            _prepare_colab(infra, existing["id"], existing)
+        except ReconcilableError:
+            _release_after_prepare_failure(infra, existing)
+            raise
+        actions.append("Colab readiness satisfied without SSH")
+        return existing, actions
+
+    if not spend.bounded:
+        raise CostError(
+            "the scope's Colab allocation accounting is not bounded ({}); "
+            "new allocation fails closed".format("; ".join(spend.unknowns)))
+    decision = envelope_module.check(
+        view, envelope_module.ACTION_CREATE_WORKER, spend.facts(),
+        requested={"provider": providers.COLAB,
+                   "projected_hours": str(projected_hours or 1)},
+    )
+    if not decision.allowed:
+        decision.require()
+
+    request = _worker_request(plan, scope)
+    before_ids = {worker.get("id") for worker in workers if worker.get("id")}
+    deadline = state_module.isoformat(_colab_deadline_for(view, projected_hours, spend))
+    intent = ledger.begin_create(
+        scope,
+        provider=providers.COLAB,
+        purpose=purpose or "job execution",
+        envelope_digest=view.digest,
+        request={"provider": providers.COLAB, "gpu": request.get("gpu")},
+        deadline=deadline,
+        existing_worker_ids=before_ids,
+    )
+    actions.append("recorded a Colab create intent before the allocation request")
+
+    result = infra.worker_create(
+        provider=providers.COLAB,
+        name=None,
+        gpu=request.get("gpu"),
+        cloud=None,
+        start_ssh=False,
+        require_direct_ssh=False,
+        max_price=None,
+        timeout=None,
+    )
+    created = ledger.find_worker_for_intent(
+        intent, infra.worker_list(provider=providers.COLAB))
+    if created is None:
+        raise ReconcilableError(
+            "the Colab allocation for {} returned {} but no single new session "
+            "identity is visible. The intent stays open and the request is never "
+            "repeated; reconcile with `sweep` or `worker ensure`. Provider said: {}"
+            .format(scope, result.returncode, _failure_text(result)),
+            action="create-worker",
+        )
+
+    worker_id = created["id"]
+    ledger.redeem_create(
+        scope, worker_id=worker_id, purpose=purpose or "job execution",
+        envelope_digest=view.digest, deadline=deadline,
+        request=intent["request"], provider=providers.COLAB,
+    )
+    actions.append("allocated Colab session {}".format(worker_id))
+    try:
+        _prepare_colab(infra, worker_id, created)
+    except ReconcilableError:
+        _release_after_prepare_failure(infra, created)
+        raise
+    actions.append("Colab readiness satisfied without SSH")
+    return created, actions
+
+
+def _select_existing_colab(workers, scope):
+    active = {
+        lease.get("worker_id"): lease
+        for lease in ledger.leases_for(scope)
+        if lease.get("state") == "active"
+        and ledger.lease_provider(lease) == providers.COLAB
+    }
+    candidates = [
+        worker for worker in workers
+        if worker.get("id") in active
+        and ledger.worker_matches_lease(worker, active[worker.get("id")])
+        and str(worker.get("state") or "").upper() not in ("DESTROYED", "TERMINATING")
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda worker: str(worker.get("id")))
+    return candidates[-1]
+
+
+def _ensure_runpod_worker(plan, view, *, infra, purpose=None, projected_hours=None):
     """Return a ready scope worker, creating one inside the envelope if needed.
 
     Returns ``(worker, actions)`` where ``actions`` is the ordered list of steps
@@ -366,8 +585,48 @@ def _select_existing(workers, scope):
     return candidates[0]
 
 
+def _prepare_colab(infra, worker_id, worker):
+    """Use Colab's native bootstrap/readiness path — never start or wait for SSH."""
+
+    try:
+        provider = providers.worker_provider(worker)
+        transport = providers.worker_transport(worker)
+    except providers.ProviderValueError as exc:
+        raise ReconcilableError(str(exc), action="worker-ensure") from exc
+    if provider != providers.COLAB or transport != providers.COLAB_EXEC:
+        raise ReconcilableError(
+            "worker {} is not a Colab/COLAB_EXEC resource".format(worker_id),
+            action="worker-ensure",
+        )
+    bootstrap = infra.worker_bootstrap(worker_id)
+    if bootstrap.returncode != 0:
+        raise ReconcilableError(
+            "Colab worker {} bootstrap failed: {}".format(
+                worker_id, _failure_text(bootstrap)),
+            action="bootstrap",
+        )
+    health = infra.worker_health(worker_id, json_output=False)
+    if health.returncode != 0:
+        raise ReconcilableError(
+            "Colab worker {} health check failed: {}".format(
+                worker_id, _failure_text(health)),
+            action="health",
+        )
+
+
+def _release_after_prepare_failure(infra, worker):
+    result = destroy_worker(
+        infra, worker["id"], reason="Colab readiness failed", worker=worker)
+    if result.returncode != 0:
+        raise ReconcilableError(
+            "Colab worker {} failed readiness and could not be released; cleanup "
+            "remains pending".format(worker["id"]),
+            action="destroy-worker",
+        )
+
+
 def _prepare(infra, worker_id, worker=None):
-    """Walk the readiness ladder explicitly: start, SSH, bootstrap, health.
+    """Walk the RunPod readiness ladder explicitly: start, SSH, bootstrap, health.
 
     Every step is idempotent in the control plane, so this is the recovery path
     after a partial failure as well as the normal path after a create. A worker
@@ -375,6 +634,16 @@ def _prepare(infra, worker_id, worker=None):
     new Pod, and its cost is re-billed from the moment it starts.
     """
 
+    try:
+        provider = providers.worker_provider(worker or {})
+        transport = providers.worker_transport(worker or {})
+    except providers.ProviderValueError as exc:
+        raise ReconcilableError(str(exc), action="worker-ensure") from exc
+    if provider != providers.RUNPOD or transport != providers.SSH:
+        raise ReconcilableError(
+            "worker {} is not a RunPod/SSH resource".format(worker_id),
+            action="worker-ensure",
+        )
     state = str((worker or {}).get("state") or "").upper()
     if state == "STOPPED":
         start = infra.worker_start(worker_id)
@@ -430,19 +699,24 @@ def _stop_after_prepare_failure(infra, worker_id):
             .format(worker_id), action="stop-worker")
 
 
-def stop_worker(infra, worker_id, *, reason):
-    """Stop compute billing. Reversible, so it is always permitted."""
+def stop_worker(infra, worker_id, *, reason, worker=None):
+    """End one owned resource in the provider's own lifecycle.
 
-    spend_before = None
+    RunPod stop is reversible. Colab has no stop/resume state, so ending the
+    allocation means terminal release (`worker destroy`).
+    """
+
     lease = _lease_for(worker_id)
     if lease is None:
         raise CapacityError("worker {} has no scope lease; refusing to stop it".format(worker_id))
-    if lease is not None:
-        workers = infra.worker_list()
-        matching = [item for item in workers if item.get("id") == worker_id]
-        if not matching or not ledger.worker_belongs_to(matching[0].get("name"), lease["scope"]):
-            raise CapacityError("worker {} no longer matches its recorded scope".format(worker_id))
-        spend_before = _accrued_for(workers, worker_id)
+    workers = infra.worker_list()
+    matching = worker or next((item for item in workers if item.get("id") == worker_id), None)
+    if matching is None or not ledger.worker_matches_lease(matching, lease):
+        raise CapacityError("worker {} no longer matches its recorded lease".format(worker_id))
+    if ledger.lease_provider(lease) == providers.COLAB:
+        return destroy_worker(infra, worker_id, reason=reason, worker=matching)
+
+    spend_before = _accrued_for(workers, worker_id)
     result = infra.worker_stop(worker_id)
     if result.returncode == 0:
         ledger.close_lease(
@@ -452,37 +726,31 @@ def stop_worker(infra, worker_id, *, reason):
             state="stopped",
         )
         state_module.append_event(
-            {"worker_id": worker_id, "action": "worker-stopped", "reason": reason},
+            {"worker_id": worker_id, "provider": providers.RUNPOD,
+             "action": "worker-stopped", "reason": reason},
             kind="worker-stopped",
         )
     return result
 
 
-def destroy_worker(infra, worker_id, *, reason, allow_adopted=False):
-    """Destroy a worker this backend created.
-
-    An adopted lease (a worker that merely matched the scope prefix) is never
-    destroyed by automation: destroying is irreversible, and the record is too
-    weak to justify it.
-    """
+def destroy_worker(infra, worker_id, *, reason, allow_adopted=False, worker=None):
+    """Destroy/release one exact provider identity this backend created."""
 
     lease = _lease_for(worker_id)
     if lease is None:
         raise CapacityError("worker {} has no ARC creation lease".format(worker_id))
-    if lease.get("provenance") != "arc":
+    if lease.get("provenance") != "arc" and not allow_adopted:
         raise CapacityError(
-            "worker {} matched the scope name prefix but has no creation record; "
-            "it may be stopped but not destroyed by automation".format(worker_id)
+            "worker {} has no creation record; it may be stopped but not destroyed "
+            "by automation".format(worker_id)
         )
-    spend_before = None
-    wall_clock = None
-    if lease is not None:
-        workers = infra.worker_list()
-        matching = [item for item in workers if item.get("id") == worker_id]
-        if not matching or not ledger.worker_belongs_to(matching[0].get("name"), lease["scope"]):
-            raise CapacityError("worker {} no longer matches its recorded scope".format(worker_id))
-        spend_before = _accrued_for(workers, worker_id)
-        wall_clock = _elapsed_hours(worker_id, workers)
+    workers = infra.worker_list()
+    matching = worker or next((item for item in workers if item.get("id") == worker_id), None)
+    if matching is None or not ledger.worker_matches_lease(matching, lease):
+        raise CapacityError("worker {} no longer matches its recorded lease".format(worker_id))
+    provider = ledger.lease_provider(lease)
+    spend_before = _accrued_for(workers, worker_id) if provider == providers.RUNPOD else None
+    wall_clock = _elapsed_hours(worker_id, workers)
     result = infra.worker_destroy(worker_id)
     if result.returncode == 0:
         ledger.close_lease(
@@ -490,7 +758,8 @@ def destroy_worker(infra, worker_id, *, reason, allow_adopted=False):
             state="destroyed",
         )
         state_module.append_event(
-            {"worker_id": worker_id, "action": "worker-destroyed", "reason": reason},
+            {"worker_id": worker_id, "provider": provider,
+             "action": "worker-destroyed", "reason": reason},
             kind="worker-destroyed",
         )
     return result
@@ -506,6 +775,8 @@ def _lease_for(worker_id):
 def _accrued_for(workers, worker_id):
     for worker in workers:
         if worker.get("id") == worker_id:
+            if providers.worker_provider(worker) != providers.RUNPOD:
+                return None
             hourly = _decimal_or_none(worker.get("hourly_cost"))
             lease = _lease_for(worker_id) or {}
             created = (state_module.parse_timestamp(worker.get("last_started_at"))
@@ -527,7 +798,8 @@ def _elapsed_hours(worker_id, workers=None):
     record = next((item for item in (workers or ()) if item.get("id") == worker_id), {})
     created = (state_module.parse_timestamp(record.get("last_started_at"))
                if lease.get("closed_wall_clock_hours") is not None else
-               state_module.parse_timestamp(record.get("created_at")))
+               (state_module.parse_timestamp(record.get("created_at"))
+                or state_module.parse_timestamp(lease.get("created_at"))))
     if created is None:
         return None
     elapsed = state_module.utc_now() - created
@@ -550,8 +822,10 @@ def _failure_text(result):
 
 
 def request_from_plan(plan):
-    """The (non-secret) worker request a plan declares."""
+    """The non-secret provider/resource intent one plan declares."""
 
     if "worker" not in plan:
         raise ConfigurationError("the plan declares no worker request")
-    return dict(plan["worker"])
+    request = dict(plan["worker"])
+    request["provider"] = jobspec.plan_provider(plan)
+    return request

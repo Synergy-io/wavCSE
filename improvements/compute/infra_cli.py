@@ -34,6 +34,7 @@ from improvements.compute.errors import (
     UsageError,
 )
 from improvements.compute import resolve as resolve_module
+from improvements.compute import providers
 
 DEFAULT_TIMEOUT_SECONDS = 600.0
 _RESEARCH_SECRET_NAMES = ("MLFLOW_TRACKING_USERNAME", "MLFLOW_TRACKING_PASSWORD")
@@ -123,6 +124,13 @@ def classify_failure(action, returncode, output):
     )
 
 
+def _require_provider(provider):
+    try:
+        return providers.normalize_provider(provider)
+    except providers.ProviderValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+
+
 class InfraCli(object):
     """Invoke the control plane over its CLI contract."""
 
@@ -207,26 +215,46 @@ class InfraCli(object):
     def doctor(self):
         return self.run("doctor")
 
-    def worker_list(self):
-        payload = self.run("worker", "list", "--read-only", json_output=True).payload
+    def worker_list(self, provider=None):
+        """Every worker the control plane tracks, optionally for one provider.
+
+        With no provider the control plane reports RunPod and, when Colab is
+        enabled, Colab together; each entry carries its own ``provider`` and
+        ``execution_transport``, which is how a caller keeps the two apart.
+        """
+
+        args = ["worker", "list", "--read-only"]
+        if provider:
+            _require_provider(provider)
+            args.extend(["--provider", provider])
+        payload = self.run(*args, json_output=True).payload
         if not isinstance(payload, list):
             raise ConfigurationError("infra worker list returned an incompatible JSON shape")
         return payload
 
+    def provider_list(self):
+        """The control plane's own provider/transport/cost-model view.
+
+        The verb renders a table and has no JSON form, so this returns its text:
+        it is read-only evidence of which providers are enabled, which transport
+        each uses, and which cost unit each is denominated in.
+        """
+
+        return self.run("provider", "list").stdout
+
     def worker_show(self, worker_id):
         return self.run("worker", "show", worker_id, "--read-only", json_output=True).payload
 
-    def worker_health(self, worker_id):
+    def worker_health(self, worker_id, json_output=True):
         """Return the readiness-ladder result, not its payload.
 
-        Callers walk the ladder by exit code (`worker_wait_ssh` and
-        `worker_bootstrap` return the same shape), so the payload is available
-        on `.payload` for anyone who needs the checks themselves. Returning the
-        bare payload here made every readiness walk raise AttributeError after
-        a paid worker had already been created.
+        Canonical RunPod health has a JSON report. At wavcse-infra commit
+        ``2d7640c``, the Colab branch accepts ``--json`` but still emits a plain
+        READY line; Colab callers therefore use ``json_output=False`` and rely on
+        its exit status. Provider/transport identity comes from ``worker list``.
         """
 
-        return self.run("worker", "health", worker_id, json_output=True)
+        return self.run("worker", "health", worker_id, json_output=json_output)
 
     def volume_list(self):
         result = self.run("volume", "list", "--read-only", json_output=True).payload or {}
@@ -323,35 +351,58 @@ class InfraCli(object):
 
     # --------------------------------------------------------------- mutating verbs
 
-    def job_submit(self, spec_path, worker_id):
-        return self.run(
-            "job", "submit", str(spec_path), "--worker", worker_id,
-            json_output=True, check=False,
-        )
+    def job_submit(self, spec_path, worker_id=None, provider=None):
+        """Submit one exact-commit job to an owned READY worker.
+
+        Placement is explicit: an exact ``--worker`` id, a ``--provider`` to
+        restrict selection to, or neither (the control plane then applies its own
+        configured provider preference). The spec itself carries no provider, so
+        job identity is unaffected by which provider runs it.
+        """
+
+        args = ["job", "submit", str(spec_path)]
+        if worker_id:
+            args.extend(["--worker", worker_id])
+        if provider:
+            provider = _require_provider(provider)
+            if provider != providers.DEFAULT_PROVIDER:
+                args.extend(["--provider", provider])
+        return self.run(*args, json_output=True, check=False)
 
     def job_cancel(self, job_id):
         return self.run("job", "cancel", job_id, json_output=True, check=False)
 
-    def worker_create(self, *, name, gpu, cloud, image=None, template=None,
-                      gpu_count=1, container_disk_gb=20, volume_gb=0,
-                      volume_mount_path=None, network_volume_id=None,
-                      data_centers=(), max_price=None, start_ssh=True,
-                      require_direct_ssh=True, timeout=None):
-        """Request one Pod. Never retried by this layer.
+    def worker_create(self, *, provider=providers.DEFAULT_PROVIDER, name=None, gpu=None,
+                      cloud=None, image=None, template=None, gpu_count=1,
+                      container_disk_gb=20, volume_gb=0, volume_mount_path=None,
+                      network_volume_id=None, data_centers=(), max_price=None,
+                      start_ssh=True, require_direct_ssh=True, timeout=None):
+        """Request one execution resource, in the selected provider's own terms.
 
-        ``--yes`` is supplied because the caller is non-interactive; it bypasses
-        only the confirmation prompt, and the price guard still applies.
+        Only the options the provider defines are sent. RunPod keeps its Pod
+        request — generated name, offer, image/template, disk, volume, SSH and the
+        USD price guard. Colab allocates through its own lifecycle and rejects
+        every RunPod placement option, including ``--name`` and ``--max-price``:
+        its identity, runtime and CU policy are the provider's, not the caller's.
         """
 
-        args = [
-            "worker", "create",
-            "--name", name,
-            "--gpu", gpu,
-            "--cloud", cloud,
-            "--gpu-count", str(int(gpu_count)),
-            "--container-disk", str(int(container_disk_gb)),
-            "--yes",
-        ]
+        _require_provider(provider)
+        args = ["worker", "create"]
+        if provider != providers.DEFAULT_PROVIDER:
+            args.extend(["--provider", provider])
+        if provider == providers.COLAB:
+            if gpu:
+                args.extend(["--gpu", str(gpu)])
+            args.append("--yes")
+            return self.run(*args, check=False, timeout=timeout)
+
+        for field, value in (("name", name), ("gpu", gpu), ("cloud", cloud)):
+            if not value:
+                raise ConfigurationError(
+                    "RunPod worker creation requires --{}".format(field))
+        args.extend(["--name", str(name), "--gpu", str(gpu), "--cloud", str(cloud),
+                     "--gpu-count", str(int(gpu_count)),
+                     "--container-disk", str(int(container_disk_gb)), "--yes"])
         if image:
             args.extend(["--image", image])
         if template:
