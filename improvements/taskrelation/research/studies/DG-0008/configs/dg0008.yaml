@@ -1,0 +1,104 @@
+# DG-0008 exact-opportunity ER-target residual diagnostic (Stage 1 only).
+#
+# One shared regime for both cells and both arms: the sole intended arm
+# difference is whether the auxiliary cross-entropy term contributes to the
+# loss.  The validation-driven scheduler is removed symmetrically, so the LR is
+# fixed at 0.0025 for every step.  Cells/arms/folds/seeds are supplied on the
+# command line; this file carries no scientific degrees of freedom.
+
+log_level: INFO
+seed: 0
+
+device:
+  type: cuda
+  index: 0
+
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/embedding
+  results_root: improvements/taskrelation/research/studies/DG-0008/outputs
+  checkpoints_root: improvements/taskrelation/research/studies/DG-0008/outputs
+
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: smp
+  layer_pooling_param: 0.5
+
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+
+training:
+  num_epochs: 5
+  batch_size: 2048
+  learning_rate: 0.0025
+  weight_decay: 0.00000005
+  saved_checkpoint_count: 1
+  shuffle_train: false
+  shuffle_val: false
+  pin_memory: true
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 0
+  l1_lambda: 0.0000001
+  l2_lambda: 0.00001
+
+evaluation:
+  batch_size: 2048
+  shuffle: false
+  pin_memory: true
+  drop_last: false
+  num_workers: 0
+
+dg0008:
+  cells: [ks_er, si_er]
+  arms: [pair, control]
+  seeds: [0, 1, 2, 3, 4]
+  folds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  target_task: er
+  target_coefficient: 0.5
+  aux_coefficient: 0.5
+  delta: 0.010
+  # Coarse DG-0001 sanity envelope only; the exact measured bounds are recorded
+  # at the freeze point and passed to check_validity_gate.py.  Not a reproduction.
+  s_envelope: [1, 1000000]
+
+experiment:
+  stop_after_epochs: 5
+
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: wavcse-baseline
+
+# ----------------------------
+# Research identity (canonical field names; consumed by
+# improvements/mlflow_utils.py's build_research_run_name/set_standard_tags and
+# resolve_run_note).  The per-arm method is resolved from `methods` by
+# run_dg0008.py and written back into `method` before naming/tagging the run, so
+# every one of the 201 members carries the Study's identity (AGENTS.md #12).
+# ----------------------------
+research:
+  study_id: DG-0008
+  stage: stage1_screen
+  family: task_relation_learning
+  hypothesis_slug: exact-opportunity-er-target-residual
+  task_set: ks_er+si_er
+  representation: smp25
+  baseline_study: DG-0001
+  agent_generated: true
+  status: blocked
+  run_note_file: improvements/taskrelation/research/studies/DG-0008/NOTE.md
+  methods:
+    pair: wavcse-baseline-exact-opportunity-pair
+    control: wavcse-baseline-exact-opportunity-control

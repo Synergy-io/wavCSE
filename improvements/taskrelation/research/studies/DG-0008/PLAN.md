@@ -1,6 +1,6 @@
 # DG-0008 — Exact-opportunity ER-target residual diagnostic
 
-Status: **REGISTERED / BLOCKED — zero-cost implementation and preflight only; no compute authorized**
+Status: **REGISTERED / IMPLEMENTED (zero-cost) / BLOCKED — implementation committed, no compute authorized**
 Type: diagnostic (behavioral transfer characterization; no mechanism)
 Created: 2026-10-04T05:38:12Z
 Proposal: `DP-0008`, `../../proposals/DG-0008_exact_matched_directed_transfer.md`
@@ -126,17 +126,17 @@ A later benchmark authorization, if granted, must bind the committed implementat
 
 ## Current blockers and stop rule
 
-Registration itself is complete. Execution remains blocked until all of these hold:
+Registration is complete and the approved experiment is implemented and locally validated. Execution remains blocked on the following, each verified in the 2026-10-04 zero-cost preparation increment:
 
-1. lawful Speech Commands, VoxCeleb1, and licence-gated IEMOCAP raw metadata/corpus availability is established;
-2. canonical embeddings and their declared digests are available and independently admitted;
-3. identity and opportunity artifacts are generated and frozen;
-4. the approved experiment implementation and focused local validation are committed;
-5. canonical `compute/plan.json` and `compute/inputs.json` validate and bind the implementation and inputs;
-6. the deterministic infra command surface required by `improvements.compute` is committed and passes its checks;
-7. a compatible-GPU five-epoch benchmark lawfully bounds runtime;
-8. current provider/storage prices, lifetimes, retry allowance, and total cost are bounded;
-9. the human commits a separate `authorizations/DG-0008.yaml` envelope covering the exact intended paid action; and
-10. a fresh deterministic Execution Plane assessment reaches `PREFLIGHT_ACCEPTED` without forcing acceptance.
+1. **OPEN (human).** Lawful Speech Commands, VoxCeleb1 and licence-gated IEMOCAP raw metadata/corpus availability is not established. No raw corpus exists on this workstation (`~/voice_dataset` absent); the sources are not recorded in-tree; IEMOCAP is LDC licence-gated.
+2. **OPEN (human/executor).** Canonical embeddings are absent locally but declared as a committed project record (15 SHA-256 object declarations inherited from the identical `wavlm_large`+`mean` configuration in DG-0007/TR-0007 `compute/inputs.json`); the canonical store is private S3 and unreachable from the workstation. Condition (a) of dual identity admission is verified at execution; the declarations are not independently re-derived locally.
+3. **OPEN (executor, blocked on 1).** The identity and opportunity artifacts do not exist; they are generator outputs after lawful restoration, and `L`, `S`, `n_ER[cell,s,f,e,k]` must not be fabricated.
+4. **DONE.** The approved experiment implementation and focused local validation are committed; the accepted `IF-MANIFEST-IO=STREAM_CANONICAL_BYTES` choice is now genuinely implemented, with streamed bytes and digests proven equal to the canonical materializing oracle.
+5. **PARTIAL.** `studies/DG-0008/compute/inputs.json` is written and validates; `studies/DG-0008/compute/plan.json` cannot be produced truthfully yet: `improvements.compute.jobspec.validate_plan` requires a concrete non-empty `worker.gpu_type` (chosen at authorization-time offer discovery), a benchmark-derived `timeout_seconds`, and one literal arm per `(cell, arm, fold)` because `expand_argv` supports only `{task_type}`, `{config}`, `{device_index}` and `{seed}` — i.e. 40 arms plus a distinct repeat arm, while the gate members' one-at-a-time ordering belongs to the authorization's concurrency limit, not the plan.
+6. **PARTIAL — decision required.** The embedded `infra/` subsystem at v0.1.1 (this increment) now satisfies the option-level contract consumed by `improvements.compute` for the verbs it implements (`worker list/show --read-only`, `worker create --require-direct-ssh`), and its gate passes. The whole `volume`, `storage` and `job` verb families are absent from both this repository's `infra/` and the standalone `wavcse-infra` checkout, so no job spec can be submitted. Closing that gap is a feature program (RunPod network-volume API version decision, an exact-commit remote-execution engine, S3 transport), not a MAINTAIN-mode repair; it needs an explicit human scope decision and cannot be established without a live worker.
+7. **OPEN (infra).** No compatible-GPU five-epoch benchmark exists; runtime and total GPU-hours are unknown and no benchmark is authorized.
+8. **OPEN (human).** Provider offer price, storage/retention rate, worker lifetime, retry allowance and the resulting total-cost ceiling are unbounded; unknown price or lifetime fails closed for new spend.
+9. **OPEN (human).** `authorizations/DG-0008.yaml` does not exist and must not be created without a later bounded human grant.
+10. **OPEN.** A fresh deterministic Execution Plane assessment has not reached `PREFLIGHT_ACCEPTED`; the current assessment is correctly `BLOCKED`.
 
 Missing or restricted data, identity mismatch, deterministic failure, unbounded cost/lifetime, absent authority, or any requested scientific change stops execution. No unavailable value may be invented and no dataset may be substituted.
