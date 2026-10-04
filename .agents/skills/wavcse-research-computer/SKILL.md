@@ -6,9 +6,10 @@ description: Run the wavCSE research-computer loop — a human goal to evidence,
 # wavCSE Research Computer V1
 
 One control loop from a human research goal to a **reviewed, human-gated
-proposal**, then stop. V1 ends at the human gate: it never authorizes a study,
-provisions a worker, submits a job or spends money. Execution, monitoring and
-recovery are later increments with their own contracts.
+proposal**, then stop. This proposal loop ends at the human gate: it never
+authorizes a study, provisions a worker, submits a job or spends money.
+Execution Plane V1 is the separate post-`APPROVED` contract in
+`wavcse-execution-plane`; it does not change this lifecycle or this stopping rule.
 
 This skill wires existing components; it does not replace them. Study-design
 content is `wavcse-experiment-operator`, cycle execution is `wavcse-research-runner`

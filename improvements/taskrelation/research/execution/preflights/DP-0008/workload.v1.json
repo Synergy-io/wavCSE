@@ -1,0 +1,687 @@
+{
+  "change_request_ref": null,
+  "existing_contracts": {
+    "authorization_path": null,
+    "compute_interface": "python -m improvements.compute",
+    "compute_plan_path": null,
+    "study_plan_path": null,
+    "study_registered": false
+  },
+  "implementation": {
+    "checkpointing": {
+      "mode": "One fixed-final-epoch checkpoint per matrix member, created and read back; the four fold-0/seed-0 gate members are reused inside the 200-member matrix.",
+      "resume": "Only an infrastructure-failed job may be repeated with the same identity digest, run-manifest digest, serialized initialization and pre-forward RNG, config and commit; the failed attempt is retained. No outcome-based rerun and no invented tolerance."
+    },
+    "commit": null,
+    "compute_plan_path": null,
+    "entrypoint": null,
+    "environment": [
+      "Python 3.9 (repository constraint)",
+      "committed lockfile with pinned CUDA/cuDNN stack shared by all comparisons",
+      "torch.use_deterministic_algorithms(True, warn_only=False)",
+      "torch.backends.cudnn.deterministic=True and benchmark=False",
+      "torch.backends.cuda.matmul.allow_tf32=False",
+      "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+      "one GPU model and one worker environment for every run"
+    ],
+    "status": "PLANNED",
+    "validation_commands": [
+      {
+        "argv": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_dg0008_identity_manifest"
+        ],
+        "evidence": "Identical bytes and errors: canonical keys, labels and split/fold membership and exact JSON bytes cannot be checked until the generator and corpus exist and Study DG-0008 is registered.",
+        "status": "PENDING"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_dg0008_opportunity_manifest"
+        ],
+        "evidence": "Tuple-associated per-epoch/run/matrix digests, n_ER and pair-equality checks are unimplemented and unregistered.",
+        "status": "PENDING"
+      },
+      {
+        "argv": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_dg0008_pinned_determinism"
+        ],
+        "evidence": "The same-arm bitwise repeat gate is a GPU zero-cost-pending check that cannot run before corpus, identity, compute plan and authorization exist.",
+        "status": "PENDING"
+      }
+    ]
+  },
+  "implementation_flexible": [
+    {
+      "allowed_values": [
+        "MATERIALIZE",
+        "STREAM_CANONICAL_BYTES"
+      ],
+      "guard": "Both paths emit byte-identical canonical JSON per the clause-5/11 rules and the same per-epoch, run-level and matrix SHA-256 digests; they differ only in whether per-epoch manifests are held in memory or streamed to the digest.",
+      "id": "IF-MANIFEST-IO",
+      "name": "bounded-memory canonical opportunity-manifest construction",
+      "value": "MATERIALIZE"
+    }
+  ],
+  "io": {
+    "inputs": [
+      {
+        "id": "INPUT-RAW-CORPUS",
+        "integrity": "Independent raw-metadata dg0008.example-identity.v1 bytes and digest, byte-identical to the frozen artifact.",
+        "requirement": "Lawfully restored Speech Commands v0.01, VoxCeleb1 and licence-gated IEMOCAP laid out per WORKER_ENVIRONMENT.md section 2, verified by counts and loader construction.",
+        "status": "MISSING"
+      },
+      {
+        "id": "INPUT-EMBEDDINGS",
+        "integrity": "Compute-plan SHA-256 set; zero embedding-digest mismatches.",
+        "requirement": "The 15 canonical embedding objects for the frozen wavlm_large / mean / smp(0.5) configuration.",
+        "status": "MISSING"
+      },
+      {
+        "id": "INPUT-IDENTITY-MANIFEST",
+        "integrity": "lowercase sha256(J(identity_object)).",
+        "requirement": "Identity object bytes and digest frozen in the registered Study compute inputs before training.",
+        "status": "MISSING"
+      },
+      {
+        "id": "INPUT-OPPORTUNITY-MANIFESTS",
+        "integrity": "dg0008.opportunity-manifest.v2 with the clause-12 tuple-to-digest association.",
+        "requirement": "Per-epoch canonical opportunity manifests for every (cell, fold, seed, epoch) plus run-level and matrix digests.",
+        "status": "MISSING"
+      },
+      {
+        "id": "INPUT-COMPUTE-PLAN",
+        "integrity": "Strict improvements.compute.jobspec schema; no job spec is duplicated here.",
+        "requirement": "Committed studies/DG-0008/compute/{plan.json,inputs.json}.",
+        "status": "MISSING"
+      },
+      {
+        "id": "INPUT-WORKER-ENV",
+        "integrity": "Raw tree verified by the count check and LoadEmbedding construction; volume attached before the first job.",
+        "requirement": "One compatible GPU worker with a ~200 GB network volume attached at pod creation in the volume's data center.",
+        "status": "MISSING"
+      }
+    ],
+    "required_outputs": [
+      {
+        "id": "OUTPUT-IDENTITY",
+        "integrity": "Byte-identical to the independently reviewed freeze.",
+        "requirement": "Canonical identity manifest JSON bytes and digest.",
+        "status": "PLANNED"
+      },
+      {
+        "id": "OUTPUT-OPPORTUNITY",
+        "integrity": "Exact canonical JSON object bytes and tuple-to-digest association; per-epoch objects, not digests only.",
+        "requirement": "Every per-epoch dg0008.opportunity-manifest.v2 object is emitted, recorded and frozen together with its digest, plus the run-level and matrix digests and the exact L/S/n_ER values.",
+        "status": "PLANNED"
+      },
+      {
+        "id": "OUTPUT-TRACE",
+        "integrity": "Matching within each pair and across the determinism repeat.",
+        "requirement": "Initialization hash, pre-forward RNG-state sequence and identity/manifest trace artifacts per run.",
+        "status": "PLANNED"
+      },
+      {
+        "id": "OUTPUT-CHECKPOINTS",
+        "integrity": "Created and read back; bitwise-equal for the repeat.",
+        "requirement": "200 matrix fixed-final checkpoints plus the determinism-repeat checkpoint.",
+        "status": "PLANNED"
+      },
+      {
+        "id": "OUTPUT-ENDPOINTS",
+        "integrity": "Read only after every validity gate passes.",
+        "requirement": "Held-out fixed-final-epoch ER accuracy per matrix member and the per-step loss trace.",
+        "status": "PLANNED"
+      },
+      {
+        "id": "OUTPUT-ANALYSIS",
+        "integrity": "Frozen analysis code; folds nested, not independent.",
+        "requirement": "Seed-level T[SI], T[KS], D interval analysis and the H1/H2/H3/INCONCLUSIVE classification.",
+        "status": "PLANNED"
+      },
+      {
+        "id": "OUTPUT-VALIDITY-GATE",
+        "integrity": "Fail-closed; any failure invalidates the execution.",
+        "requirement": "Stage-1 validity gate record with the required-zero counts and S sanity envelope.",
+        "status": "PLANNED"
+      }
+    ]
+  },
+  "kind": "execution_workload",
+  "proposal": {
+    "allocated_study_id": "DG-0008",
+    "approved_at": "2026-10-03T16:18:45+00:00",
+    "approved_by": "Kevin Sanjula <kevinxsanjula@gmail.com>",
+    "path": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md",
+    "proposal_id": "DP-0008",
+    "sha256": "c3548d7f9bae2881dcd833c9ddb19e5abb0df174ae76692dac79ab6b566572bc",
+    "status": "APPROVED"
+  },
+  "readiness": {
+    "blockers": [
+      {
+        "class": "PREREQUISITE",
+        "detail": "DG-0008 is not registered: absent from STUDIES.jsonl and no studies/DG-0008/PLAN.md.",
+        "id": "B-REGISTRATION",
+        "owner": "HUMAN"
+      },
+      {
+        "class": "AUTHORITY",
+        "detail": "No committed authorizations/DG-0008.yaml and no human price/spend/lifetime envelope; unknown price or lifetime fails closed.",
+        "id": "B-AUTHORIZATION",
+        "owner": "HUMAN"
+      },
+      {
+        "class": "PREREQUISITE",
+        "detail": "Raw corpus farm destroyed, IEMOCAP licence-gated and in-tree source locations unrecorded; lawful restoration and byte-identical example/split identity evidence are absent.",
+        "id": "B-CORPUS",
+        "owner": "HUMAN"
+      },
+      {
+        "class": "PREREQUISITE",
+        "detail": "No committed studies/DG-0008/compute/{plan.json,inputs.json}; the DG-0001 S envelope is sanity-only.",
+        "id": "B-COMPUTE-PLAN",
+        "owner": "EXECUTOR"
+      },
+      {
+        "class": "IMPLEMENTATION",
+        "detail": "generate_opportunity_manifest.py, the manifest-driven sampler, the default-off auxiliary-loss hook, the fixed-LR diagnostic mode and pinned-equality checks are not implemented.",
+        "id": "B-IMPLEMENTATION",
+        "owner": "EXECUTOR"
+      },
+      {
+        "class": "PREREQUISITE",
+        "detail": "No frozen canonical embedding SHA-256 set or identity digest exists, so dual identity admission cannot be evaluated.",
+        "id": "B-EMBEDDING-IDENTITY",
+        "owner": "EXECUTOR"
+      },
+      {
+        "class": "UNKNOWN",
+        "detail": "Five-epoch runtime for each arm class is unmeasured; total GPU-hours and cost remain null.",
+        "id": "B-BENCHMARK",
+        "owner": "INFRA"
+      },
+      {
+        "class": "UNKNOWN",
+        "detail": "The selected compatible GPU offer, its current hourly rate and the maximum paid lifetime are unknown.",
+        "id": "B-COMPATIBLE-GPU",
+        "owner": "INFRA"
+      },
+      {
+        "class": "LIFECYCLE",
+        "detail": "Stage 1 cannot run until the corpus, dual identity, compute plan, implementation and human authorization all exist.",
+        "id": "B-LIFECYCLE",
+        "owner": "MAIN_OMP"
+      }
+    ],
+    "state": "BLOCKED"
+  },
+  "resource_profile": {
+    "constraints": [
+      {
+        "name": "one_live_job_workspace",
+        "source": "WORKER_ENVIRONMENT.md section 5",
+        "value": "exactly one job workspace at a time"
+      },
+      {
+        "name": "container_disk_gb",
+        "source": "WORKER_ENVIRONMENT.md section 5",
+        "value": "at or above the recorded 100 GB minimum"
+      },
+      {
+        "name": "raw_corpus_network_volume",
+        "source": "WORKER_ENVIRONMENT.md section 4",
+        "value": "~200 GB STANDARD attached at pod creation in the volume's data center"
+      },
+      {
+        "name": "gpu_cuda_arch",
+        "source": "WORKER_ENVIRONMENT.md section 6",
+        "value": "no newer than sm_90; Blackwell hard-filtered before price"
+      },
+      {
+        "name": "gpu_selection",
+        "source": "proposal section Expected compute",
+        "value": "cheapest compatible offer in the volume's data center, hourly ceiling passed through --max-price"
+      },
+      {
+        "name": "matrix_concurrency_cap",
+        "source": "VARIANT_BENCHMARK_PROTOCOL.md section 9",
+        "value": "at most two concurrent jobs after the one-at-a-time gate jobs"
+      },
+      {
+        "name": "unknown_price_or_lifetime",
+        "source": ".agents/policies/autonomy.md",
+        "value": "fails closed; no new spend without a human price/spend/lifetime envelope"
+      }
+    ],
+    "estimated_cost": {
+      "basis": "Corpus restoration, storage lifetime, worker rate and idle/teardown are UNKNOWN; unknown price or lifetime fails closed.",
+      "currency": "USD",
+      "value": null
+    },
+    "estimated_runtime": {
+      "basis": "Five-epoch training-plus-validation duration for all four arm classes and the repeat is UNKNOWN until a compatible-GPU benchmark measures or safely bounds it; no ceiling is claimed.",
+      "unit": "gpu_hours",
+      "value": null
+    },
+    "telemetry_required": [
+      "job state",
+      "process liveness",
+      "heartbeat",
+      "artifact progress",
+      "disk availability",
+      "worker/job runtime and derived cost",
+      "gpu model and memory capacity"
+    ]
+  },
+  "revision": 1,
+  "schema_version": 1,
+  "scientific_invariants": [
+    {
+      "id": "SI-CELLS-ARMS",
+      "name": "two-cell two-arm exact-matched matrix",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Proposed study",
+      "value": {
+        "arms": [
+          "pair",
+          "control"
+        ],
+        "cells": [
+          "ks_er",
+          "si_er"
+        ],
+        "control_aux_loss": "disabled",
+        "ks_si_cell": "absent",
+        "matching_scope": "within-cell only",
+        "pair_aux_loss": "enabled",
+        "reverse_cells": []
+      }
+    },
+    {
+      "id": "SI-SEEDS-FOLDS",
+      "name": "seed and fold units",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Hypotheses",
+      "value": {
+        "folds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "independent_unit": "seed",
+        "n15_branch": false,
+        "n_seeds": 5,
+        "nested_observations": "seed-fold, never 50 independent units",
+        "seeds": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      }
+    },
+    {
+      "id": "SI-LOSO",
+      "name": "speaker-independent ten-fold LOSO",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Evidence basis",
+      "value": {
+        "definition": "improvements/base/kfold_iemocap.py::build_loso_fold",
+        "fold_rule": "fold f: test speakers[f], validation speakers[(f+1) mod 10], train other eight",
+        "speakers_sorted": true,
+        "validation_test_disjoint": true
+      }
+    },
+    {
+      "id": "SI-REGIME",
+      "name": "frozen-embedding fixed-LR five-epoch regime",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Proposed study",
+      "value": {
+        "batch_size": 2048,
+        "drop_last_train": true,
+        "epochs": 5,
+        "frame_pooling": "mean",
+        "layer_pooling": "smp(0.5) over all 25 layers",
+        "lr": 0.0025,
+        "lr_schedule": "fixed every step; validation-driven scheduler removed symmetrically",
+        "optimizer": "AdamW",
+        "other_endpoints": "KS and SI outcomes are not endpoints",
+        "sanity_envelope": "DG-0001 S envelope is sanity-only, not a reproduction",
+        "sole_scientific_endpoint": "fixed-final-epoch ER accuracy",
+        "upstream": "wavlm_large frozen"
+      }
+    },
+    {
+      "id": "SI-INTERVENTION",
+      "name": "auxiliary-loss switch as the only intended arm difference",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Proposed study",
+      "value": {
+        "control_w_aux": 0,
+        "forward_graph": "both arms execute the forward graph before the loss-term switch",
+        "hook": "default-off diagnostic hook, not a loss-weighting method",
+        "model": "same two-head model",
+        "pair_w_aux": 0.5,
+        "stream": "same combined input stream",
+        "w_ER": 0.5
+      }
+    },
+    {
+      "id": "SI-MATCHED-CONTROL",
+      "name": "within-cell matched-control equality set",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Proposed study",
+      "value": {
+        "shared": [
+          "dataset membership",
+          "ordered manifests",
+          "epoch and step counts",
+          "per-step ER counts",
+          "serialized initialization",
+          "Python/NumPy/CPU-Torch/CUDA/DataLoader-worker/dropout RNG states",
+          "forward graph",
+          "target-loss coefficient",
+          "LR sequence",
+          "precision",
+          "checkpoint point",
+          "evaluation code"
+        ]
+      }
+    },
+    {
+      "id": "SI-REGULARIZATION",
+      "name": "common regularization and optimizer",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Proposed study",
+      "value": {
+        "l1": 1e-07,
+        "l2": 1e-05,
+        "optimizer_implementation": "common",
+        "weight_decay": 5e-08
+      }
+    },
+    {
+      "id": "SI-MANIFEST-CANONICAL",
+      "name": "canonical manifest generation contract",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md### Opportunity and identity manifests — fully declarative specification",
+      "value": {
+        "dataset_keys": "Speech Commands / VoxCeleb1 / IEMOCAP extracted per the verified loader readers",
+        "epoch_convention": "zero-based e in 0..4; steps zero-based k in 0..S-1; endpoint after e=4",
+        "generator": "committed CPU-only, no-training generate_opportunity_manifest.py",
+        "key_uniqueness": "duplicate canonical key after normalization is fatal",
+        "normalization": "backslashes to '/', reject NUL/absolute/drive-qualified/empty/dot/dotdot segments, no filesystem resolution, symlink dereference, case-fold, percent-decode or Unicode normalization",
+        "ordering": "ascending lexicographic order of canonical-key UTF-8 bytes"
+      }
+    },
+    {
+      "id": "SI-IDENTITY-MANIFEST",
+      "name": "digest-addressed example/split identity manifest",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md### Opportunity and identity manifests — fully declarative specification",
+      "value": {
+        "components": [
+          "speechcommand",
+          "voxceleb",
+          "iemocap"
+        ],
+        "digest": "lowercase sha256(J(identity_object))",
+        "includes": "effective KS class, effective SI speaker id/index, ER label after exc->hap, official split, all ten LOSO fold memberships",
+        "independent_source": "restored raw corpus official metadata, not embedding filenames/tensors/predictions",
+        "schema": "dg0008.example-identity.v1"
+      }
+    },
+    {
+      "id": "SI-CANONICAL-JSON",
+      "name": "canonical JSON bytes and tuple-to-digest association",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md### Opportunity and identity manifests — fully declarative specification",
+      "value": {
+        "J": "json.dumps(x, sort_keys=True, separators=(',',':'), ensure_ascii=False, allow_nan=False).encode('utf-8')",
+        "forbidden": "delimiter-joined text or bare sorted digest lists",
+        "matrix_digest": "sha256(J(all entries sorted by (cell UTF-8 bytes, f, s, e)))",
+        "run_array": "[[cell,f,s,e,digest_e] for e in 0..4] in ascending epoch order",
+        "run_digest": "sha256(J(run_array)); attached to pair job, control job and determinism repeat"
+      }
+    },
+    {
+      "id": "SI-PERMUTATION",
+      "name": "manifest seed, permutation and epoch-indexed opportunity schema",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md### Opportunity and identity manifests — fully declarative specification",
+      "value": {
+        "batching": "step k = ordered slice IN[2048k:2048(k+1)]; both arms consume the exact step",
+        "emission": "for each (cell,f,s,e) emit exactly the dg0008.opportunity-manifest.v2 object; step_keys has exactly S[cell,f] batches of exactly 2048 entries and n_er exactly S[cell,f] entries with n_er[k]=n_ER[cell,s,f,e,k]; per-epoch digest = lowercase sha256(J(manifest_object))",
+        "manifest_seed": "UTF-8 bytes of 'DG-0008|manifest|' + cell + '|f=' + str(f) + '|s=' + str(s) + '|e=' + str(e) verbatim",
+        "n_ER": "n_ER[cell,s,f,e,k] = count of iemocap entries in step k; epoch index mandatory",
+        "permutation": "counter-based keyed Fisher-Yates; j = int.from_bytes(SHA-256(('perm|'+seed+'|i='+str(i)).encode('utf-8')).digest()[:8],'big') % (i+1)",
+        "schema": "dg0008.opportunity-manifest.v2"
+      }
+    },
+    {
+      "id": "SI-LENGTHS-STEPS",
+      "name": "length and step derivation",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md### Opportunity and identity manifests — fully declarative specification",
+      "value": {
+        "L": "L[cell,f] = N_0 + N_1",
+        "S": "S[cell,f] = floor(L[cell,f] / 2048); trailing partial slice dropped",
+        "exactness": "L, S and n_ER are generator outputs, unknown until lawful corpus restoration, never fabricated"
+      }
+    },
+    {
+      "id": "SI-DUAL-IDENTITY-ADMISSION",
+      "name": "dual identity admission, fail closed",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md### Opportunity and identity manifests — fully declarative specification",
+      "value": {
+        "condition_a": "every declared canonical embedding object matches the compute plan SHA-256 set",
+        "condition_b": "fresh extraction from the raw corpus reproduces byte-identical dg0008.example-identity.v1 JSON and the same digest",
+        "mismatch": "stop",
+        "substitution": "embedding equality can never substitute for condition b"
+      }
+    },
+    {
+      "id": "SI-FREEZE-POINT",
+      "name": "pre-training freeze point",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md### Opportunity and identity manifests — fully declarative specification",
+      "value": {
+        "before": "any training or held-out endpoint read; all strict-schema checks must pass",
+        "freeze": "identity object/digest, every per-epoch object/digest, every run-level digest, the matrix-level digest and the emitted L, S and n_ER",
+        "per_epoch_persistence": "every per-epoch manifest object AND its digest are emitted, recorded and frozen; digests-only persistence is not admissible (clauses 11 and 14, finding 6 resolved fail-closed)"
+      }
+    },
+    {
+      "id": "SI-REPRODUCIBILITY",
+      "name": "deterministic pinned execution",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md### Reproducibility rule — pinned and fail closed",
+      "value": {
+        "cuda_matmul_allow_tf32": false,
+        "cudnn_benchmark": false,
+        "cudnn_deterministic": true,
+        "env": "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "stack": "committed lockfile, pinned CUDA/cuDNN, one GPU model, same worker environment",
+        "torch_use_deterministic_algorithms": "True, warn_only=False"
+      }
+    },
+    {
+      "id": "SI-SAME-ARM-REPEAT",
+      "name": "same-arm determinism repeat",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md### Reproducibility rule — pinned and fail closed",
+      "value": {
+        "bitwise_equal": [
+          "per-step loss trace",
+          "fixed-final validation ER accuracy",
+          "serialized checkpoint"
+        ],
+        "failure": "any deterministic-algorithm error or bitwise disagreement is fatal; no tolerance is invented, no held-out endpoint is read",
+        "held_out": "no held-out test result from the repeat is used",
+        "shares": "same five run-manifest epochs, run-level digest, initialization and RNG snapshot",
+        "target": "si_er control, fold 0, seed 0 second execution"
+      }
+    },
+    {
+      "id": "SI-HYPOTHESES",
+      "name": "exhaustive mutually exclusive screening vocabulary",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Hypotheses",
+      "value": {
+        "H1": "ER<-SI harmfully negative, ER<-KS practically null, D negative beyond delta",
+        "H2": "both auxiliaries harm ER beyond delta, D practically equivalent to zero",
+        "H3": "both ER-target residuals practically equivalent to zero",
+        "INCONCLUSIVE": "every other valid pattern including opposite signs, a non-null KS cell without H1, or intervals too wide",
+        "classes": [
+          "H1",
+          "H2",
+          "H3",
+          "INCONCLUSIVE"
+        ],
+        "semantics": "behavioral pair-selectivity only; no semantic causation or full directionality claim"
+      }
+    },
+    {
+      "id": "SI-SESOI",
+      "name": "sole diagnostic SESOI and strict boundary rule",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Success and stop conditions",
+      "value": {
+        "boundary_equality": "not success; every region inequality is strict",
+        "delta": 0.01,
+        "origin": "DG-0001 pre-registered transfer-materiality boundary",
+        "unit": "ER-accuracy"
+      }
+    },
+    {
+      "id": "SI-INTERVALS",
+      "name": "seed-level interval construction",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Success and stop conditions",
+      "value": {
+        "D": "paired construction handles between-cell covariance; no zero-covariance assumption in the realized decision",
+        "folds": "nested description only, never 50 independent observations",
+        "per_quantity": "mean, sample SD over the five seed values, half-width t_.025,4 * sd / sqrt(5)",
+        "quantities": [
+          "T[SI]",
+          "T[KS]",
+          "D"
+        ]
+      }
+    },
+    {
+      "id": "SI-CLASSIFICATION",
+      "name": "interval classification regions",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Success and stop conditions",
+      "value": {
+        "H1": "mean_T[SI]+h_T[SI] < -delta; mean_T[KS]-h_T[KS] > -delta and mean_T[KS]+h_T[KS] < +delta; mean_D+h_D < -delta",
+        "H2": "mean_T[SI]+h_T[SI] < -delta; mean_T[KS]+h_T[KS] < -delta; mean_D-h_D > -delta and mean_D+h_D < +delta",
+        "H3": "for each c in {SI,KS}: mean_T[c]-h_T[c] > -delta and mean_T[c]+h_T[c] < +delta",
+        "INCONCLUSIVE": "every other valid result, including any boundary touch/cross and wide intervals",
+        "wide_interval": "never evidence of equivalence"
+      }
+    },
+    {
+      "id": "SI-STAGED-PLAN",
+      "name": "single scientific stage and exact job count",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md### Staged plan",
+      "value": {
+        "early_stop": "none outcome-based; stop after classification for H1/H2/H3/INCONCLUSIVE alike",
+        "excluded": [
+          "reverse cell",
+          "KS<->SI cell",
+          "30-epoch A0/A1 scale experiment",
+          "confirmation work",
+          "gradient diagnostics"
+        ],
+        "gate_members": "four fold-0/seed-0 matrix members are reused, not extra jobs",
+        "repeat": "1 same-arm five-epoch determinism repeat",
+        "stage1_jobs": "200 five-epoch matrix trainings (2 cells x 2 arms x 5 seeds x 10 folds)",
+        "total_training_jobs": 201
+      }
+    },
+    {
+      "id": "SI-VALIDITY-GATE",
+      "name": "Stage-1 fail-closed validity gate",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Success and stop conditions",
+      "value": {
+        "S_envelope": "within the coarse DG-0001 sanity envelope",
+        "checkpoint": "successful creation and read-back",
+        "failure": "any failure invalidates execution and is not evidence for or against H1-H3",
+        "held_out_reads": "0 before all gates and all 200 matrix trainings pass",
+        "repeat": "bitwise-identical",
+        "required_zero": [
+          "embedding-digest mismatches",
+          "identity-manifest byte/digest mismatches",
+          "opportunity-manifest or aggregate-digest mismatches",
+          "mismatched batch entries within a pair",
+          "mismatches in ER key order or n_ER",
+          "differences in step count, ER coefficient, LR sequence, initialization hash or pre-forward RNG-state sequence"
+        ]
+      }
+    },
+    {
+      "id": "SI-MEASUREMENTS",
+      "name": "measurement roles and non-discriminators",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Discriminating measurements",
+      "value": {
+        "gradient_diagnostics": "none in the matrix",
+        "nested": "fold-level residuals, held-out-speaker ranges, fold sign counts describe heterogeneity only",
+        "non_discriminating": [
+          "aggregate accuracy",
+          "KS/SI outcomes",
+          "manifest sizes",
+          "relation-object magnitude",
+          "deleted gradient-geometry suite"
+        ],
+        "primary": "five seed-level T[SI], T[KS], D with mean/SD/t 95% interval",
+        "validity": "equalities, manifest digests, n_ER and bitwise repeat decide admissibility, not transfer"
+      }
+    },
+    {
+      "id": "SI-SCOPE",
+      "name": "diagnostic screening scope",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Proposed study",
+      "value": {
+        "category": "DG-xxxx behavioral transfer characterization, no mechanism",
+        "confirmation": "future separately designed, reviewed, registered and authorized proposal/Study",
+        "mechanism_plateau": "does not increment the counter and cannot authorize a relation architecture",
+        "promotion": "no class promotes a finding or continues DG-0008"
+      }
+    },
+    {
+      "id": "SI-LEAKAGE",
+      "name": "held-out test-workflow leakage guard",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Risks and confounds",
+      "value": {
+        "frozen_before_read": [
+          "cells",
+          "thresholds",
+          "labels",
+          "splits",
+          "manifests",
+          "digests",
+          "analysis code"
+        ],
+        "held_out_read": "no result read until all 200 matrix trainings and validity gates pass"
+      }
+    },
+    {
+      "id": "SI-UNKNOWN-BLOCKERS",
+      "name": "unknown resource classes block registration and authorization",
+      "source": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md#Expected compute",
+      "value": {
+        "rule": "each must be measured or bounded in a human-owned envelope before spend; unknown price or lifetime fails closed",
+        "unknowns": [
+          "lawful corpus acquisition/restoration time and cost",
+          "network-volume creation/storage rate, retention and cold-cache transfer",
+          "five-epoch training-plus-validation duration per arm class on the selected GPU",
+          "worker setup, idle, teardown and bounded retry allowance",
+          "selected compatible GPU current rate, maximum paid lifetime and total-cost ceiling"
+        ]
+      }
+    }
+  ],
+  "supersedes": null,
+  "workload_digest": "2a99d0b76302657091bd7ced5f8517b1fcd7efc3ce9a2725b37cbc7dc5f8f76b",
+  "workload_id": "DP-0008-W01"
+}

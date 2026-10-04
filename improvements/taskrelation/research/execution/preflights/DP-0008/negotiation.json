@@ -1,0 +1,54 @@
+{
+  "current_workload_ref": {
+    "digest": "b0340df0c4bd69888367b1290d6803d130035472f78a024c5393c1eca58fe883",
+    "revision": 2,
+    "workload_id": "DP-0008-W01"
+  },
+  "escalation": null,
+  "kind": "execution_negotiation",
+  "max_rounds": 3,
+  "negotiation_digest": "452e669ea2223a689c433ac9bf4e018794e0933c530d7a5de98c9d933c8059db",
+  "negotiation_id": "DP-0008-N01",
+  "proposal_ref": {
+    "allocated_study_id": "DG-0008",
+    "approved_at": "2026-10-03T16:18:45+00:00",
+    "approved_by": "Kevin Sanjula <kevinxsanjula@gmail.com>",
+    "path": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md",
+    "proposal_id": "DP-0008",
+    "sha256": "c3548d7f9bae2881dcd833c9ddb19e5abb0df174ae76692dac79ab6b566572bc",
+    "status": "APPROVED"
+  },
+  "rounds": [
+    {
+      "assessment_ref": {
+        "assessment_id": "DP-0008-A01",
+        "digest": "b758372c2ced279a2db993f889c0325f1bdbf079aac65d5f235a3d42739156b4",
+        "round": 1
+      },
+      "decision": "REQUEST_IMPLEMENTATION_CHANGE",
+      "round": 1,
+      "workload_ref": {
+        "digest": "2a99d0b76302657091bd7ced5f8517b1fcd7efc3ce9a2725b37cbc7dc5f8f76b",
+        "revision": 1,
+        "workload_id": "DP-0008-W01"
+      }
+    },
+    {
+      "assessment_ref": {
+        "assessment_id": "DP-0008-A02",
+        "digest": "09b669d3885d4484a7a5386ad578a84122302bb58f05e79fc26be5da784c3c92",
+        "round": 2
+      },
+      "decision": "BLOCKED",
+      "round": 2,
+      "workload_ref": {
+        "digest": "b0340df0c4bd69888367b1290d6803d130035472f78a024c5393c1eca58fe883",
+        "revision": 2,
+        "workload_id": "DP-0008-W01"
+      }
+    }
+  ],
+  "schema_version": 1,
+  "status": "BLOCKED",
+  "transcript_required": false
+}

@@ -1,0 +1,193 @@
+{
+  "assessment_digest": "b758372c2ced279a2db993f889c0325f1bdbf079aac65d5f235a3d42739156b4",
+  "assessment_id": "DP-0008-A01",
+  "blockers": [
+    {
+      "class": "PREREQUISITE",
+      "detail": "DG-0008 is not registered: absent from STUDIES.jsonl and no studies/DG-0008/PLAN.md.",
+      "id": "B-REGISTRATION",
+      "owner": "HUMAN"
+    },
+    {
+      "class": "AUTHORITY",
+      "detail": "No committed authorizations/DG-0008.yaml and no human price/spend/lifetime envelope; unknown price or lifetime fails closed.",
+      "id": "B-AUTHORIZATION",
+      "owner": "HUMAN"
+    },
+    {
+      "class": "PREREQUISITE",
+      "detail": "Raw corpus farm destroyed, IEMOCAP licence-gated and in-tree source locations unrecorded; lawful restoration and byte-identical example/split identity evidence are absent.",
+      "id": "B-CORPUS",
+      "owner": "HUMAN"
+    },
+    {
+      "class": "PREREQUISITE",
+      "detail": "No committed studies/DG-0008/compute/{plan.json,inputs.json}; the DG-0001 S envelope is sanity-only.",
+      "id": "B-COMPUTE-PLAN",
+      "owner": "EXECUTOR"
+    },
+    {
+      "class": "IMPLEMENTATION",
+      "detail": "generate_opportunity_manifest.py, the manifest-driven sampler, the default-off auxiliary-loss hook, the fixed-LR diagnostic mode and pinned-equality checks are not implemented.",
+      "id": "B-IMPLEMENTATION",
+      "owner": "EXECUTOR"
+    },
+    {
+      "class": "PREREQUISITE",
+      "detail": "No frozen canonical embedding SHA-256 set or identity digest exists, so dual identity admission cannot be evaluated.",
+      "id": "B-EMBEDDING-IDENTITY",
+      "owner": "EXECUTOR"
+    },
+    {
+      "class": "UNKNOWN",
+      "detail": "Five-epoch runtime for each arm class is unmeasured; total GPU-hours and cost remain null.",
+      "id": "B-BENCHMARK",
+      "owner": "INFRA"
+    },
+    {
+      "class": "UNKNOWN",
+      "detail": "The selected compatible GPU offer, its current hourly rate and the maximum paid lifetime are unknown.",
+      "id": "B-COMPATIBLE-GPU",
+      "owner": "INFRA"
+    },
+    {
+      "class": "LIFECYCLE",
+      "detail": "Stage 1 cannot run until the corpus, dual identity, compute plan, implementation and human authorization all exist.",
+      "id": "B-LIFECYCLE",
+      "owner": "MAIN_OMP"
+    },
+    {
+      "class": "CAPABILITY",
+      "detail": "The resolved embedded infra control plane (monorepo infra/, v0.1.0, commit 6a2e2bd) exposes only `doctor`, `config` and `worker`; the `volume`, `storage` and `job` verbs that improvements.compute drives (volume list/show/cache stats; storage list/verify/read/download; job list/status/logs/submit/cancel) are absent, so no job spec can be submitted.",
+      "id": "B-INFRA-SURFACE",
+      "owner": "INFRA"
+    },
+    {
+      "class": "VERSION",
+      "detail": "The infra tree is DIRTY: six tracked infra files are modified (AGENTS.md, README.md, controller/cloud-init.yaml, docs/ARCHITECTURE.md, docs/OPERATIONS.md, docs/SPEC.md), so no clean committed infra version can be identified as the one that would operate the Study.",
+      "id": "B-INFRA-VERSION",
+      "owner": "INFRA"
+    }
+  ],
+  "change_requests": [
+    {
+      "classification": "IMPLEMENTATION_FLEXIBLE",
+      "id": "CR-001",
+      "reason": "Each dg0008.opportunity-manifest.v2 object embeds step_keys of exactly S x 2048 entries, and 500 (cell, fold, seed, epoch) objects exist; holding the whole matrix resident is avoidable. Streaming each per-epoch canonical object to its SHA-256 and to the frozen output preserves the clause-5/11 J byte identity, the clause-12 tuple-to-digest association and every per-epoch, run-level and matrix digest, so the streamed path bounds peak memory without touching any scientific invariant.",
+      "requested_value": "STREAM_CANONICAL_BYTES",
+      "target_id": "IF-MANIFEST-IO"
+    }
+  ],
+  "decision": "REQUEST_IMPLEMENTATION_CHANGE",
+  "estimated_cost": {
+    "basis": "GPU rate, total runtime, storage lifetime and idle/teardown are all unmeasured; unknown price or lifetime fails closed under .agents/policies/autonomy.md.",
+    "currency": "USD",
+    "value": null
+  },
+  "estimated_runtime": {
+    "basis": "Five-epoch training-plus-validation duration for each of the four arm classes and the repeat is unmeasured; the 201-job total is unknown until a compatible-GPU benchmark measures or safely bounds one run.",
+    "unit": "gpu_hours",
+    "value": null
+  },
+  "expected_bottlenecks": [
+    "opportunity-manifest construction: 500 per-epoch objects each carry all S x 2048 step keys; MATERIALIZE holds the whole matrix resident, which STREAM_CANONICAL_BYTES avoids without changing canonical bytes or digests",
+    "no compatible-GPU five-epoch benchmark exists, so runtime and cost stay null and cannot be bounded",
+    "unknown provider hourly price and unknown maximum paid lifetime leave spend unbounded",
+    "the resolved embedded infra exposes only doctor/config/worker, so job submission, storage reads and volume attachment are unavailable",
+    "one live job workspace with at most two concurrent matrix jobs serialises the 201 trainings",
+    "~200 GB corpus volume must be attached at pod creation in its own data centre and the container disk must be at least 100 GB",
+    "GPU utilisation, CPU/RAM utilisation, disk I/O and network throughput are not exposed, so utilisation bottlenecks cannot be observed"
+  ],
+  "failure_class": null,
+  "feasible": false,
+  "infra_version": {
+    "commit": "6a2e2bddfe3589ab2433b090ab56e4a451fbf9a5",
+    "repository": "infra",
+    "tree_state": "DIRTY",
+    "version": "0.1.0"
+  },
+  "kind": "execution_assessment",
+  "maintenance": {
+    "failure_ref": null,
+    "fix_commit": null,
+    "re_evaluation_required": false,
+    "status": "NOT_REQUIRED"
+  },
+  "mode": "OPERATE",
+  "observed_bottlenecks": [],
+  "policy": {
+    "authorization_path": null,
+    "reason": "No committed improvements/taskrelation/research/authorizations/DG-0008.yaml (envelope-check --scope DG-0008 --action submit-job exits 3 AuthorizationError); the budget is undeclared and unknown, so new spend fails closed.",
+    "within_budget": null
+  },
+  "recommended_action": "Executor revision: set IF-MANIFEST-IO to STREAM_CANONICAL_BYTES, emitting and freezing every per-epoch object and digest exactly as before. This clears only the construction-flexible request; execution stays blocked independently because DG-0008 is unregistered with no authorization, the raw corpus and dual-identity evidence are absent, no compute plan exists, no compatible-GPU benchmark bounds runtime/cost, and the resolved embedded infra (commit 6a2e2bd, v0.1.0, DIRTY tree) lacks the job/storage/volume surface, so no preflight can ACCEPT.",
+  "resource_recommendation": [
+    {
+      "name": "gpu_cuda_arch",
+      "source": "WORKER_ENVIRONMENT.md section 6",
+      "value": "no newer than sm_90; Blackwell hard-filtered before price"
+    },
+    {
+      "name": "gpu_selection",
+      "source": "proposal section Expected compute",
+      "value": "cheapest compatible offer in the corpus volume's data centre, hourly ceiling passed through --max-price"
+    },
+    {
+      "name": "raw_corpus_network_volume",
+      "source": "WORKER_ENVIRONMENT.md section 4",
+      "value": "~200 GB STANDARD attached at pod creation in the volume's data centre"
+    },
+    {
+      "name": "container_disk_gb",
+      "source": "WORKER_ENVIRONMENT.md section 5",
+      "value": "at or above the recorded 100 GB minimum"
+    },
+    {
+      "name": "matrix_concurrency_cap",
+      "source": "VARIANT_BENCHMARK_PROTOCOL.md section 9",
+      "value": "at most two concurrent jobs after the one-at-a-time gate jobs"
+    },
+    {
+      "name": "one_live_job_workspace",
+      "source": "WORKER_ENVIRONMENT.md section 5",
+      "value": "exactly one job workspace at a time"
+    },
+    {
+      "name": "training_job_count",
+      "source": "workload scientific invariant SI-STAGED-PLAN",
+      "value": "200 five-epoch matrix trainings plus 1 same-arm determinism repeat = 201 training jobs"
+    },
+    {
+      "name": "unknown_price_or_lifetime",
+      "source": ".agents/policies/autonomy.md",
+      "value": "fails closed; no new spend without a human price/spend/lifetime envelope"
+    }
+  ],
+  "round": 1,
+  "schema_version": 1,
+  "selected_strategy": "Streamed canonical opportunity-manifest construction (STREAM_CANONICAL_BYTES), then 200 five-epoch matrix trainings plus one determinism repeat under exactly one job workspace, at most two concurrent after the one-at-a-time gate members, all on one compatible GPU model no newer than sm_90.",
+  "telemetry": {
+    "deterministic": [
+      "worker and job state (infra worker list/show, job list/status)",
+      "job liveness, heartbeat and progress (job status, job logs --tail-bytes)",
+      "artifact progress and identity (storage verify/read, artifact digests)",
+      "disk availability (worker health)",
+      "GPU model and memory capacity (worker health)",
+      "worker/job runtime and derived cost (lease records and spend derivation)",
+      "controller/service readiness (doctor, worker health)"
+    ],
+    "reasoning_triggers": [
+      "job not terminal and heartbeat/progress stale beyond the lease window",
+      "disk availability below the container-disk threshold",
+      "artifact digest or size mismatch on read-back",
+      "derived spend unbounded or a lease deadline exceeded",
+      "attempt budget for a scope exhausted",
+      "worker health ladder not READY before a billable action"
+    ]
+  },
+  "workload_ref": {
+    "digest": "2a99d0b76302657091bd7ced5f8517b1fcd7efc3ce9a2725b37cbc7dc5f8f76b",
+    "revision": 1,
+    "workload_id": "DP-0008-W01"
+  }
+}

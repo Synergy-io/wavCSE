@@ -10,7 +10,7 @@ variant benchmark contract in
 is not the question chooser: the autonomous cycle (`/wav-cycle`) selects and
 registers the Study; this command carries it out.
 
-Skills: wavcse-experiment-operator
+Skills: wavcse-experiment-operator, wavcse-execution-plane
 Boundaries: mutates-research-state, may-provision-compute
 
 ## Entry gates: refuse to start when unmet
@@ -23,12 +23,15 @@ Boundaries: mutates-research-state, may-provision-compute
 3. The plan's compute allocation is authorized by a committed envelope under
    `improvements/taskrelation/research/authorizations/`, and no other Study of
    this programme already holds the required compute.
+4. A sealed Execution Plane preflight has reached `PREFLIGHT_ACCEPTED` for the
+   exact approved proposal and exact workload revision being executed. The
+   assessment grants no authority; gates 1–3 still apply independently.
 
-If the plan is missing, unapproved, or a gate fails: stop and report the exact
-unmet gate. Never substitute a different experiment, choose a study yourself,
-or lower a gate to make progress. If the plan needs an implementation that is
-not yet committed, hand back to the committing cycle; this command does not
-commit.
+If the plan, authority or accepted preflight is missing, or any gate fails: stop
+and report the exact unmet gate. Never substitute a different experiment, choose
+a study yourself, or lower a gate to make progress. If the workload needs an
+implementation that is not yet committed, hand back to the Research Executor;
+this command does not commit.
 
 ## Steps
 
