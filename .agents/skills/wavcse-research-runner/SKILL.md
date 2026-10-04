@@ -56,21 +56,18 @@ For a request to *propose* a study rather than run one, the design/review loop
 is `wavcse-research-computer` — it produces a reviewed, human-gated proposal and
 stops before any compute.
 
-The wavcse-infra checkout:
+The bounded `infra/` subsystem in this repository owns controller, worker,
+storage and job mechanics. Its canonical domain rules are `infra/AGENTS.md`;
+provider and operational detail lives in `infra/docs/`.
 
-- `wavcse-infra-operator` — controller, workers, jobs, storage, lifecycle.
-- `gpu-research-operator` — paid GPU provisioning and cost discipline.
-- `wavcse-artifact-pipeline` — artifact validation, publication and caching.
-
-Load the relevant companion before consequential work in its domain; follow it
-rather than paraphrasing it from here. How to reach them from here without
-changing directory is in *Infrastructure delegation* below.
+Load those scoped instructions before consequential infrastructure work and
+follow them rather than paraphrasing them here.
 
 ## Infrastructure delegation
 
-Infrastructure actions happen through the `infra` CLI in the wavcse-infra
-checkout. Never reimplement provisioning, transfer, caching or publication in
-ad-hoc shell, even when that looks faster to type.
+Infrastructure actions happen through the `infra` CLI from the bounded
+`infra/` subsystem. Never reimplement provisioning, transfer, caching or
+publication in ad-hoc shell, even when that looks faster to type.
 
 Do not hand-write `infra` invocations either. The compute backend
 (`improvements/compute`, `python -m improvements.compute …`) is the only route
@@ -79,18 +76,11 @@ provider facts, keyed submissions and the sweep. Its README documents the verbs;
 `.agents/policies/autonomy.md` documents what may be decided without the
 researcher.
 
-**Infra competence.** The control plane's own skills are canonical and must not
-be copied here. Resolve the checkout with
-`python -m improvements.compute resolve --json`, then read the specialist skill
-you need from `<checkout>/.agents/skills/`:
-
-- `wavcse-infra-operator` — controller, workers, jobs, storage, lifecycle;
-- `gpu-research-operator` — GPU choice, price ceilings, throughput, stopping;
-- `wavcse-artifact-pipeline` — artifact identity, manifests, cache, read-back.
-
-When a failure needs infrastructure judgement rather than a CLI call, delegate
-to a subagent rooted in that checkout with those skills available, and bring
-back the conclusion — the researcher should never have to change directory.
+**Infra competence.** Resolve the subsystem and CLI with
+`python -m improvements.compute resolve --json`, then read
+`<checkout>/AGENTS.md` and the relevant document under `<checkout>/docs/`.
+The compute backend remains the only route to paid actions; infrastructure
+judgement that exceeds the CLI contract stays inside the `infra/` domain.
 
 ## Cycle is not complete until
 

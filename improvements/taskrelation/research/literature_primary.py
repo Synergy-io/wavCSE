@@ -15,7 +15,7 @@ boundary):
 * **The retained bytes** live in the local store the policy resolves
   (``WAVCSE_PRIMARY_CACHE``). The manifest checksum is the identity, so those
   bytes are trusted only while they still match it. A durable remote store (S3,
-  owned by the ``wavcse-infra`` checkout) is the *deferred* INC-004B boundary;
+  owned by the bounded ``infra/`` subsystem) is the *deferred* INC-004B boundary;
   until it is wired the transfer seam (``fetcher``) is ``None`` and a cache miss
   reports ``STORAGE_NOT_CONFIGURED`` rather than fabricating bytes.
 * **Registration** is an operator-side act: it copies one known local file into
@@ -521,7 +521,7 @@ class LiteraturePrimary:
         if self._fetcher is None:
             raise PrimaryError(
                 "no primary-artifact transfer backend is configured; S3 retrieval "
-                "is owned by the wavcse-infra checkout",
+                "is owned by the infra/ subsystem",
                 kind=STORAGE_NOT_CONFIGURED,
                 detail={
                     "paper_id": paper_id,

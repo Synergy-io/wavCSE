@@ -9,10 +9,11 @@ carries a defensible evidence tier and traceable provenance. The programme's obj
 scope decisions (`improvements/taskrelation/research/OBJECTIVE.md`, `.../DECISIONS.md`) are not this
 skill's to change.
 
-Other domains belong to sibling skills: `wavcse-artifact-pipeline` (artifact storage, validation,
-publication), `wavcse-infra-operator` (workers, jobs, storage, `infra` CLI), `gpu-research-operator`
-(GPU provisioning, concurrency, cost), `wavcse-embedding-generation` (embeddings, dataset layout),
-`wavcse-research-runner` (cycle orchestration).
+Other domains belong to sibling skills: `wavcse-embedding-generation` (embeddings, dataset layout)
+and `wavcse-research-runner` (cycle orchestration). Infrastructure mechanics — workers, jobs,
+storage, artifact publication, GPU provisioning and cost — belong to the bounded `infra/` subsystem,
+not to a sibling skill: read `infra/AGENTS.md` and the documents under `infra/docs/`, and reach them
+through the `infra` CLI (paid actions only via `improvements.compute`).
 
 ## Reconcile the record first
 The record lives under `improvements/taskrelation/research/`: `OBJECTIVE.md`, `STATE.md`,

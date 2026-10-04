@@ -1,7 +1,7 @@
 """Primary-paper retrieval is paper_id-driven, checksum-verified and cache-disposable.
 
 The remote transfer is an injected seam: real S3 publication and credentials
-belong to the `wavcse-infra` checkout, so these tests use a fake fetcher and
+belong to the `infra/` subsystem, so these tests use a fake fetcher and
 never require live AWS credentials.
 """
 

@@ -6,10 +6,11 @@ project instructions, the hard invariants, the validation gate and the engineeri
 
 - **Domain competence:** `.agents/skills/<name>/SKILL.md` — `wavcse-research-runner` (whole-system
   entry point), `wavcse-experiment-operator` (one Task Relation Learning study),
-  `wavcse-embedding-generation` (embedding readiness), plus the infra-side companions in the
-  `wavcse-infra` checkout.
+  `wavcse-embedding-generation` (embedding readiness); infrastructure mechanics are the bounded
+  `infra/` subsystem, whose rules live in `infra/AGENTS.md`.
 - **Workflow intent:** `.agents/commands/` — `wav-cycle`, `wav-experiment`, `wav-embeddings`,
-  `wav-analyze`, `wav-literature`, `wav-status`, `wav-weekly`.
+  `wav-analyze`, `wav-literature`, `wav-status`, `wav-weekly`, `wav-propose`,
+  `wav-execution-preflight`.
 - **What the repository is:** the two-stage wavCSE framework (frozen WavLM embeddings → shared
   backbone with per-task heads) plus `improvements/`, the parameter-based MTL architectures — see
   `AGENTS.md` and `improvements/README.md`.

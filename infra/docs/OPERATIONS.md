@@ -146,7 +146,7 @@ Credential precedence is:
 
 ## Initial controller setup
 
-Prerequisites outside this repository:
+Prerequisites outside this subsystem:
 
 1. Launch a supported Ubuntu EC2 instance.
 2. Attach an instance profile with least-privilege access to the private artifact
@@ -156,8 +156,8 @@ Prerequisites outside this repository:
 4. Apply `controller/cloud-init.yaml` as user data, or run:
 
    ```bash
-   git clone https://github.com/Ke-vin-S/wavcse-infra.git
-   cd wavcse-infra
+   git clone https://github.com/Synergy-io/wavCSE.git
+   cd wavCSE/infra
    ./controller/bootstrap.sh
    nano ~/.config/wavcse-infra/config.toml
    ```
@@ -177,12 +177,56 @@ Prerequisites outside this repository:
    ```
 
    Standard browser-based Codex authentication is also available with `codex login`.
-6. Clone the separate wavCSE repository under `~/projects/wavCSE`.
-7. Run `infra doctor`.
+6. Run `infra doctor`.
 
 Bootstrap installs controller prerequisites and the locked Python project. It is
 idempotent and safe to rerun. It delegates OMP, Codex, and AGF installation to
 `controller/install-agents.sh`; it does not inject secrets or provision cloud resources.
+
+## Bootstrap contract — repository vs machine
+
+Cloning the repository provides every project-specific OMP / Research Computer
+definition. Nothing in this list is copied by hand onto a controller, and nothing
+in it is resolved from another checkout or from a user's OMP home.
+
+| Layer | Path in the clone |
+| --- | --- |
+| Project instructions | `AGENTS.md`, `.omp/AGENTS.md` (relative symlink) |
+| Agent definitions | `.omp/agents/*.md` |
+| Model-facing tools | `.omp/tools/*.ts` |
+| Project settings / project MCP policy | `.omp/config.yml`, `.omp/mcp.json` |
+| Skills | `.agents/skills/<name>/SKILL.md` |
+| Commands | `.agents/commands/*.md` |
+| Capability policy | `.agents/policies/autonomy.md` |
+
+The machine must still supply, outside Git:
+
+1. the OMP runtime (the pinned version installed by `controller/install-agents.sh`);
+2. model-provider authentication for the model selectors and role aliases the
+   agent frontmatter references — `modelRoles` (for example `slow`) are machine
+   OMP settings, and an unset role degrades to the parent/default model rather
+   than failing the spawn;
+3. the `infra` CLI environment — `uv sync --locked --all-groups` under `infra/`.
+   `improvements.compute` resolves the monorepo `infra/` subsystem itself; an
+   explicit `WAVCSE_INFRA_CHECKOUT` or `WAVCSE_INFRA_CLI` overrides that;
+4. machine-scoped controller configuration and credentials (SSM parameter name,
+   AWS instance profile, RunPod key, DagsHub/MLflow authentication, Git identity).
+
+Credentials never enter the repository, and none of the four items above is a
+Research Computer definition.
+
+Check a controller without spending money:
+
+```bash
+make check                                     # agent assets + compute + research gates
+make infra-check                               # infra tests and cloud-init schema
+uv run --locked python -m improvements.compute resolve --json
+cd infra && infra doctor
+```
+
+`resolve --json` must report `"resolved_by": "monorepo"` and a checkout under the
+clone; a sibling-checkout result means the controller is still reading a legacy
+location.
 
 ## Controller agent installation
 

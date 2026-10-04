@@ -9,10 +9,12 @@ Scope: the scientific semantics of upstream embedding extraction for wavCSE - th
 that defines a dataset, the tensor and on-disk contracts, per-dataset membership and label
 semantics, and the validation that must pass before embeddings are reused or republished.
 
-- Worker lifecycle, bootstrap, job submission, CLI flags: `wavcse-infra-operator`.
-- GPU choice, cost, benchmarking, monitoring: `gpu-research-operator`.
+- Worker lifecycle, bootstrap, job submission, CLI flags: `infra/AGENTS.md`
+  (see `infra/docs/OPERATIONS.md`).
+- GPU choice, cost, benchmarking, monitoring: `infra/AGENTS.md`
+  (see `infra/docs/RUNPOD.md`).
 - Canonical storage, S3 keys, manifests, transfer, cache, read-back verification:
-  `wavcse-artifact-pipeline`.
+  `infra/AGENTS.md` (see `infra/docs/ARCHITECTURE.md`, `infra/docs/SECURITY.md`).
 - Study design, controls, provenance recording: `wavcse-experiment-operator`.
 
 ## Reuse before regenerate
@@ -143,7 +145,7 @@ Do not treat historical sample counts as eternal; read the loader and config.
    and split metadata, index-to-disk consistency.
 3. Independent oracle: derive expected membership from the source - split lists, loader metadata,
    dataset annotations - never only from an index the generator itself wrote. Common-mode failure
-   between producer and verifier is treated in `wavcse-artifact-pipeline`.
+   between producer and verifier is treated in `infra/AGENTS.md` (artifact manifests).
 
 What the repository does and does not check: there is no standalone embedding validator script. The
 only index the extractor produces about its own output is the CSV described above, which records a
@@ -155,7 +157,7 @@ own metadata.
 
 Run extraction from an exact reproducible commit. Never hand-copy patched Python files to a worker,
 never execute an uncommitted local scientific change, never run whatever is on the worker's `main`.
-Checkout and job-submission mechanics: `wavcse-infra-operator`.
+Checkout and job-submission mechanics: `infra/AGENTS.md` and the `infra` CLI.
 
 Treat the WavLM checkpoint as an immutable artifact and verify its identity before using a cached
 copy. Do not substitute another WavLM size, another host's differing bytes, or a Hugging Face
@@ -171,8 +173,8 @@ process exit is not completion.
 The generated membership defines the scientific content of a package: order members
 deterministically and choose shard boundaries explicitly, never from filesystem traversal order, so
 a re-run over the same inputs reproduces the same package. Byte-level rules - digests, size
-ceilings, manifest, upload and read-back verification, cache and cleanup - are
-`wavcse-artifact-pipeline`.
+ceilings, manifest, upload and read-back verification, cache and cleanup - are in
+`infra/AGENTS.md` (storage architecture, artifact manifests).
 
 After publication, inspect how the current experiment loader consumes embeddings before deciding
 what to materialize. It resolves one `.pt` per sample by path and slices the layer axis in memory,
@@ -204,12 +206,13 @@ mismatch, scientific configuration mismatch, unexplained shape or dtype differen
 incomplete output, or failed verification of the published artifact.
 
 Do not "fix" a dataset by deleting inconvenient samples. Do not silently reduce the workload after
-an OOM. Retry, cost and stopping decisions belong to `gpu-research-operator` and
-`wavcse-infra-operator`.
+an OOM. Retry, cost and stopping decisions belong to the bounded `infra/` subsystem
+(`infra/AGENTS.md`) and the compute backend's authorization envelope.
 
 ## Readiness
 
 Report per dataset: source verified, exact scientific configuration recorded, embedding count,
 tensor contract, canonical artifact state, warm representation, ready. The objective is not that
 every historical dataset exists, but that every dataset the current experiment requires is
-reproducibly ready. Readiness state names and canonical definitions: `wavcse-artifact-pipeline`.
+reproducibly ready. Readiness state names and canonical definitions: `infra/AGENTS.md`
+(storage architecture, artifact manifests).

@@ -113,5 +113,5 @@ degrades silently into a cheaper or narrower action.
 | Study design, evidence tiers, promotion | `.agents/skills/wavcse-experiment-operator/SKILL.md` |
 | Backend verbs, envelopes, ledger, jobs | the compute backend's README under `improvements/compute/` |
 | Spend authority for one scope | `improvements/taskrelation/research/authorizations/` |
-| Infrastructure mechanics | the infrastructure checkout's own skills, reached through its CLI |
+| Infrastructure mechanics | scoped rules under `infra/`, reached through its CLI |
 | Hard invariants | `AGENTS.md` |

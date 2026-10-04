@@ -15,10 +15,10 @@ mechanisms, not merely higher accuracy.
 
 ## Boundary — what does not belong here
 
-- **Infrastructure is a different repository.** Controller and worker lifecycle, GPU provisioning, job
-  submission, storage transfer, artifact publication and caching belong to the separate `wavcse-infra`
-  checkout and are reached through its `infra` CLI. Never reimplement provisioning, transfer, caching
-  or publication in ad-hoc shell here, and never add infrastructure logic to this repository.
+- **Infrastructure is a bounded subsystem under `infra/`.** Controller and worker lifecycle, GPU
+  provisioning, job submission, storage transfer, artifact publication and caching belong there and
+  are reached through its `infra` CLI. Never reimplement them in ad-hoc shell or in research modules;
+  repository consolidation changes ownership, not the software architecture seam.
 - **`downstream/` is frozen.** It mirrors baseline code co-authored by the project's co-supervisor:
   read it, never edit it. New behaviour goes in `improvements/` as new files that subclass existing
   classes rather than modify them.
@@ -173,9 +173,9 @@ Never weaken or delete a failing test to make the gate pass.
   **stop**. The proposal object is `improvements/taskrelation/research/proposals/README.md`,
   validated deterministically by `proposal_check.py`. V1 registers nothing, authorizes nothing and
   runs nothing; execution stays a separate human-gated increment.
-- Infra-side companions live in the `wavcse-infra` checkout: `wavcse-infra-operator`,
-  `gpu-research-operator`, `wavcse-artifact-pipeline`. Load the relevant one before consequential work
-  in its domain and follow it rather than paraphrasing it.
+- Infrastructure-specific rules live in `infra/AGENTS.md`; its package, environment and CLI remain
+  bounded under `infra/`. Read those instructions before consequential infrastructure work and use
+  the `infra` CLI rather than paraphrasing or reimplementing its mechanics.
 - Commands: `.agents/commands/{wav-cycle,wav-experiment,wav-embeddings,wav-analyze,wav-literature,wav-status,wav-weekly,wav-propose}.md`.
 
 ## Current state — reconcile, never assume
@@ -198,8 +198,8 @@ Never trust conversation memory or an earlier session for dynamic state — what
 which study is open, what a run produced, which commit was executed. The repository, not the
 conversation, is the research memory: re-derive those facts from the records above, run identifiers and
 commit SHAs included, and report a conflict between records instead of smoothing it over. Runtime
-infrastructure state (workers, volumes, jobs) is owned by the `wavcse-infra` checkout — reconcile it
-there with the `infra` CLI.
+infrastructure state (workers, volumes, jobs) is owned by the `infra/` subsystem and remains outside
+Git; reconcile it through the `infra` CLI.
 
 ## Agent-facing assets
 
