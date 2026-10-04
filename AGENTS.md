@@ -28,6 +28,62 @@ mechanisms, not merely higher accuracy.
 - **Procedure a skill already covers** is pointed at, never restated here (see *Skills*).
 - The fixed upstream wavCSE/WavLM embedding changes only when the human changes project scope.
 
+## Capability boundary — how a change reaches the canonical checkout
+
+A writing specialist never edits the canonical checkout directly. Every candidate
+follows one path:
+
+```text
+trusted baseline (HEAD)
+        │  OMP isolation workspace (task.isolation.enabled: true)
+        ▼
+candidate workspace ──► writing specialist
+        │                (research-executor, or infrastructure-engineer MAINTAIN)
+        │  candidate artifact (task.isolation.apply: false — never auto-applied)
+        ▼
+deterministic candidate gate
+  (`python3 scripts/agents/candidate_gate.py check --repo . --baseline <commit> …`)
+        │
+     +--+--+
+   reject  accept
+            ▼
+baseline-defined validation (`make check` from the trusted baseline)
+            ▼
+controlled integration (Main OMP applies the patch and commits)
+```
+
+- Main OMP spawns a writing specialist with `isolated: true`. `.omp/config.yml`
+  sets `task.isolation.enabled: true` and `task.isolation.apply: false`, so a
+  successful candidate is retained (an `omp/task/<id>` branch or a patch) and is
+  **never written back to the canonical checkout automatically**.
+- The gate judges against the **trusted baseline**, not the candidate. Its
+  authority lives in `scripts/agents/candidate_gate.py`, which is itself on the
+  validation-authority list. A candidate that edits the gate, its policy, the
+  validation command, test discovery, an agent definition, a tool definition, the
+  project capability policy, a lifecycle record, or an existing test is rejected
+  with a deterministic reason code — not by review.
+- **Existing tests are baseline-owned evidence.** A candidate may add a new,
+  feature-specific test; modifying, deleting or renaming an existing one is a
+  separate TEST/CONTRACT MAINTENANCE change and is escalated, never absorbed by
+  the same candidate it is meant to judge.
+- The boundary itself is installed and changed only by an explicit trusted
+  maintenance action. There is no in-band "hardening mode" a writing agent can
+  enable, and `make candidate-gate-check` (part of `make check`) fails if the
+  gate stops rejecting its own adversarial cases.
+
+Run `make candidate-gate-check` for the gate's adversarial self-test and
+`make check` for the baseline-defined validation.
+
+**Residual trust — stated honestly.** This is a boundary on candidate
+integration, not a sandbox. Main OMP keeps broad filesystem authority and is the
+trusted integration boundary; `bash` inside an isolated workspace carries the
+same process authority as outside it, so an absolute path can leave the
+workspace. The enforceable property is that an *unauthorised candidate change
+cannot reach the canonical checkout through the integration path*: the gate
+rejects it, and `task.isolation.apply: false` means it was never applied in the
+first place. A writer that deliberately bypasses the orchestrator is a violation
+to report and halt on, not a defeated sandbox.
+
 ## Hard invariants — never violate
 
 A skill mentioning one of these does not relax it.
@@ -102,7 +158,9 @@ uv run python -m improvements.run_improvements --help    # entry-point import sm
 ```
 
 `make check` runs the whole research suite: no module is excluded, and `make research-check-all`
-is an alias. The MSSL solver module (`research/tests/test_mssl_omega_solver.py`) was the
+is an alias. It begins with `agents-check` (agent-asset drift) and `candidate-gate-check` (the
+candidate-change gate's adversarial self-test), then the compute-backend tests and the research
+suite. The MSSL solver module (`research/tests/test_mssl_omega_solver.py`) was the
 project's one known-red module until TR-0007's Option-A decision (`DEC-0015`) fixed both its
 defective assertions and the solver behaviour they had exposed; it now runs inside the gate.
 Never weaken or delete a failing test to make the gate pass.

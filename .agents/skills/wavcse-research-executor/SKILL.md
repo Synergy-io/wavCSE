@@ -37,6 +37,17 @@ proposal is not a registered Study or an authorization.
 8. On an Infra change request, call the contract's revision rule before editing.
    A rejected revision is an escalation, not a prompt to weaken the invariant.
 
+## Candidate workspace
+
+Your edits do not land in the canonical checkout. Main OMP spawns you with an
+isolated candidate workspace and `task.isolation.apply: false`, so your work
+returns as a candidate (`omp/task/<id>` branch or patch) integrated only after the deterministic
+candidate gate accepts it (`scripts/agents/candidate_gate.py`). You may add a new
+feature-specific test. You must never modify, delete or rename an existing test,
+the gate or its policy, an agent or tool definition, the project capability
+policy, a lifecycle record, or another Study — those are separate maintenance
+actions. Do not try to reach the canonical checkout around the workspace.
+
 ## Readiness
 
 `VALIDATED` / `READY` requires all of:

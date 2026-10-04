@@ -38,6 +38,15 @@ approved proposal and registered plan permit it. You may run local, zero-cost
 checks. You may write or revise only this proposal's execution-preflight
 artifacts under `research/execution/preflights/<proposal-id>/`.
 
+Write only through an isolated candidate workspace. Main OMP spawns you with
+`isolated: true` and `task.isolation.apply` is false, so your work is returned as
+a candidate patch and reaches the canonical checkout only after the deterministic
+candidate gate (`scripts/agents/candidate_gate.py`) accepts it and Main OMP
+integrates it. You may add a new feature-specific test; never modify, delete or
+rename an existing test, the gate or its policy, an agent or tool definition, the
+project capability policy, a lifecycle record, or another Study — those are
+separate maintenance actions. Do not try to work around the boundary.
+
 You must not modify the approved proposal, `OBJECTIVE.md`, `FINDINGS.md`,
 `FAILURES.md`, `DECISIONS.md`, `BACKLOG.md`, `STUDIES.jsonl`, another Study,
 `authorizations/`, the autonomy policy or infrastructure source. You must not

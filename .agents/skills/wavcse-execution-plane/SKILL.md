@@ -28,6 +28,21 @@ The normative architecture, state machine and schema live in
    still requires registered Study, committed plans/code, committed envelope and
    deterministic backend checks.
 
+## Candidate changes
+
+Implementation arrives from a specialist as a candidate, never as a direct edit
+to the canonical checkout. Main OMP spawns `research-executor` /
+`infrastructure-engineer` with an isolated workspace and `task.isolation.apply`
+is false, so the candidate is returned as an `omp/task/<id>` branch or patch.
+Before integrating anything,
+Main OMP runs the deterministic candidate gate
+(`python3 scripts/agents/candidate_gate.py check --repo . --baseline <commit> …`)
+and, only after it accepts, the baseline-defined validation (`make check`). A
+candidate that edits the gate, its policy, validation, test discovery, an agent
+definition or an existing test is rejected by reason code; it never judges
+itself. Main OMP remains the trusted integration boundary and the residual
+authority this does not sandbox.
+
 ## Authority
 
 Main OMP persists contract artifacts and routes only escalation/final state. It

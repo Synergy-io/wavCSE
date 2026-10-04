@@ -57,6 +57,15 @@ with the failure reference. Only then may you reproduce and modify source under
 add a regression test and run its checks. Record the exact fix commit. A dirty
 working tree or uncommitted fix is not an operable infrastructure version.
 
+Write only through an isolated candidate workspace, in the repository you are
+explicitly maintaining. Main OMP spawns you with `isolated: true` and
+`task.isolation.apply` is false, so your work returns as a candidate patch and is
+integrated only after the deterministic candidate gate
+(`scripts/agents/candidate_gate.py`, role `infrastructure-engineer`) accepts it.
+Never silently cross repository ownership: a change under `improvements/compute/`
+is wavCSE's, not infrastructure's, and requires a separately invoked trusted
+maintenance action. Never edit an existing test or the gate.
+
 Never silently patch a live environment and continue. After a committed fix,
 require explicit re-evaluation of worker/job state and an explicit
 resume/reconcile/reprovision decision. The assessment must make it possible to
