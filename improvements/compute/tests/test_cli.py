@@ -188,10 +188,6 @@ class CliTests(ComputeTestCase):
         self.assertIsInstance(payload, dict)
         self.assertIn("scope", payload)
 
-
-if __name__ == "__main__":
-    unittest.main()
-
     def test_worker_health_returns_a_result_the_readiness_ladder_can_walk(self):
         """Regression: worker_health used to return its payload.
 
@@ -210,6 +206,7 @@ if __name__ == "__main__":
             captured["args"] = args
             captured["json_output"] = kwargs.get("json_output")
             return infra_cli.InfraResult(
+                (),
                 returncode=0,
                 stdout='{"ready": true, "readiness_state": "READY"}',
                 stderr="",
@@ -225,3 +222,42 @@ if __name__ == "__main__":
         self.assertEqual(result.payload["readiness_state"], "READY")
         self.assertEqual(captured["args"], ("worker", "health", "worker-1"))
         self.assertTrue(captured["json_output"])
+
+    def test_worker_create_sends_the_documented_control_plane_options(self):
+        """The adapter's create argv must match the `worker create` contract.
+
+        The documented worker-creation command (`WORKER_ENVIRONMENT.md` §4)
+        carries ``--start-ssh`` and ``--require-direct-ssh``, so the adapter must
+        forward both and nothing the control plane does not define.
+        """
+
+        from improvements.compute import infra_cli
+
+        captured = {}
+
+        def fake_run(*args, **kwargs):
+            captured["args"] = args
+            captured["check"] = kwargs.get("check")
+            return infra_cli.InfraResult((), returncode=0, stdout="", stderr="")
+
+        location = type("Location", (), {"checkout": None, "cli": "/bin/true"})()
+        client = infra_cli.InfraCli(location)
+        client.run = fake_run
+        client.worker_create(
+            name="wavcse-tr-0007-abc123def456",
+            gpu="NVIDIA RTX A5000",
+            cloud="COMMUNITY",
+            image="runpod/pytorch:example",
+            container_disk_gb=100,
+            max_price="0.50",
+        )
+
+        argv = captured["args"]
+        self.assertEqual(argv[:2], ("worker", "create"))
+        self.assertIn("--start-ssh", argv)
+        self.assertIn("--require-direct-ssh", argv)
+        self.assertFalse(captured["check"])
+
+
+if __name__ == "__main__":
+    unittest.main()

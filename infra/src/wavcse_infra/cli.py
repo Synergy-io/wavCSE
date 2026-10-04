@@ -19,6 +19,7 @@ from wavcse_infra.doctor import CheckStatus, DoctorReport, run_doctor
 from wavcse_infra.errors import (
     ConfigurationError,
     InfraError,
+    LifecycleError,
     ProviderError,
     ProviderNotFoundError,
     StateError,
@@ -140,6 +141,13 @@ def doctor_command(context: typer.Context) -> None:
 @worker_app.command("list")
 def list_workers(
     context: typer.Context,
+    read_only: Annotated[
+        bool,
+        typer.Option(
+            "--read-only",
+            help="Report provider state without writing tracked local metadata.",
+        ),
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Render normalized machine-readable JSON.")
     ] = False,
@@ -150,7 +158,8 @@ def list_workers(
     try:
         with RunPodClient.from_settings(settings) as client:
             workers = client.list_workers()
-        _reconcile_state(workers)
+        if not read_only:
+            _reconcile_state(workers)
     except ConfigurationError as exc:
         _configuration_failure(exc)
     except ProviderError as exc:
@@ -183,6 +192,13 @@ def list_workers(
 def show_worker(
     context: typer.Context,
     worker_id: Annotated[str, typer.Argument(help="Exact RunPod worker ID.")],
+    read_only: Annotated[
+        bool,
+        typer.Option(
+            "--read-only",
+            help="Report provider state without writing tracked local metadata.",
+        ),
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Render normalized machine-readable JSON.")
     ] = False,
@@ -193,11 +209,13 @@ def show_worker(
     try:
         with RunPodClient.from_settings(settings) as client:
             worker = client.get_worker(worker_id)
-        _observe_state(worker)
+        if not read_only:
+            _observe_state(worker)
     except ConfigurationError as exc:
         _configuration_failure(exc)
     except ProviderNotFoundError as exc:
-        _mark_state_destroyed(worker_id)
+        if not read_only:
+            _mark_state_destroyed(worker_id)
         _provider_failure(exc)
     except ProviderError as exc:
         _provider_failure(exc)
@@ -311,6 +329,16 @@ def create_worker(
         bool,
         typer.Option("--start-ssh", help="Ask RunPod to inject registered SSH keys and port 22."),
     ] = False,
+    require_direct_ssh: Annotated[
+        bool,
+        typer.Option(
+            "--require-direct-ssh",
+            help=(
+                "Refuse a worker the provider reports with only its command-only SSH "
+                "proxy, i.e. no directly reachable endpoint."
+            ),
+        ),
+    ] = False,
     max_price: Annotated[
         str | None,
         typer.Option("--max-price", help="Maximum accepted total GPU price in USD/hour."),
@@ -357,6 +385,12 @@ def create_worker(
                 typer.echo("Creation cancelled; no Pod was created.")
                 return
             worker = lifecycle.create(plan, timeout_seconds=wait_timeout)
+            if require_direct_ssh and worker.ssh_direct is None and worker.ssh_proxy is not None:
+                raise LifecycleError(
+                    f"RunPod worker {worker.id} reached RUNNING with only its command-only "
+                    "SSH proxy; --require-direct-ssh requires a directly reachable endpoint. "
+                    "The worker was not accepted silently; destroy or reuse it explicitly."
+                )
     except ConfigurationError as exc:
         _configuration_failure(exc)
     except ProviderError as exc:

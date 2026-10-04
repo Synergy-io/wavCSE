@@ -507,3 +507,200 @@ def test_health_command_exits_nonzero_without_ready_transition(monkeypatch, tmp_
     assert result.exit_code == 1
     assert '"readiness_state": "FAILED"' in result.stdout
     assert '"ready": false' in result.stdout
+
+
+def _read_only_spy(monkeypatch, tmp_path: Path, client=None) -> Mock:
+    """Install a fake provider and a spy state store, returning the spy.
+
+    The state store is the only path by which ``worker list``/``worker show``
+    mutate tracked local metadata, so asserting it is untouched proves the
+    read-only contract rather than merely the flag's spelling.
+    """
+
+    store = Mock()
+    monkeypatch.setattr(cli.RunPodClient, "from_settings", lambda settings: client or FakeClient())
+    monkeypatch.setattr(cli, "_state_store", lambda: store)
+    return store
+
+
+def test_worker_list_read_only_never_writes_tracked_state(monkeypatch, tmp_path: Path) -> None:
+    store = _read_only_spy(monkeypatch, tmp_path)
+
+    result = runner.invoke(
+        app,
+        ["worker", "list", "--read-only", "--json"],
+        env={"RUNPOD_API_KEY": "fake-token"},
+    )
+
+    assert result.exit_code == 0, result.output
+    assert '"id": "pod-123"' in result.stdout
+    store.reconcile.assert_not_called()
+
+
+def test_worker_list_without_read_only_reconciles_tracked_state(
+    monkeypatch, tmp_path: Path
+) -> None:
+    store = _read_only_spy(monkeypatch, tmp_path)
+
+    result = runner.invoke(app, ["worker", "list", "--json"], env={"RUNPOD_API_KEY": "fake-token"})
+
+    assert result.exit_code == 0, result.output
+    store.reconcile.assert_called_once()
+
+
+def test_worker_show_read_only_never_writes_tracked_state(monkeypatch, tmp_path: Path) -> None:
+    store = _read_only_spy(monkeypatch, tmp_path)
+
+    result = runner.invoke(
+        app,
+        ["worker", "show", "pod-123", "--read-only", "--json"],
+        env={"RUNPOD_API_KEY": "fake-token"},
+    )
+
+    assert result.exit_code == 0, result.output
+    assert '"id": "pod-123"' in result.stdout
+    store.observe.assert_not_called()
+
+
+def test_worker_show_without_read_only_observes_tracked_state(monkeypatch, tmp_path: Path) -> None:
+    store = _read_only_spy(monkeypatch, tmp_path)
+
+    result = runner.invoke(
+        app, ["worker", "show", "pod-123", "--json"], env={"RUNPOD_API_KEY": "fake-token"}
+    )
+
+    assert result.exit_code == 0, result.output
+    store.observe.assert_called_once()
+
+
+def test_worker_show_read_only_never_marks_absent_on_provider_404(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class AbsentClient(FakeClient):
+        def get_worker(self, worker_id: str) -> Worker:
+            raise ProviderNotFoundError(f"RunPod worker {worker_id} was not found")
+
+    store = _read_only_spy(monkeypatch, tmp_path, AbsentClient())
+
+    result = runner.invoke(
+        app,
+        ["worker", "show", "pod-123", "--read-only"],
+        env={"RUNPOD_API_KEY": "fake-token"},
+    )
+
+    assert result.exit_code == 1
+    assert "was not found" in result.stderr
+    store.mark_destroyed.assert_not_called()
+
+
+def test_worker_show_without_read_only_marks_absent_on_provider_404(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class AbsentClient(FakeClient):
+        def get_worker(self, worker_id: str) -> Worker:
+            raise ProviderNotFoundError(f"RunPod worker {worker_id} was not found")
+
+    store = _read_only_spy(monkeypatch, tmp_path, AbsentClient())
+
+    result = runner.invoke(app, ["worker", "show", "pod-123"], env={"RUNPOD_API_KEY": "fake-token"})
+
+    assert result.exit_code == 1
+    store.mark_destroyed.assert_called_once_with("pod-123")
+
+
+def _proxy_only_worker() -> Worker:
+    return _worker().model_copy(
+        update={
+            "public_ip": None,
+            "ssh_port": None,
+            "ssh_direct": None,
+            "ssh_proxy": WorkerConnectionInfo(
+                provider_worker_id="pod-123",
+                kind="proxy",
+                host="ssh.runpod.io",
+                port=22,
+                username="pod-123-route",
+            ),
+        }
+    )
+
+
+def _directly_reachable_worker() -> Worker:
+    return _worker().model_copy(
+        update={
+            "public_ip": "203.0.113.9",
+            "ssh_port": 30222,
+            "ssh_direct": WorkerConnectionInfo(
+                provider_worker_id="pod-123",
+                kind="direct",
+                host="203.0.113.9",
+                port=30222,
+                username="root",
+            ),
+            "ssh_proxy": None,
+        }
+    )
+
+
+def _invoke_create(monkeypatch, tmp_path: Path, worker: Worker, *extra: str):
+    client = FakeClient(worker=worker)
+    _install_fakes(monkeypatch, tmp_path, client)
+    monkeypatch.setattr(cli, "_infra_worker_name", lambda prefix: "wavcse-training-abc123")
+    result = runner.invoke(
+        app,
+        [
+            "worker",
+            "create",
+            "--gpu",
+            "NVIDIA RTX A5000",
+            "--cloud",
+            "COMMUNITY",
+            "--image",
+            "runpod/pytorch:example",
+            *extra,
+            "--yes",
+        ],
+        env={"RUNPOD_API_KEY": "fake-token"},
+    )
+    return client, result
+
+
+def test_create_require_direct_ssh_refuses_a_proxy_only_worker(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    client, result = _invoke_create(
+        monkeypatch, tmp_path, _proxy_only_worker(), "--require-direct-ssh"
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "command-only" in result.stderr
+    assert "direct" in result.stderr
+    # The refusal happens only after the paid create is observed; it is never a
+    # second, duplicated provider request.
+    assert client.create_calls == 1
+
+
+def test_create_require_direct_ssh_accepts_a_directly_reachable_worker(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    client, result = _invoke_create(
+        monkeypatch, tmp_path, _directly_reachable_worker(), "--require-direct-ssh"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "RunPod worker created and reached RUNNING" in result.stdout
+    assert client.create_calls == 1
+
+
+def test_create_without_require_direct_ssh_accepts_a_proxy_only_worker(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    client, result = _invoke_create(monkeypatch, tmp_path, _proxy_only_worker())
+
+    assert result.exit_code == 0, result.output
+    assert client.create_calls == 1
