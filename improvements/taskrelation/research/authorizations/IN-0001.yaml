@@ -1,27 +1,45 @@
 # IN-0001 — compute authorization (INFRASTRUCTURE VALIDATION ONLY)
 #
-# Granted by the researcher in the session of 2026-10-04. It authorizes exactly
-# one bounded Colab infrastructure-validation smoke test under the committed
-# plan `improvements/taskrelation/research/execution/IN-0001/smoke_plan.json`,
+# RETRY GRANT, 2026-10-04. This supersedes, for the same scope and with the same
+# bounds, the first grant at commit 95dbb871299fe5942693bbb04f2c527795dae6a7
+# (file digest 5f91a87670e79c166d071d2907c6d6b6ac72d779ed3eabc4360a7462327a27a7,
+# window 2026-10-04T13:22:01Z - 19:22:01Z). That grant authorized one session; it
+# was used, the provider allocated a free-tier T4, and the session was terminally
+# released after a readiness timeout, so the grant was consumed rather than
+# extended. It is preserved in Git history, in the recorded envelope snapshots,
+# and in improvements/taskrelation/research/execution/IN-0001/.
+#
+# The researcher then authorized one further bounded retry explicitly: exactly
+# ONE additional Colab session for IN-0001, after the previous authorized session
+# was terminally released, and no replacement if this retry fails. That
+# single-session authority is carried by this document's provenance -
+# `granted_by` - and not by `replacement_workers_allowed`, which stays false
+# because the previous grant's replacement flag is expressly not the authority
+# for the new session. The contract has no allocation counter, so the
+# "one additional session, no further replacement" bound is a human decision
+# recorded here and in the execution history; the machine enforces provider,
+# cost unit, free-tier permission, concurrency and wall clock as always.
+#
+# Authorizes one bounded free-tier Colab infrastructure-validation smoke under
+# the committed plan improvements/taskrelation/research/execution/IN-0001/smoke_plan.json
 # and nothing else: no DG-0008 execution, no DG-0008 benchmark, no research
-# training, no embedding download, no RunPod allocation, no second Colab
-# session, and no paid Colab execution.
+# training, no embedding download, no RunPod allocation, no second session, and
+# no paid Colab execution.
 #
 # BILLING: FREE_TIER ONLY. The CU ceilings below are the safety bounds the
 # existing contract requires; they are NOT permission to spend paid CU. If the
-# execution path reports PAID_CU, or would consume paid CU, the session is
-# released and the run stops.
+# execution path reports PAID_CU, the session is released and the run stops.
 #
 # IN-0001 is an execution scope of kind `infrastructure_validation`: it is not a
-# Study, it confers no scientific authority, and it never authorizes DG-0008.
-# An agent must not widen this grant; a change to any field is a new human grant.
+# Study, it confers no scientific authority, and it never authorizes DG-0008. An
+# agent must not widen this grant; a change to any field is a new human grant.
 schema_version: 1
 scope: IN-0001
 scope_kind: infrastructure_validation
 provider: colab
-granted_by: Kevin Sanjula (human grant)
-granted_at: "2026-10-04T13:22:01+00:00"
-expires_at: "2026-10-04T19:22:01+00:00"
+granted_by: "Kevin Sanjula (human grant - 2026-10-04 retry: one additional Colab session, no further replacement)"
+granted_at: "2026-10-04T14:45:17+00:00"
+expires_at: "2026-10-04T20:45:17+00:00"
 
 budget:
   cost_unit: CU
