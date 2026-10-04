@@ -153,10 +153,13 @@ def _parser():
     return parser
 
 
-def _infra():
+def _infra(*, provider_mutation=None):
     from improvements.compute import infra_cli, resolve as resolve_module
 
-    return infra_cli.InfraCli(resolve_module.resolve())
+    location = resolve_module.resolve()
+    if provider_mutation:
+        resolve_module.require_explicit(location, operation=provider_mutation)
+    return infra_cli.InfraCli(location)
 
 
 @contextlib.contextmanager
@@ -235,7 +238,7 @@ def _run(args):
         return _emit(args, result)
 
     if args.verb == "worker-ensure":
-        infra = _infra()
+        infra = _infra(provider_mutation="worker allocation")
         view = envelope_module.load(args.scope)
         with _mutation(args.scope):
             worker, actions = worker_module.ensure_worker(plan, view, infra=infra)
@@ -247,7 +250,7 @@ def _run(args):
         })
 
     if args.verb == "advance":
-        infra = _infra()
+        infra = _infra(provider_mutation=None if args.dry_run else "recorded job submission")
         record = run_study.load_record(args.scope)
         if args.dry_run:
             result = run_study.advance(

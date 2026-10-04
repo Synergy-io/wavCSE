@@ -21,6 +21,7 @@ from improvements.compute import ledger, providers, state as state_module
 from improvements.compute import envelope as envelope_module
 from improvements.compute import jobspec, remote_commit
 from improvements.compute.errors import (
+    AuthorizationError,
     CapacityError,
     ConfigurationError,
     CostError,
@@ -190,6 +191,25 @@ def ensure_worker(plan, view, *, infra, purpose=None, projected_hours=None):
                 provider, authorized
             )
         )
+    # An authorization is isolated by scope identity *and* scope kind. A plan
+    # that names another scope, or the right scope of the wrong kind — a Study
+    # plan under an infrastructure-validation grant, or the reverse — is
+    # refused before any provider call, because no amount of later care makes
+    # that pairing mean what either side intended.
+    plan_scope = jobspec.plan_scope(plan)
+    if plan_scope != view.scope:
+        raise AuthorizationError(
+            "compute plan scope {} does not match authorization scope {}; a plan may "
+            "only spend the authorization it is named by".format(plan_scope, view.scope)
+        )
+    plan_kind = jobspec.plan_scope_kind(plan)
+    authorized_kind = envelope_module.envelope_scope_kind(view.envelope)
+    if plan_kind != authorized_kind:
+        raise AuthorizationError(
+            "compute plan scope {}({}) is a {} scope but the authorization for {} is a "
+            "{} scope; an authorization is isolated by both scope identity and scope "
+            "kind".format(plan_scope, view.scope, plan_kind, view.scope, authorized_kind)
+        )
     if provider == providers.COLAB:
         return _ensure_colab_worker(
             plan, view, infra=infra, purpose=purpose, projected_hours=projected_hours)
@@ -205,7 +225,7 @@ def _ensure_colab_worker(plan, view, *, infra, purpose=None, projected_hours=Non
     commit availability, attempt accounting and cleanup attribution.
     """
 
-    scope = plan["study"]
+    scope = jobspec.plan_scope(plan)
     actions = []
     infra.job_list()
     workers = infra.worker_list(provider=providers.COLAB)
@@ -370,7 +390,7 @@ def _ensure_runpod_worker(plan, view, *, infra, purpose=None, projected_hours=No
     assumed ready.
     """
 
-    scope = plan["study"]
+    scope = jobspec.plan_scope(plan)
     actions = []
     # A paid Pod is pointless if this checkout cannot discover and reconcile
     # jobs after a lost submit acknowledgement. Check that contract first.

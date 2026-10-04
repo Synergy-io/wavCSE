@@ -24,11 +24,13 @@ from decimal import Decimal
 from improvements.compute import envelope as envelope_module
 from improvements.compute import evidence
 from improvements.compute import failures, jobspec, ledger, providers, remote_commit
+from improvements.compute import scopes
 from improvements.compute import state as state_module
 from improvements.compute import worker as worker_module
 from improvements.compute.errors import (
     ArtifactIntegrityError,
     AuthorizationError,
+    ConfigurationError,
     CostError,
     EvidenceError,
     ImplementationBugError,
@@ -93,7 +95,6 @@ def _entry(record, key, *, arm, seed, plan, stage):
             "job_key": key,
             "arm": arm,
             "seed": seed,
-            "study": plan["study"],
             "stage": stage,
             "state": PENDING,
             "attempts": 0,
@@ -104,6 +105,14 @@ def _entry(record, key, *, arm, seed, plan, stage):
             "outputs_verified": False,
             "created_at": state_module.isoformat(state_module.utc_now()),
         }
+        # A Study entry keeps the field name it has always had; a non-Study
+        # entry records the execution scope, so a reader is never told that an
+        # infrastructure-validation run is a scientific Study identity.
+        if jobspec.plan_scope_kind(plan) == scopes.STUDY:
+            entry["study"] = jobspec.plan_scope(plan)
+        else:
+            entry["scope"] = jobspec.plan_scope(plan)
+            entry["scope_kind"] = jobspec.plan_scope_kind(plan)
         entries[key] = entry
     return entry
 
@@ -122,6 +131,29 @@ def _viewport(scope, *, repo_root=None, infra=None):
     return view
 
 
+def _require_scope(scope, plan, view):
+    """The plan and the authorization must agree on scope identity and kind.
+
+    An authorization is isolated by both, so this is checked before any
+    transition that could spend: a plan may only ever spend the authorization
+    it is named by, in the kind that authorization grants.
+    """
+
+    plan_scope = jobspec.plan_scope(plan)
+    if plan_scope != scope:
+        raise ConfigurationError(
+            "the compute plan is for scope {} but this action is for {}; a plan only "
+            "spends the authorization it names".format(plan_scope, scope))
+    plan_kind = jobspec.plan_scope_kind(plan)
+    authorized_kind = envelope_module.envelope_scope_kind(view.envelope)
+    if plan_kind != authorized_kind:
+        raise AuthorizationError(
+            "compute scope {} is a {} plan but its authorization is a {} grant; an "
+            "authorization is isolated by both scope identity and scope kind".format(
+                scope, plan_kind, authorized_kind))
+    return plan_kind
+
+
 def _match_provider_job(jobs, spec, excluded=()):
     for job in jobs:
         if job.get("job_id") not in excluded and jobspec.looks_like_duplicate(job, spec):
@@ -138,7 +170,7 @@ def reconcile(scope, plan, stage, *, infra, record=None):
     adopted = []
 
     for arm, seed in plan_jobs(plan, stage):
-        key = jobspec.job_key(scope, plan["study"], stage, arm, seed, commit)
+        key = jobspec.job_key(scope, jobspec.plan_scope(plan), stage, arm, seed, commit)
         entry = _entry(record, key, arm=arm, seed=seed, plan=plan, stage=stage)
         if entry.get("job_id"):
             continue
@@ -245,6 +277,7 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
 
     commit = jobspec.git_state()["head"]
     tree = jobspec.git_state()
+    _require_scope(scope, plan, view)
     if require_clean and not dry_run:
         jobspec.require_committed_experiment(expected_commit=commit)
     if not dry_run:
@@ -263,7 +296,7 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
         )
 
     for arm, seed in plan_jobs(plan, stage):
-        key = jobspec.job_key(scope, plan["study"], stage, arm, seed, commit)
+        key = jobspec.job_key(scope, jobspec.plan_scope(plan), stage, arm, seed, commit)
         entry = _entry(record, key, arm=arm, seed=seed, plan=plan, stage=stage)
         if entry.get("job_id") or entry.get("state") == COLLECTED:
             continue
@@ -277,7 +310,8 @@ def submit_pending(scope, plan, stage, *, infra, view, record, dry_run=False,
         decision = envelope_module.check(
             view, envelope_module.ACTION_SUBMIT_JOB,
             ledger.derive_spend(infra.worker_list(), scope).facts(),
-            requested={"provider": provider},
+            requested={"provider": provider,
+                       "scope_kind": jobspec.plan_scope_kind(plan)},
         )
         if not decision.allowed:
             decision.require()
@@ -438,7 +472,7 @@ def collect(scope, plan, stage, *, record, reader, require_all=True):
     invalid = []
     commit = jobspec.git_state()["head"]
     for arm, seed in plan_jobs(plan, stage):
-        key = jobspec.job_key(scope, plan["study"], stage, arm, seed, commit)
+        key = jobspec.job_key(scope, jobspec.plan_scope(plan), stage, arm, seed, commit)
         for entry in record["entries"].values():
             if entry.get("job_key") != key:
                 continue
@@ -474,11 +508,22 @@ def collect(scope, plan, stage, *, record, reader, require_all=True):
                 unverified.append(entry["job_key"])
                 continue
             try:
-                entry["evidence"] = evidence.validate(
-                    plan, stage=stage, arm=arm, seed=seed, commit=commit,
-                    entry=entry, reader=reader,
-                    where="{} {} seed {}".format(scope, key, seed),
-                )
+                if jobspec.plan_scope_kind(plan) == scopes.STUDY:
+                    entry["evidence"] = evidence.validate(
+                        plan, stage=stage, arm=arm, seed=seed, commit=commit,
+                        entry=entry, reader=reader,
+                        where="{} {} seed {}".format(scope, key, seed),
+                    )
+                else:
+                    # An infrastructure-validation job stages no research
+                    # evidence: there is no manifest and no protocol vocabulary.
+                    # What is verified is what the seam promises — the declared
+                    # artifact persisted, and the bytes read back are the bytes
+                    # the control plane verified for it.
+                    entry["evidence"] = evidence.validate_infrastructure(
+                        plan, entry=entry, reader=reader,
+                        where="{} {} seed {}".format(scope, key, seed),
+                    )
             except EvidenceError as exc:
                 entry["state"] = FAILED
                 entry["failure_class"] = failures.EVIDENCE_INVALID
@@ -572,7 +617,7 @@ def finish(scope, plan, *, infra, view, record):
     """Stop or destroy scope compute once nothing useful is pending."""
 
     if not record["entries"]:
-        return {"finished": False, "reason": "no verified study work is recorded"}
+        return {"finished": False, "reason": "no verified work is recorded"}
     pending = [
         entry for entry in record["entries"].values()
         if entry.get("state") != COLLECTED
@@ -626,6 +671,7 @@ def advance(scope, plan, stage, *, infra, record=None, view=None, dry_run=False)
         return {"step": "dry-run", "adopted": [], "outcomes": [],
                 "submit": preview, "in_flight": []}
     view = view or _viewport(scope, infra=infra)
+    _require_scope(scope, plan, view)
     if not dry_run:
         workers = infra.worker_list()
         # Reconcile the ledger against provider truth *before* deciding anything about

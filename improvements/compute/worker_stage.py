@@ -162,7 +162,7 @@ def write_manifest(plan, *, stage, arm, seed, identity, staged, outputs_dir,
                    training_exit_code, embedding_layout=None):
     manifest = {
         "schema_version": 1,
-        "study": plan["study"],
+        "study": jobspec.plan_scope(plan),
         "stage": stage,
         "arm": arm["arm"],
         "method": arm.get("method", arm["arm"]),
@@ -202,7 +202,7 @@ def main(argv=None):
     if args.seed not in jobspec.stage_seeds(plan, args.stage):
         print(
             "seed {} is not pre-registered for stage {} of {}".format(
-                args.seed, args.stage, plan["study"]
+                args.seed, args.stage, jobspec.plan_scope(plan)
             ),
             file=sys.stderr,
         )
@@ -210,7 +210,7 @@ def main(argv=None):
     if args.arm not in jobspec.stage_arm_names(plan, args.stage):
         print(
             "arm {} is not selected by stage {} of {} (stage runs: {})".format(
-                args.arm, args.stage, plan["study"],
+                args.arm, args.stage, jobspec.plan_scope(plan),
                 ", ".join(jobspec.stage_arm_names(plan, args.stage)),
             ),
             file=sys.stderr,
@@ -292,7 +292,7 @@ def main(argv=None):
         return 3
     print(
         "staged {} output(s) for {} {} seed {}".format(
-            len(staged), plan["study"], arm["arm"], args.seed
+            len(staged), jobspec.plan_scope(plan), arm["arm"], args.seed
         ),
         flush=True,
     )

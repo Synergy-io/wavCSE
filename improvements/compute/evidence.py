@@ -30,6 +30,7 @@ import json
 import re
 
 from improvements.compute import jobspec
+from improvements.compute import scopes
 from improvements.compute.errors import EvidenceError
 
 SCHEMA_VERSION = 1
@@ -162,7 +163,7 @@ def validate_manifest(text, *, plan, stage, arm, seed, commit, job_id, declared,
             document["schema_version"], SCHEMA_VERSION))
 
     identity = {
-        "study": plan["study"],
+        "study": jobspec.plan_scope(plan),
         "stage": stage,
         "arm": arm,
         "task_type": plan["task_type"],
@@ -442,6 +443,42 @@ def validate_declared_inputs(entry, *, where):
                 item.get("destination")))
         materialized += 1
     return materialized
+
+
+def validate_infrastructure(plan, *, entry, reader, where):
+    """Validate an infrastructure-validation job's stored artifact.
+
+    An infrastructure-validation scope runs no protocol, so there is no manifest
+    and no metric vocabulary to check — asserting one would invent scientific
+    semantics for a job that has none. What is still required is the part the
+    seam actually promises: the declared artifact was persisted, and the bytes
+    read back through the control plane are the bytes it verified for it.
+    """
+
+    outputs = entry.get("outputs")
+    if not isinstance(outputs, list) or not outputs:
+        _fail(where, "the job record lists no stored outputs")
+    verified = []
+    for index, output in enumerate(outputs):
+        at = "{}.outputs[{}]".format(where, index)
+        _require_mapping(output, at)
+        if output.get("persisted") is not True:
+            continue
+        artifact = _require_text(output.get("artifact"), at + ".artifact")
+        sha256 = str(output.get("sha256") or "")
+        text = read_evidence(reader, artifact, sha256, where=at)
+        verified.append({
+            "artifact": artifact,
+            "sha256": sha256,
+            "size_bytes": output.get("verified_size_bytes"),
+            "text_bytes": len(text.encode("utf-8")),
+        })
+    if not verified:
+        _fail(where, "no persisted output could be read back for this job")
+    return {
+        "scope_kind": scopes.INFRASTRUCTURE_VALIDATION,
+        "outputs": sorted(verified, key=lambda item: item["artifact"]),
+    }
 
 
 def validate(plan, *, stage, arm, seed, commit, entry, reader, where):

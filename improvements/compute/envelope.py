@@ -24,6 +24,7 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from improvements.compute import providers
+from improvements.compute import scopes
 from improvements.compute import state as state_module
 from improvements.compute.errors import (
     AuthorizationError,
@@ -51,12 +52,14 @@ _COSTLY_ACTIONS = (ACTION_CREATE_WORKER, ACTION_SUBMIT_JOB, ACTION_ATTACH_VOLUME
                    ACTION_CREATE_VOLUME)
 
 _TOP_LEVEL_KEYS = {
-    "schema_version", "scope", "granted_by", "granted_at", "expires_at",
-    "budget", "concurrency", "resources", "stop_policy", "provider",
+    "schema_version", "scope", "scope_kind", "granted_by", "granted_at",
+    "expires_at", "budget", "concurrency", "resources", "stop_policy", "provider",
 }
 # `provider` is optional only for legacy envelopes, which are deterministically
-# RunPod. New Colab authorizations state it explicitly.
-_TOP_LEVEL_REQUIRED = _TOP_LEVEL_KEYS - {"provider"}
+# RunPod, and `scope_kind` is optional only for legacy envelopes, which are
+# deterministically Study authorizations. A new non-Study authorization (an
+# infrastructure-validation scope) states both explicitly.
+_TOP_LEVEL_REQUIRED = _TOP_LEVEL_KEYS - {"provider", "scope_kind"}
 _BUDGET_COMMON_KEYS = {"cost_unit", "max_wall_clock_hours"}
 _BUDGET_RUNPOD_KEYS = {"max_gpu_hourly_usd", "max_total_gpu_usd"}
 _BUDGET_COLAB_KEYS = {
@@ -149,6 +152,19 @@ def envelope_provider(envelope):
         raise ConfigurationError(str(exc)) from exc
 
 
+def envelope_scope_kind(envelope):
+    """Scope kind bound by the grant; a missing value is a legacy Study grant.
+
+    The kind is policy, so an unrecognised one is refused here rather than
+    defaulted: an authorization this backend cannot classify must never be
+    honoured as a Study grant.
+    """
+
+    return scopes.normalize_kind(
+        (envelope or {}).get("scope_kind"), field="envelope scope_kind"
+    )
+
+
 def cost_unit(envelope):
     """Native provider cost unit; no CU-to-USD conversion is representable."""
 
@@ -193,9 +209,10 @@ def validate(envelope):
     scope = envelope["scope"]
     if not isinstance(scope, str) or not re.match(SCOPE_PATTERN, scope):
         raise ConfigurationError(
-            "envelope scope must be a study identifier of the form TR-0007, got "
+            "envelope scope must be a scope identifier of the form TR-0007, got "
             "{!r}".format(scope)
         )
+    envelope_scope_kind(envelope)
     for field in ("granted_by", "granted_at", "expires_at"):
         if not isinstance(envelope[field], str) or not envelope[field].strip():
             raise ConfigurationError(
@@ -392,6 +409,7 @@ class EnvelopeView(object):
     def as_dict(self):
         return {
             "scope": self.scope,
+            "scope_kind": envelope_scope_kind(self.envelope),
             "digest": self.digest,
             "committed_digest": self.committed_digest,
             "source": self.source,
@@ -535,6 +553,23 @@ def check(view, action, facts, requested=None):
 
     requested = requested or {}
     envelope = view.envelope
+    if "scope_kind" in requested:
+        # Scope identity is already bound by ``load(scope)``; the kind is the
+        # second half of the isolation. An action whose plan declares a kind the
+        # authorization does not is refused before anything else is considered.
+        try:
+            requested_kind = scopes.normalize_kind(requested.get("scope_kind"))
+        except ConfigurationError as exc:
+            return Decision(False, "AUTHORIZATION", str(exc), action=action)
+        authorized_kind = envelope_scope_kind(envelope)
+        if requested_kind != authorized_kind:
+            return Decision(
+                False, "AUTHORIZATION",
+                "the authorization for {} is a {} scope but the requested action belongs "
+                "to a {} scope; an authorization is isolated by both scope identity and "
+                "scope kind".format(view.scope, authorized_kind, requested_kind),
+                action=action,
+            )
     budget = envelope["budget"]
     concurrency = envelope["concurrency"]
     resources = envelope["resources"]

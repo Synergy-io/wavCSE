@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "scope": "IN-0001",
+  "scope_kind": "infrastructure_validation",
+  "repository": "https://github.com/Synergy-io/wavCSE.git",
+  "task_type": "infrastructure_validation",
+  "provider": "colab",
+  "worker": {
+    "gpu_type": "T4",
+    "gpu_count": 1
+  },
+  "setup_argv": [],
+  "timeout_seconds": 900,
+  "device_index": 0,
+  "environment_secrets": [],
+  "arms": [
+    {
+      "arm": "smoke",
+      "method": "infrastructure-validation-probe",
+      "argv": [
+        "python3",
+        "-m",
+        "improvements.compute.infra_probe",
+        "--seed",
+        "{seed}",
+        "--output",
+        "outputs/smoke_s00/smoke_probe.txt"
+      ]
+    }
+  ],
+  "stages": {
+    "smoke": {
+      "seeds": [0]
+    }
+  },
+  "outputs": [
+    {
+      "name": "smoke_probe",
+      "kind": "results_file",
+      "required": true
+    }
+  ]
+}

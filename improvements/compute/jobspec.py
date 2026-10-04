@@ -1,15 +1,18 @@
 """Deterministic, exact-commit job specifications.
 
-One job is one (study, stage, arm, seed) on one exact commit. Everything about
-the resulting document is derived from committed state — the plan file in the
+One job is one (scope, stage, arm, seed) on one exact commit — the scope being
+a research Study or an infrastructure-validation scope, which differ only in
+what the job runs and what it promises to produce. Everything about the
+resulting document is derived from committed state — the plan file in the
 checkout at that commit, the seed set, the arm, and the envelope digest — so
 generating the same job twice produces byte-identical bytes. There is no
 timestamp, no branch name, and no "latest" anywhere in the payload.
 
-The wrapper the job runs is itself committed code
-(``improvements.compute.worker_stage``), so what executes is pinned by the SHA
-the spec names, and the spec names the *wrapper* rather than a shell string: the
-training argv lives in the plan file, where review can see it.
+A Study job runs the committed wrapper ``improvements.compute.worker_stage`` so
+that what executes is pinned by the SHA the spec names, and the spec names the
+*wrapper* rather than a shell string: the training argv lives in the plan file,
+where review can see it. An infrastructure-validation job has no research
+wrapper to run, so the spec is the plan's own command.
 
 Local validation mirrors the control plane's own rules (full 40/64-hex commit,
 anonymous HTTPS remote, argv as a vector, relative paths only, no credentials).
@@ -23,6 +26,7 @@ import re
 import subprocess
 
 from improvements.compute import providers
+from improvements.compute import scopes
 from improvements.compute import state as state_module
 from improvements.compute.errors import (
     ArtifactIntegrityError,
@@ -38,10 +42,10 @@ _SECRET_MARKERS = ("X-Amz-", "?Signature=", "&Signature=", "Bearer ", "AKIA",
                    "-----BEGIN", "ssh://")
 _PLACEHOLDERS = ("task_type", "config", "device_index", "seed")
 
-_PLAN_KEYS = {"schema_version", "study", "repository", "task_type",
-              "timeout_seconds", "device_index", "arms", "stages", "outputs",
-              "inputs_file", "environment", "environment_secrets", "setup_argv",
-              "method", "worker", "embedding_layout", "provider"}
+_PLAN_KEYS = {"schema_version", "study", "scope", "scope_kind", "repository",
+              "task_type", "timeout_seconds", "device_index", "arms", "stages",
+              "outputs", "inputs_file", "environment", "environment_secrets",
+              "setup_argv", "method", "worker", "embedding_layout", "provider"}
 _LAYOUT_KEYS = {"root", "datasets"}
 _LAYOUT_DATASET_KEYS = {"dataset", "input", "inputs"}
 _ARM_KEYS = {"arm", "method", "argv", "config", "labels"}
@@ -113,8 +117,43 @@ def plan_provider(plan):
         _fail("provider", str(exc))
 
 
+def plan_scope_kind(plan):
+    """The execution-scope kind a plan declares.
+
+    A plan written before kinds existed carries none and is a Study plan, so
+    every legacy Study plan keeps its exact meaning. An unrecognised kind is
+    refused here rather than defaulted.
+    """
+
+    try:
+        return scopes.normalize_kind(plan.get("scope_kind"))
+    except ConfigurationError as exc:
+        _fail("scope_kind", str(exc))
+
+
+def plan_scope(plan):
+    """The execution scope a plan is authorized and attributed by.
+
+    A Study plan names its scope with ``study``; an infrastructure-validation
+    plan names it with ``scope``. The two spellings are deliberately exclusive
+    per kind, so a plan can never carry a scientific Study id *and* a
+    non-Study scope id at once and leave a reader to guess which one owns the
+    compute.
+    """
+
+    if plan_scope_kind(plan) == scopes.STUDY:
+        return plan["study"]
+    return plan["scope"]
+
+
 def validate_plan(plan):
-    """Validate one study compute plan."""
+    """Validate one compute plan.
+
+    A Study plan and an infrastructure-validation plan share one schema and
+    differ only in the kind they declare and the field that carries the scope
+    identity, so the shared validation stays shared and the difference stays
+    explicit.
+    """
 
     _require(isinstance(plan, dict), "root", "must be a mapping")
     # Keys starting with "_" are internal annotations added by load_plan (the
@@ -123,8 +162,20 @@ def validate_plan(plan):
     _require(not unknown, "root", "has unknown key(s): {}".format(", ".join(unknown)))
     _require(plan.get("schema_version") == SCHEMA_VERSION, "schema_version",
              "must be {}".format(SCHEMA_VERSION))
-    _require(isinstance(plan.get("study"), str) and plan["study"].strip(),
-             "study", "must be a study identifier")
+    kind = plan_scope_kind(plan)
+    if kind == scopes.STUDY:
+        # The scope identity of a Study plan *is* its Study id; `scope` is the
+        # non-Study spelling and is never a second way to say the same thing.
+        _require(isinstance(plan.get("study"), str) and plan["study"].strip(),
+                 "study", "must be a study identifier")
+        _require("scope" not in plan, "scope",
+                 "is not used by a study plan; the study id is the execution scope")
+    else:
+        _require(isinstance(plan.get("scope"), str)
+                 and scopes.SCOPE_ID.match(plan["scope"]), "scope",
+                 "must be an infrastructure-validation scope identifier of the form IN-0001")
+        _require("study" not in plan, "study",
+                 "is not used by an infrastructure-validation plan; name the scope instead")
     _check_secret_free(plan, "root")
     secret_names = plan.get("environment_secrets", [])
     _require(isinstance(secret_names, list) and all(
@@ -133,8 +184,16 @@ def validate_plan(plan):
         "may name only the MLflow credentials required by this research workload")
     _require(len(set(secret_names)) == len(secret_names), "environment_secrets",
              "must not repeat a name")
-    _require(set(secret_names) == _ALLOWED_RUNTIME_SECRETS, "environment_secrets",
-             "must declare both MLflow credentials for a recorded research job")
+    if kind == scopes.STUDY:
+        _require(set(secret_names) == _ALLOWED_RUNTIME_SECRETS, "environment_secrets",
+                 "must declare both MLflow credentials for a recorded research job")
+    else:
+        # An infrastructure-validation job runs no training and reaches no
+        # tracker, so it declares no research credential. The control plane only
+        # requires the secrets a spec names, so demanding MLflow here would put
+        # a research credential on a job that must not carry one.
+        _require(not secret_names, "environment_secrets",
+                 "an infrastructure-validation job declares no research credentials")
 
     repository = plan.get("repository", "")
     _require(repository.startswith("https://"), "repository",
@@ -465,10 +524,15 @@ def declared_outputs(plan, arm, seed):
     Paths are derived from the plan and the (arm, seed) pair, never from a
     timestamp, so they are known before the job runs and can be declared
     required in the spec.
+
+    A Study job also declares the wrapper's sidecar ``MANIFEST.json``, which is
+    what the evidence validator reads back. An infrastructure-validation job
+    runs a plain command and stages no research evidence, so its declared
+    outputs are exactly the artifacts that command was asked to write.
     """
 
     root = outputs_root(arm["arm"], seed)
-    key_root = "{}/{}_s{:02d}".format(plan["study"], arm["arm"], seed)
+    key_root = "{}/{}_s{:02d}".format(plan_scope(plan), arm["arm"], seed)
     entries = []
     for output in plan["outputs"]:
         kind = output["kind"]
@@ -484,19 +548,26 @@ def declared_outputs(plan, arm, seed):
             "required": bool(output.get("required", True)),
             "overwrite": False,
         })
-    entries.append({
-        "path": "{}/MANIFEST.json".format(root),
-        "artifact": "{}/MANIFEST.json".format(key_root),
-        "required": True,
-        "overwrite": False,
-    })
+    if plan_scope_kind(plan) == scopes.STUDY:
+        entries.append({
+            "path": "{}/MANIFEST.json".format(root),
+            "artifact": "{}/MANIFEST.json".format(key_root),
+            "required": True,
+            "overwrite": False,
+        })
     entries.sort(key=lambda entry: entry["path"])
     return entries
 
 
 def build_spec(plan, *, stage, arm, seed, commit, scope, envelope_digest,
                inputs=()):
-    """Render one version 1 job specification."""
+    """Render one version 1 job specification.
+
+    The shape follows the plan's scope kind and nothing else: a Study job names
+    the committed research wrapper and declares its evidence manifest, while an
+    infrastructure-validation job names the plan's own probe command and
+    declares only the artifacts that command writes.
+    """
 
     validate_plan(plan)
     commit = str(commit).strip().lower()
@@ -520,19 +591,31 @@ def build_spec(plan, *, stage, arm, seed, commit, scope, envelope_digest,
             )
         )
 
-    name = job_name(plan["study"], stage, arm_spec["arm"], seed)
+    kind = plan_scope_kind(plan)
+    scope_id = plan_scope(plan)
+    name = job_name(scope_id, stage, arm_spec["arm"], seed)
     root = outputs_root(arm_spec["arm"], seed)
-    wrapper_argv = [
-        "uv", "run", "--locked", "python", "-m", WRAPPER_MODULE,
-        "--plan", _plan_relative(plan),
-        "--stage", stage,
-        "--arm", arm_spec["arm"],
-        "--seed", str(seed),
-        "--outputs-root", root,
-    ]
+    if kind == scopes.STUDY:
+        # The wrapper is committed code: it runs the arm, stages the declared
+        # outputs and writes the sidecar manifest the evidence validator reads.
+        command_argv = [
+            "uv", "run", "--locked", "python", "-m", WRAPPER_MODULE,
+            "--plan", _plan_relative(plan),
+            "--stage", stage,
+            "--arm", arm_spec["arm"],
+            "--seed", str(seed),
+            "--outputs-root", root,
+        ]
+        setup_argv = list(plan.get("setup_argv") or DEFAULT_SETUP_ARGV)
+    else:
+        # An infrastructure-validation job *is* the command the plan names: no
+        # research wrapper, no run identity, no staged evidence. An absent
+        # setup means no setup, because such a job is a direct probe, not a
+        # training run that needs the research environment installed.
+        command_argv = expand_argv(plan, arm_spec, seed)
+        setup_argv = [str(token) for token in (plan.get("setup_argv") or [])]
 
     metadata = {
-        "study_id": plan["study"],
         "stage": stage,
         "arm": arm_spec["arm"],
         "method": plan.get("method") or arm_spec.get("method", arm_spec["arm"]),
@@ -541,6 +624,11 @@ def build_spec(plan, *, stage, arm, seed, commit, scope, envelope_digest,
         "scope": scope,
         "envelope_digest": envelope_digest,
     }
+    if kind == scopes.STUDY:
+        metadata["study_id"] = scope_id
+    else:
+        metadata["scope_id"] = scope_id
+        metadata["scope_kind"] = kind
     for key, value in (arm_spec.get("labels") or {}).items():
         metadata[key] = str(value)
 
@@ -548,8 +636,7 @@ def build_spec(plan, *, stage, arm, seed, commit, scope, envelope_digest,
         "schema_version": SCHEMA_VERSION,
         "name": name,
         "source": {"repository": plan["repository"], "commit": commit},
-        "command": {"argv": wrapper_argv},
-        "setup": {"argv": list(plan.get("setup_argv") or DEFAULT_SETUP_ARGV)},
+        "command": {"argv": command_argv},
         "runtime": {
             "timeout_seconds": int(plan.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)),
             "environment": dict(plan.get("environment") or {}),
@@ -558,6 +645,10 @@ def build_spec(plan, *, stage, arm, seed, commit, scope, envelope_digest,
         "outputs": declared_outputs(plan, arm_spec, seed),
         "tracking": {"metadata": metadata},
     }
+    if setup_argv:
+        # The control plane's own model requires a non-empty setup argv, so "no
+        # setup" is the absent key, never an empty vector.
+        spec["setup"] = {"argv": list(setup_argv)}
     secrets = plan.get("environment_secrets")
     if secrets:
         spec["runtime"]["environment_secrets"] = list(secrets)

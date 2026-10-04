@@ -1,9 +1,10 @@
 # Compute authorizations
 
-One file per scope — `<SCOPE>.yaml`, named by Study ID (`TR-0007`) — is the
-human's written authority to spend money on that scope. It is the *only*
-authority: the orchestrator consumes it and can never create, renew, widen or
-lift it.
+One file per scope — `<SCOPE>.yaml`, named by the execution scope it grants
+(a Study id such as `TR-0007`, or an infrastructure-validation scope such as
+`IN-0001`) — is the human's written authority to spend money on that scope. It is
+the *only* authority: the orchestrator consumes it and can never create, renew,
+widen or lift it.
 
 Nothing in this directory exists for a scope that has not been granted, and the
 backend fails closed when it is absent: a scope without an envelope cannot
@@ -31,7 +32,8 @@ provision, and reports the block rather than improvising.
 
 ```yaml
 schema_version: 1
-scope: TR-0007                     # Study ID; the unit of authorization
+scope: TR-0007                     # scope id; the unit of authorization
+scope_kind: study                   # optional; "study" (default) or "infrastructure_validation"
 granted_by: <human>                # who is accountable for this grant
 granted_at: 2026-09-29T12:00:00+00:00
 expires_at: 2026-10-06T00:00:00+00:00
@@ -57,8 +59,14 @@ stop_policy:
   retain_for_reuse_hours: 0
 ```
 
-## How a grant is made
+An authorization is isolated by **both** the scope identity and the scope kind.
+A plan may only spend the authorization it is named by, and only when the two
+kinds agree: a Study authorization cannot be spent by an infrastructure-validation
+plan, and an infrastructure-validation authorization confers nothing on any
+Study — `IN-0001` never authorizes `DG-0008`. An unrecognised `scope_kind` is
+refused, and a missing one is a legacy Study grant.
 
+## How a grant is made
 1. A human writes `<SCOPE>.yaml` from the schema above and commits it in the
    same change as the study's `PLAN.md` where possible.
 2. The first action under that envelope records its digest in the

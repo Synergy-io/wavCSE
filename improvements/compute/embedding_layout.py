@@ -349,7 +349,7 @@ def prepare(plan, *, stage, arm, seed, checkout_root, job_directory, commit, job
     if not pool_id or not model_type:
         raise ImplementationBugError("the loader path components are empty")
     marker = embedding_root.mark_prepared(root, {
-        "study": plan["study"],
+        "study": jobspec.plan_scope(plan),
         "stage": stage,
         "arm": arm,
         "seed": int(seed),

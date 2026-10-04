@@ -66,6 +66,9 @@ class InfraLocation(object):
 
 REPO_ROOT_ENV = "WAVCSE_REPO_ROOT"
 
+# How a control plane counts as "explicitly bound" rather than merely found.
+EXPLICIT_SOURCES = ("environment", "environment-cli")
+
 
 def repo_root():
     """The wavCSE repository root, derived from this file's location.
@@ -198,3 +201,27 @@ def resolve(checkout=None, cli=None):
             marker=marker,
         )
     )
+
+
+def require_explicit(location, *, operation):
+    """Refuse a provider-mutating step without an explicitly bound control plane.
+
+    The controller preflight established that ``WAVCSE_INFRA_CHECKOUT`` is not
+    persisted, and that this repository's embedded ``infra/`` subsystem wins
+    resolution ahead of ``PATH``. That subsystem predates the canonical
+    implementation and cannot serve a job, so operating it silently is how a
+    recorded run would validate the wrong software. Nothing here repairs or
+    synchronizes the embedded copy: a recorded mutation simply stops until the
+    canonical external checkout is named explicitly.
+    """
+
+    if location.source not in EXPLICIT_SOURCES:
+        raise ConfigurationError(
+            "{} requires an explicitly bound infrastructure control plane, but "
+            "resolution picked {} ({}). Bind the canonical external wavcse-infra "
+            "checkout with {} (or {}) and re-run; a merely discovered control plane "
+            "is never used for a provider-mutating step.".format(
+                operation, location.checkout, location.source, CHECKOUT_ENV, CLI_ENV
+            )
+        )
+    return location
