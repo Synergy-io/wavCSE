@@ -1,5 +1,5 @@
 {
-  "assessment_digest": "b758372c2ced279a2db993f889c0325f1bdbf079aac65d5f235a3d42739156b4",
+  "assessment_digest": "d0e470f75409fa77f6f408c49c43f7b4592d7fa389b841a55993317b86246ab1",
   "assessment_id": "DP-0008-A01",
   "blockers": [
     {
@@ -186,7 +186,7 @@
     ]
   },
   "workload_ref": {
-    "digest": "2a99d0b76302657091bd7ced5f8517b1fcd7efc3ce9a2725b37cbc7dc5f8f76b",
+    "digest": "727901cac90a39b16384521b507a5276d1fc2b06a2bfe1e3e31a903ccc5648cb",
     "revision": 1,
     "workload_id": "DP-0008-W01"
   }

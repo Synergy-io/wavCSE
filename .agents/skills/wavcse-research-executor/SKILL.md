@@ -13,7 +13,7 @@ validator is `improvements/taskrelation/research/execution_contract.py`.
 ## Entry
 
 Accept an approved proposal **reference**, never copied transcript prose. Verify
-its exact bytes, approval identity and reviewer PASS with `proposal_reference`.
+its exact committed bytes, approval identity and reviewer PASS with `proposal_reference`.
 Reconstruct the experiment from the proposal and repository. An approved
 proposal is not a registered Study or an authorization.
 

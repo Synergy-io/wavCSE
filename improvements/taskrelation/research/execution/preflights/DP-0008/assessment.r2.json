@@ -1,5 +1,5 @@
 {
-  "assessment_digest": "09b669d3885d4484a7a5386ad578a84122302bb58f05e79fc26be5da784c3c92",
+  "assessment_digest": "7dacdaab16c2fe1cfa3f0c3793e1ecf3f3d69691cb530b7496f8cd60e5ab897c",
   "assessment_id": "DP-0008-A02",
   "blockers": [
     {
@@ -112,7 +112,7 @@
     "reason": "No improvements/taskrelation/research/authorizations/DG-0008.yaml exists (authorizations/ holds only DG-0007.yaml, TR-0007.yaml and TR-0013.yaml), so the spend envelope is undeclared and within_budget is null: unknown price or unknown lifetime fails closed for new spend under .agents/policies/autonomy.md. No paid verb, provider query, or live resource was used in this OPERATE slice.",
     "within_budget": null
   },
-  "recommended_action": "Round-2 re-assessment of DP-0008-W01 revision 2 (digest b0340df0c4bd69888367b1290d6803d130035472f78a024c5393c1eca58fe883). CR-001 is satisfied without invariant drift: IF-MANIFEST-IO equals its requested allowed value STREAM_CANONICAL_BYTES, every other implementation-flexible field and all scientific_invariants are byte-identical to revision 1, so no further implementation change is requested. This OPERATE slice must nonetheless BLOCK because the lifecycle gates are genuinely missing and independent of the flexible revision: DG-0008 is unregistered (absent from STUDIES.jsonl, no studies/DG-0008/PLAN.md); no committed improvements/taskrelation/research/authorizations/DG-0008.yaml exists so spend is undeclared, within_budget is null and unknown price/lifetime fails closed; the lawful raw corpus and byte-identical dual-identity evidence are absent; no committed studies/DG-0008/compute/{plan.json,inputs.json} exists; the implementation is PLANNED with no commit or entrypoint; no compatible-GPU benchmark bounds runtime/cost; and the resolved embedded infra checkout (commit 6a2e2bd, v0.1.0, DIRTY tree) lacks the volume/storage/job command surface that improvements.compute requires. A preflight grants none of proposal approval, registration, authorization or execution; no live resource was created and no scientific endpoint was read.",
+  "recommended_action": "Round-2 re-assessment of DP-0008-W01 revision 2 (digest 9d180e58ef86a7d59818175bb35d72f9e437e46c5d768bd70e3db8b9b931de9d). CR-001 is satisfied without invariant drift: IF-MANIFEST-IO equals its requested allowed value STREAM_CANONICAL_BYTES, every other implementation-flexible field and all scientific_invariants are byte-identical to revision 1, so no further implementation change is requested. This OPERATE slice must nonetheless BLOCK because the lifecycle gates are genuinely missing and independent of the flexible revision: DG-0008 is unregistered (absent from STUDIES.jsonl, no studies/DG-0008/PLAN.md); no committed improvements/taskrelation/research/authorizations/DG-0008.yaml exists so spend is undeclared, within_budget is null and unknown price/lifetime fails closed; the lawful raw corpus and byte-identical dual-identity evidence are absent; no committed studies/DG-0008/compute/{plan.json,inputs.json} exists; the implementation is PLANNED with no commit or entrypoint; no compatible-GPU benchmark bounds runtime/cost; and the resolved embedded infra checkout (commit 6a2e2bd, v0.1.0, DIRTY tree) lacks the volume/storage/job command surface that improvements.compute requires. A preflight grants none of proposal approval, registration, authorization or execution; no live resource was created and no scientific endpoint was read.",
   "resource_recommendation": [
     {
       "name": "gpu_cuda_arch",
@@ -162,7 +162,7 @@
   ],
   "round": 2,
   "schema_version": 1,
-  "selected_strategy": "Round-2 OPERATE strategy against corrected workload revision 2 (digest b0340df0c4bd69888367b1290d6803d130035472f78a024c5393c1eca58fe883). CR-001 is satisfied: IF-MANIFEST-IO=STREAM_CANONICAL_BYTES now equals the requested allowed value and every scientific invariant and other flexible-choice field is unchanged, so the Executor's flexible request is closed and no further implementation change is requested. Execution remains infeasible: 200 five-epoch matrix trainings plus one same-arm determinism repeat would run under exactly one job workspace and at most two concurrent jobs after the one-at-a-time gate members, on one compatible GPU no newer than sm_90 with a ~200 GB corpus volume attached at pod creation — but no compatible-GPU benchmark bounds runtime or cost, no human price/lifetime envelope exists, the lawful corpus and dual-identity evidence are absent, and the currently resolved embedded infra checkout lacks the volume/storage/job command surface, so no job spec can be submitted. This preflight stops before live execution and submits no job; no live resource, provider query or scientific endpoint was touched.",
+  "selected_strategy": "Round-2 OPERATE strategy against corrected workload revision 2 (digest 9d180e58ef86a7d59818175bb35d72f9e437e46c5d768bd70e3db8b9b931de9d). CR-001 is satisfied: IF-MANIFEST-IO=STREAM_CANONICAL_BYTES now equals the requested allowed value and every scientific invariant and other flexible-choice field is unchanged, so the Executor's flexible request is closed and no further implementation change is requested. Execution remains infeasible: 200 five-epoch matrix trainings plus one same-arm determinism repeat would run under exactly one job workspace and at most two concurrent jobs after the one-at-a-time gate members, on one compatible GPU no newer than sm_90 with a ~200 GB corpus volume attached at pod creation — but no compatible-GPU benchmark bounds runtime or cost, no human price/lifetime envelope exists, the lawful corpus and dual-identity evidence are absent, and the currently resolved embedded infra checkout lacks the volume/storage/job command surface, so no job spec can be submitted. This preflight stops before live execution and submits no job; no live resource, provider query or scientific endpoint was touched.",
   "telemetry": {
     "deterministic": [
       "deterministic/exposed: worker and job state (infra worker list/show, job list/status)",
@@ -184,7 +184,7 @@
     ]
   },
   "workload_ref": {
-    "digest": "b0340df0c4bd69888367b1290d6803d130035472f78a024c5393c1eca58fe883",
+    "digest": "9d180e58ef86a7d59818175bb35d72f9e437e46c5d768bd70e3db8b9b931de9d",
     "revision": 2,
     "workload_id": "DP-0008-W01"
   }

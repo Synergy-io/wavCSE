@@ -23,7 +23,7 @@ from the approved proposal and repository records. Validate artifacts through
 Before implementation:
 
 1. verify proposal status `APPROVED`, reviewer `PASS`, human identity/timestamp,
-   and exact proposal SHA-256;
+   and exact proposal bytes at an immutable full Git commit;
 2. confirm whether the allocated Study is registered and whether its `PLAN.md`,
    compute plan and authorization exist; never manufacture any of them;
 3. derive explicit `scientific_invariants` from the proposal and keep
@@ -63,7 +63,7 @@ implement it.
 
 Produce a sealed `execution_workload` document with:
 
-- exact approved-proposal reference and digest;
+- exact approved-proposal path, commit and digest;
 - explicit invariants and implementation-flexible choices;
 - implementation status, exact commit when implemented, argv entrypoint,
   environment, validation evidence, checkpoint/resume semantics;

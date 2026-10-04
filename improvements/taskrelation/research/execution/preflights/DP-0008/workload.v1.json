@@ -159,6 +159,7 @@
     "allocated_study_id": "DG-0008",
     "approved_at": "2026-10-03T16:18:45+00:00",
     "approved_by": "Kevin Sanjula <kevinxsanjula@gmail.com>",
+    "commit": "83694cd965a3045ddf2f0bc8c8c9949a5abfaba2",
     "path": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md",
     "proposal_id": "DP-0008",
     "sha256": "c3548d7f9bae2881dcd833c9ddb19e5abb0df174ae76692dac79ab6b566572bc",
@@ -682,6 +683,6 @@
     }
   ],
   "supersedes": null,
-  "workload_digest": "2a99d0b76302657091bd7ced5f8517b1fcd7efc3ce9a2725b37cbc7dc5f8f76b",
+  "workload_digest": "727901cac90a39b16384521b507a5276d1fc2b06a2bfe1e3e31a903ccc5648cb",
   "workload_id": "DP-0008-W01"
 }

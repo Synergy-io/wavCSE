@@ -1,18 +1,19 @@
 {
   "current_workload_ref": {
-    "digest": "b0340df0c4bd69888367b1290d6803d130035472f78a024c5393c1eca58fe883",
+    "digest": "9d180e58ef86a7d59818175bb35d72f9e437e46c5d768bd70e3db8b9b931de9d",
     "revision": 2,
     "workload_id": "DP-0008-W01"
   },
   "escalation": null,
   "kind": "execution_negotiation",
   "max_rounds": 3,
-  "negotiation_digest": "452e669ea2223a689c433ac9bf4e018794e0933c530d7a5de98c9d933c8059db",
+  "negotiation_digest": "d17c4294ee06bad5eae1d8f3ef7c94f5c51c6f2bdbc403dbcfd97297cbe4aafd",
   "negotiation_id": "DP-0008-N01",
   "proposal_ref": {
     "allocated_study_id": "DG-0008",
     "approved_at": "2026-10-03T16:18:45+00:00",
     "approved_by": "Kevin Sanjula <kevinxsanjula@gmail.com>",
+    "commit": "83694cd965a3045ddf2f0bc8c8c9949a5abfaba2",
     "path": "improvements/taskrelation/research/proposals/DG-0008_exact_matched_directed_transfer.md",
     "proposal_id": "DP-0008",
     "sha256": "c3548d7f9bae2881dcd833c9ddb19e5abb0df174ae76692dac79ab6b566572bc",
@@ -22,13 +23,13 @@
     {
       "assessment_ref": {
         "assessment_id": "DP-0008-A01",
-        "digest": "b758372c2ced279a2db993f889c0325f1bdbf079aac65d5f235a3d42739156b4",
+        "digest": "d0e470f75409fa77f6f408c49c43f7b4592d7fa389b841a55993317b86246ab1",
         "round": 1
       },
       "decision": "REQUEST_IMPLEMENTATION_CHANGE",
       "round": 1,
       "workload_ref": {
-        "digest": "2a99d0b76302657091bd7ced5f8517b1fcd7efc3ce9a2725b37cbc7dc5f8f76b",
+        "digest": "727901cac90a39b16384521b507a5276d1fc2b06a2bfe1e3e31a903ccc5648cb",
         "revision": 1,
         "workload_id": "DP-0008-W01"
       }
@@ -36,13 +37,13 @@
     {
       "assessment_ref": {
         "assessment_id": "DP-0008-A02",
-        "digest": "09b669d3885d4484a7a5386ad578a84122302bb58f05e79fc26be5da784c3c92",
+        "digest": "7dacdaab16c2fe1cfa3f0c3793e1ecf3f3d69691cb530b7496f8cd60e5ab897c",
         "round": 2
       },
       "decision": "BLOCKED",
       "round": 2,
       "workload_ref": {
-        "digest": "b0340df0c4bd69888367b1290d6803d130035472f78a024c5393c1eca58fe883",
+        "digest": "9d180e58ef86a7d59818175bb35d72f9e437e46c5d768bd70e3db8b9b931de9d",
         "revision": 2,
         "workload_id": "DP-0008-W01"
       }

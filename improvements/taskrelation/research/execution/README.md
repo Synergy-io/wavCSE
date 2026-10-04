@@ -19,7 +19,7 @@ not infrastructure.
 
 | Concern | Existing authority | Execution Plane treatment |
 |---|---|---|
-| Scientific design and human acceptance | `proposals/*.md`, schema/status checked by `proposal_check.py` | Exact path and SHA-256 reference; never copied or reinterpreted |
+| Scientific design and human acceptance | `proposals/*.md`, schema/status checked by `proposal_check.py` | Exact path, immutable Git commit and SHA-256 reference; never copied or reinterpreted |
 | Registered Study | `STUDIES.jsonl` and `studies/<ID>/PLAN.md` | Referenced when it exists; never created by either specialist |
 | Executable study expansion | `studies/<ID>/compute/{plan.json,inputs.json}` and `improvements.compute.jobspec` | Referenced, not duplicated |
 | Spend authority | committed `authorizations/<ID>.yaml` | Referenced, never created/renewed/widened |
@@ -74,7 +74,7 @@ digest field.
 The Executor's handoff contains:
 
 - workload id and monotonic revision;
-- exact approved-proposal id/path/SHA-256/approval identity;
+- exact approved-proposal id/path/commit/SHA-256/approval identity;
 - explicit `scientific_invariants` derived from that proposal;
 - finite `implementation_flexible` choices and equivalence guards;
 - implementation status, exact commit, argv entrypoint, environment, local

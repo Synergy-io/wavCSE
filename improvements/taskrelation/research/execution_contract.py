@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -194,8 +195,8 @@ def write(path, document):
     return destination
 
 
-def proposal_reference(path, repo_root=None):
-    """Return an exact-byte reference to one valid, human-approved proposal."""
+def proposal_reference(path, repo_root=None, commit=None):
+    """Return an immutable Git reference to one valid, human-approved proposal."""
 
     root = Path(repo_root or Path(__file__).resolve().parents[3]).resolve()
     proposal_path = Path(path)
@@ -209,11 +210,38 @@ def proposal_reference(path, repo_root=None):
     except ValueError as exc:
         raise ContractError("proposal path must be inside the repository proposals directory") from exc
 
+    revision = commit
+    if revision is None:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(root),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            universal_newlines=True,
+        )
+        if completed.returncode != 0:
+            raise ContractError("cannot resolve the commit containing the approved proposal")
+        revision = completed.stdout.strip()
+    if not _COMMIT.match(str(revision)):
+        raise ContractError("approved proposal reference requires a full Git commit")
+
+    completed = subprocess.run(
+        ["git", "show", "{}:{}".format(revision, relative.as_posix())],
+        cwd=str(root),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise ContractError(
+            "approved proposal {} is not present at commit {}".format(relative, revision)
+        )
+    payload = completed.stdout
     try:
-        payload = proposal_path.read_bytes()
-    except OSError as exc:
-        raise ContractError("cannot read approved proposal {}: {}".format(relative, exc)) from exc
-    text = payload.decode("utf-8")
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ContractError("approved proposal is not UTF-8 at commit {}".format(revision)) from exc
     entries, parse_problems = proposal_check.parse_frontmatter(text)
     if entries is None:
         raise ContractError("approved proposal has no frontmatter")
@@ -233,6 +261,7 @@ def proposal_reference(path, repo_root=None):
         "proposal_id": fields["proposal_id"],
         "allocated_study_id": fields["allocated_study_id"],
         "path": relative.as_posix(),
+        "commit": revision,
         "sha256": hashlib.sha256(payload).hexdigest(),
         "status": fields["status"],
         "approved_by": fields["approved_by"],
@@ -614,7 +643,7 @@ def check_directory(path, repo_root=None):
 
 def _validate_proposal(value, repo_root=None):
     _validate_proposal_shape(value)
-    current = proposal_reference(value["path"], repo_root=repo_root)
+    current = proposal_reference(value["path"], repo_root=repo_root, commit=value["commit"])
     if value != current:
         raise ContractError(
             "proposal reference no longer matches the approved proposal bytes",
@@ -631,6 +660,7 @@ def _validate_proposal_shape(value):
             "allocated_study_id",
             "path",
             "sha256",
+            "commit",
             "status",
             "approved_by",
             "approved_at",
@@ -640,6 +670,8 @@ def _validate_proposal_shape(value):
     _identifier(value["proposal_id"], "proposal_ref.proposal_id")
     _identifier(value["allocated_study_id"], "proposal_ref.allocated_study_id")
     _relative(value["path"], "proposal_ref.path")
+    if not _COMMIT.match(str(value["commit"])):
+        raise ContractError("proposal_ref.commit must be a full Git commit")
     if not _SHA256.match(str(value["sha256"])):
         raise ContractError("proposal_ref.sha256 must be a full SHA-256")
     if value["status"] != "APPROVED":

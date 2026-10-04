@@ -2,6 +2,7 @@
 
 import copy
 import hashlib
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -226,12 +227,16 @@ def revise(previous, request, *, choice):
 class ApprovedProposalBindingTests(unittest.TestCase):
     def test_reference_identifies_the_exact_human_approved_proposal(self):
         reference = contract.proposal_reference(PROPOSAL_PATH, repo_root=REPO_ROOT)
-        payload = (REPO_ROOT / PROPOSAL_PATH).read_bytes()
+        committed = subprocess.check_output(
+            ["git", "show", "{}:{}".format(reference["commit"], PROPOSAL_PATH)],
+            cwd=str(REPO_ROOT),
+        )
 
         self.assertEqual(reference["proposal_id"], "DP-0008")
         self.assertEqual(reference["allocated_study_id"], "DG-0008")
         self.assertEqual(reference["status"], "APPROVED")
-        self.assertEqual(reference["sha256"], hashlib.sha256(payload).hexdigest())
+        self.assertRegex(reference["commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(reference["sha256"], hashlib.sha256(committed).hexdigest())
 
     def test_workload_fails_when_the_approved_proposal_digest_drifts(self):
         document = workload()
