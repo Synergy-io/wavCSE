@@ -22,6 +22,7 @@ import os
 import re
 import subprocess
 
+from improvements.compute import providers
 from improvements.compute import state as state_module
 from improvements.compute.errors import (
     ArtifactIntegrityError,
@@ -40,7 +41,7 @@ _PLACEHOLDERS = ("task_type", "config", "device_index", "seed")
 _PLAN_KEYS = {"schema_version", "study", "repository", "task_type",
               "timeout_seconds", "device_index", "arms", "stages", "outputs",
               "inputs_file", "environment", "environment_secrets", "setup_argv",
-              "method", "worker", "embedding_layout"}
+              "method", "worker", "embedding_layout", "provider"}
 _LAYOUT_KEYS = {"root", "datasets"}
 _LAYOUT_DATASET_KEYS = {"dataset", "input", "inputs"}
 _ARM_KEYS = {"arm", "method", "argv", "config", "labels"}
@@ -48,9 +49,20 @@ _ARM_KEYS = {"arm", "method", "argv", "config", "labels"}
 # plan's arms; a stage that declares no `arms` keeps the original behaviour and
 # expands every declared arm, so a pre-extension plan expands exactly as before.
 _STAGE_KEYS = {"seeds", "arms"}
-_WORKER_KEYS = {"gpu_type", "cloud", "gpu_count", "image", "template",
-                "container_disk_gb", "volume_gb", "network_volume",
-                "data_centers"}
+
+# Worker intent is split by what it means, not by which provider accepts it:
+#   neutral — the execution resource itself, meaningful to every provider;
+#   runpod  — RunPod placement, image and storage choices;
+#   colab   — nothing beyond the neutral intent: Colab owns its runtime, disk,
+#             placement, session identity and CU policy in its own configuration,
+#             so a Colab plan must not carry fields it cannot honour.
+_WORKER_NEUTRAL_KEYS = {"gpu_type", "gpu_count", "container_disk_gb"}
+_WORKER_PROVIDER_KEYS = {
+    providers.RUNPOD: {"cloud", "image", "template", "volume_gb", "volume_mount_path",
+                      "network_volume", "data_centers"},
+    providers.COLAB: set(),
+}
+_WORKER_KEYS = _WORKER_NEUTRAL_KEYS | set().union(*_WORKER_PROVIDER_KEYS.values())
 _VOLUME_KEYS = {"min_size_gb", "datacenter", "volume_type"}
 _OUTPUT_KEYS = {"name", "kind", "tag", "required"}
 _ALLOWED_OUTPUT_KINDS = ("checkpoint", "results_file", "gradient_diagnostics")
@@ -84,6 +96,21 @@ def _check_secret_free(value, field):
     elif isinstance(value, list):
         for index, item in enumerate(value):
             _check_secret_free(item, "{}[{}]".format(field, index))
+
+
+def plan_provider(plan):
+    """The execution provider a plan declares, or the documented legacy default.
+
+    A plan written before providers were explicit carries no ``provider`` and is
+    a RunPod plan. The rule is deterministic and is never inferred from which
+    provider-specific fields happen to be present, so a legacy plan and a plan
+    that states ``provider: runpod`` behave identically.
+    """
+
+    try:
+        return providers.normalize_provider(plan.get("provider"))
+    except providers.ProviderValueError as exc:
+        _fail("provider", str(exc))
 
 
 def validate_plan(plan):
@@ -257,20 +284,62 @@ def validate_plan(plan):
             _require(len(set(shards)) == len(shards), where,
                      "names the same artifact twice")
 
+    provider = plan_provider(plan)
     worker = plan.get("worker")
     _require(isinstance(worker, dict) and worker, "worker",
              "must declare the resource the arm needs")
-    unknown = sorted(set(worker) - _WORKER_KEYS)
-    _require(not unknown, "worker", "has unknown key(s): {}".format(", ".join(unknown)))
-    for field in ("gpu_type", "cloud", "image"):
-        _require(isinstance(worker.get(field), str) and worker[field],
-                 "worker." + field, "must be a non-empty string")
+    allowed = _WORKER_NEUTRAL_KEYS | _WORKER_PROVIDER_KEYS[provider]
+    unknown = sorted(set(worker) - allowed)
+    _require(not unknown, "worker",
+             "has key(s) provider {} does not define: {}".format(
+                 provider, ", ".join(unknown)))
     count = worker.get("gpu_count", 1)
     _require(isinstance(count, int) and not isinstance(count, bool) and count >= 1,
              "worker.gpu_count", "must be an integer >= 1")
+
+    if provider == providers.COLAB:
+        # Colab owns its runtime, scratch, placement and session identity. The
+        # plan may only express the accelerator preference; everything else is
+        # controller-side Colab configuration, not scientific intent.
+        _require(count == 1, "worker.gpu_count",
+                 "Colab allocations are single-accelerator")
+        accelerator = worker.get("gpu_type")
+        _require(accelerator is None or (isinstance(accelerator, str) and accelerator.strip()),
+                 "worker.gpu_type",
+                 "must be a non-empty accelerator name when present")
+        return plan
+
+    _require(isinstance(worker.get("gpu_type"), str) and worker["gpu_type"],
+             "worker.gpu_type", "must be a non-empty string")
+    _require(isinstance(worker.get("cloud"), str) and worker["cloud"],
+             "worker.cloud", "must be a non-empty string")
+    image = worker.get("image")
+    template = worker.get("template")
+    _require((image is None) != (template is None), "worker",
+             "must declare exactly one of image or template")
+    for field in ("image", "template"):
+        value = worker.get(field)
+        _require(value is None or (isinstance(value, str) and value),
+                 "worker." + field, "must be a non-empty string when present")
     disk = worker.get("container_disk_gb")
     _require(isinstance(disk, int) and not isinstance(disk, bool) and disk >= 1,
              "worker.container_disk_gb", "must be an integer >= 1")
+    volume_gb = worker.get("volume_gb")
+    if volume_gb is not None:
+        _require(isinstance(volume_gb, int) and not isinstance(volume_gb, bool)
+                 and volume_gb >= 0, "worker.volume_gb",
+                 "must be an integer >= 0")
+    mount = worker.get("volume_mount_path")
+    if mount is not None:
+        _require(isinstance(mount, str) and mount, "worker.volume_mount_path",
+                 "must be a non-empty string")
+    data_centers = worker.get("data_centers")
+    if data_centers is not None:
+        _require(isinstance(data_centers, list) and data_centers, "worker.data_centers",
+                 "must be a non-empty list of provider data-center identifiers")
+        for center in data_centers:
+            _require(isinstance(center, str) and center.strip(), "worker.data_centers",
+                     "every data center must be a non-empty string")
     volume = worker.get("network_volume")
     if volume is not None:
         _require(isinstance(volume, dict), "worker.network_volume", "must be a mapping")
