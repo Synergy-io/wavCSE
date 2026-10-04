@@ -66,6 +66,7 @@ from improvements.taskrelation.research.dg0008.sampler import (  # noqa: E402
     key_to_index,
     plain_dataset,
 )
+from improvements.run_identity import emit_run_identity, research_identity  # noqa: E402
 from model.downstream_model import DownstreamMultiTaskModel  # noqa: E402
 from utils.parse_transformer_layers import parse_transformer_layers  # noqa: E402
 from utils.pooling_id import make_pooling_id  # noqa: E402
@@ -319,6 +320,23 @@ def build_member(cfg, cell, arm, fold, seed, artifacts_directory, index, out_roo
             extra_tags={"task_set": cell},
         )
         mlflow_utils.log_config_params(member_config)
+
+        # State this member's run identity explicitly, after the trainer has
+        # created its directories and before any step is trained, exactly as
+        # improvements/base/run_base.py does.  The compute-plane wrapper reads
+        # this record from ARC_RUN_IDENTITY_FILE to stage the declared
+        # outputs; without it the member trains but stages nothing.  The same
+        # run-identity contract applies, so one record answers *which arm of
+        # which study at which commit* produced the artifact: the trained model
+        # is the study's committed one, the arm is the resolved per-arm
+        # research method, and the commit is the one actually executed.
+        emit_run_identity(
+            trainer, model=MEMBER_MODEL, task_type=cell, seed=seed,
+            extra=research_identity(
+                member_config["research"], mlflow_utils.resolve_git_commit(),
+                default_method=method,
+            ),
+        )
         trainer.train()
 
         implementation_commit = mlflow_utils.resolve_git_commit()
