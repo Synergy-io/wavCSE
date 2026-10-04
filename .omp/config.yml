@@ -15,3 +15,21 @@
 # repository is unaffected.
 disabledExtensions:
   - extension-module:deja
+
+# Capability boundary (see AGENTS.md "Capability boundary").
+#
+# `task.isolation.enabled` makes the per-spawn `isolated` field available, and
+# `task.isolation.apply: false` means a successful isolated spawn's changes are
+# NEVER written back to the canonical checkout — OMP retains the candidate (an
+# `omp/task/<id>` branch, or a patch) for Main OMP to gate and integrate
+# deliberately. See AGENTS.md "Capability boundary".
+#
+# Enablement is the orchestrator's job, not the writing specialist's: Main OMP
+# spawns `research-executor`/`infrastructure-engineer` with `isolated: true`.
+# A writing specialist cannot escape by spawning, because neither agent has the
+# `task` tool. This is a boundary on candidate integration, not a sandbox.
+task:
+  isolation:
+    enabled: true
+    apply: false
+    merge: branch
