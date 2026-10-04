@@ -358,6 +358,35 @@ The authorized IN-0001 smoke was attempted and **did not reach allocation**
   `INTENT_ABANDON_AFTER_HOURS = 1`. No DG-0008 work was performed and the
   DG-0008 benchmark was not started.
 
+## Controller-side record — IN-0001 smoke RETRY (2026-10-04): FAILED at readiness, released
+
+The authorized retry was attempted after `fc85441` repaired the Colab allocation
+blocker. It passed every prerequisite and failed inside readiness; full record in
+`execution/IN-0001/SMOKE_RESULT.md`. In brief:
+
+- The bounded reaper abandoned the stale create intent at `14:23:27Z` (age
+  `1.0065 h`, threshold `1 h`) — the intended age-based path, not the new
+  `worker reconcile` verb.
+- The retry allocated **one** free-tier Colab T4 (`wavcse-fc5dbf40f42e4a66`) and
+  adopted it by exact identity after the first ensure call was interrupted
+  (no second create was ever issued).
+- Bootstrap/readiness then failed: the health `exec` did not return within the
+  CLI's 300 s command timeout, and the control plane correctly refused to infer
+  provider state from a timed-out exec. The session was released with
+  provider-confirmed absence at `14:36:26Z`.
+- No job was submitted (`runs/IN-0001.json` does not exist), so the
+  `colab_exec` job-transport dispatch was not reached this time.
+- Billing stayed FREE_TIER throughout (balance `0.00 CU`); the lease's
+  `closed_cost_usd` is `null` because the cost unit is CU, never fabricated USD.
+- Observation for any next attempt: the aggregate `usage` counter still reported
+  `assignments 1` (rate `1.07 CU/hour`) at `14:37:53Z` and `14:39:01Z` while the
+  authoritative `sessions` listing was empty. The create path attributes a new
+  allocation by `usage_after - usage_before == +1`, so that counter should settle
+  before another allocation is attempted.
+
+No second session was attempted: the authorization bounds this run to one worker,
+no replacements and no second Colab session. IN-0001 is not closed.
+
 ## Live-validation requirement
 
 Deterministic, zero-cost coverage of the Colab path is strong (`make check`,
