@@ -1,6 +1,6 @@
 # DG-0008 Run Note
 
-Status: **REGISTERED / BLOCKED — zero-cost preparation active; no run; no MLflow run; no compute authorization**
+Status: **REGISTERED / IMPLEMENTED (zero-cost) / BLOCKED — no run, no MLflow run, no compute authorization**
 Type: diagnostic (exact-opportunity ER-target residual)
 Created: 2026-10-04T05:38:12Z
 Proposal: DP-0008
@@ -35,5 +35,7 @@ The INC-021 workload revision accepted `IF-MANIFEST-IO: STREAM_CANONICAL_BYTES` 
 **Infrastructure.** The Infrastructure Engineer reproduced the INC-021 command-surface mismatch deterministically and found two distinct classes. Option-level mismatches on verbs that do exist were repaired in the owning layer (`infra/` v0.1.1): `worker list/show --read-only` now suppress the tracked-state writes the compute adapter's read-only discipline requires, and `worker create --require-direct-ssh` refuses a worker whose provider record carries only the command-only SSH proxy. Regression tests were added in `infra/tests/unit/test_cli.py` and `improvements/compute/tests/test_cli.py`; `make infra-check` is green (154 tests). The whole `volume`, `storage` and `job` verb families are absent from the embedded subsystem *and* from the standalone `wavcse-infra` checkout, so the mismatch is a missing feature program rather than a defect: the RunPod network-volume API version, an exact-commit remote-execution engine and S3 transport cannot be built or verified without a live worker, and are escalated as an explicit scope decision. The engineer reported a collision rather than editing `infra/AGENTS.md`/`infra/README.md`, which carry uncommitted user changes, so the two new options are documented by their CLI help text only.
 
 **Data audit (verified locally).** `~/voice_dataset` and `~/embedding` are absent; no `.env`, no `~/.config/wavcse-infra/config.toml`, no `MLFLOW_TRACKING_*`, no `RUNPOD_API_KEY`; the AWS profiles present are unrelated to wavCSE; the DVC pointer is unresolved. Speech Commands v0.01 and VoxCeleb1 are public but not restored; IEMOCAP is licence-gated; the canonical embedding objects live in private S3. No identity or opportunity artifact exists, and none may be fabricated.
+
+**Provenance of this increment.** Registration `fa326fc39ca1bc2977d30a0964b80c493571e02b`; implementation and Study records `d9675688cdb3759778214509d3f6e7fa3348f429`; embedded-infrastructure contract repair (v0.1.1) `a7ee886a8c0947f82b1079802b53c0507d7e6ec8`. Any DG-0008 execution must record the commit it actually checked out, and may only be launched from a tree whose `improvements/compute` preflight and envelope checks pass at that commit.
 
 **Not done, deliberately.** No compute, provider mutation, worker, volume, job, benchmark, authorization, result interpretation or observability layer. No change to the approved proposal, to any scientific invariant, to another Study, or to `downstream/`.
