@@ -3,8 +3,8 @@
 Deterministic handoff from the development computer to the controller. It
 records only identities and unresolved bindings; it copies no artifact, carries
 no credential, and grants no authority. Rewritten on the development machine on
-2026-10-04 in the Colab-reconciliation increment (see *wavcse-infra side*), on
-top of wavCSE commit `3c996802a3ab3fce8f5f8c2178c52d7d6bbb0582`; the controller
+2026-10-04 in the provider-neutral integration increment (the Colab seam is now
+implemented and validated; see *wavCSE ↔ wavcse-infra integration status*); the controller
 must check out the commit that contains this file — that commit or a descendant
 — resolved with
 `git log -1 --format=%H -- improvements/taskrelation/research/execution/CONTROLLER_HANDOFF.md`.
@@ -22,8 +22,9 @@ and an authorization is not a submission.
 | Registered Study | `DG-0008` — `research/studies/DG-0008/PLAN.md`, `NOTE.md`; registration commit `fa326fc39ca1bc2977d30a0964b80c493571e02b` |
 | Implementation identity | `research/dg0008/` plus `studies/DG-0008/{run_dg0008.py,generate_opportunity_manifest.py,evaluate_dg0008.py,check_validity_gate.py,analyze_dg0008.py,configs/dg0008.yaml}` — commit `d9675688cdb3759778214509d3f6e7fa3348f429` |
 | Compute inputs | `research/studies/DG-0008/compute/inputs.json` — 15 digest-pinned requirements (5 speechcommand, 9 voxceleb, 1 iemocap), validated by `improvements.compute.artifacts` |
-| Compute plan | **Not authored.** Every static field is known, but `worker.gpu_type`/`worker.cloud`/`worker.image` and a bounded `timeout_seconds` are controller-time bindings and must not be invented on the development machine. Note the schema itself is RunPod-shaped (requires `cloud`/`image`, carries no provider field); see *wavCSE ↔ wavcse-infra integration status*. |
-| JobSpec schema | `improvements/compute/jobspec.py`, `SCHEMA_VERSION = 1`; stages may select an arm subset, so the approved 200 + 1 topology is expressible (`improvements/compute/tests/test_stage_arms.py`) |
+| Compute plan | **Not authored — no longer for a schema reason.** The schema can now express a Colab-first plan (`provider: colab`, accelerator-only `worker` block) and the seam drives it. The residual blockers are authorization/benchmark inputs, not gaps: the pinned accelerator is an authorization-time decision under DG-0008's one-GPU-model invariant, `timeout_seconds` needs the compatible-accelerator benchmark, and the `outputs` staging names need one run of the study entrypoint to confirm. Authoring now would invent those values. |
+| JobSpec schema | `improvements/compute/jobspec.py`, `SCHEMA_VERSION = 1`; stages may select an arm subset (200 + 1 topology), and a plan states its `provider` (missing = legacy RunPod) (`tests/test_stage_arms.py`, `tests/test_provider_neutral.py`) |
+| Provider contract | `improvements/compute/providers.py` — provider ids, execution transports (`ssh`, `colab_exec`) and cost units (`USD/hour`, `CU`) shared with `wavcse-infra`; no CU→USD conversion exists |
 | Scientific invariants | The sealed workload `execution/preflights/DP-0008/workload.v2.json` (26 invariants, one flexible choice `IF-MANIFEST-IO=STREAM_CANONICAL_BYTES`). Not duplicated here. |
 | Execution contract | `improvements/taskrelation/research/execution/README.md`; validator `python -m improvements.taskrelation.research.execution_contract check <dir>` |
 | Authorization | **None.** `research/authorizations/DG-0008.yaml` does not exist and must not be created by an agent. |
@@ -33,10 +34,12 @@ and an authorization is not a submission.
 
 | Field | Kind |
 | --- | --- |
-| `study`, `arms[].{arm,method,argv,config}`, `stages[].{seeds,arms}`, `outputs`, `inputs_file`, `embedding_layout`, `repository`, `task_type`, `environment_secrets` | static scientific / execution intent |
-| `worker.{gpu_type,cloud,image,template,gpu_count,container_disk_gb,volume_gb,data_centers,network_volume}` | controller-time provider binding (offer + cloud tier + volume are discovered at authorization time) |
+| `provider`, `study`, `arms[].{arm,method,argv,config}`, `stages[].{seeds,arms}`, `outputs`, `inputs_file`, `embedding_layout`, `repository`, `task_type`, `environment_secrets` | static scientific / execution intent |
+| `worker.gpu_type` | accelerator requirement — bounded execution intent; for Colab it is the only worker field a plan may carry, and DG-0008's one-GPU-model invariant makes the choice an authorization decision |
+| `worker.{cloud,image,template,container_disk_gb,volume_gb,data_centers,network_volume}` | RunPod-only placement/storage binding (offer, cloud tier and volume are discovered or chosen at authorization time) |
 | `timeout_seconds` | controller-time binding (schema default until a compatible-GPU benchmark bounds it) |
 | `device_index` | execution intent with a safe default |
+| authorization `provider`, `budget.cost_unit`, `budget.{max_gpu_hourly_usd,max_total_gpu_usd}` (RunPod) / `budget.{allow_free_tier,max_incremental_rate_cu_per_hour,max_job_cu}` (Colab) | human authorization: the provider and its native unit; provider-specific budget fields are mutually exclusive |
 
 ### Required before any DG-0008 job
 
@@ -107,9 +110,13 @@ parses `--json` output. It assumes:
   `worker create … --yes`, `worker wait-ssh`, `worker bootstrap`, `worker health`,
   `worker start/stop/destroy`;
 - `volume list --read-only --json`, `volume cache stats --worker <id> --json`;
-- `job submit <spec> --worker <id> --json`, `job status <id> --json`,
-  `job list [--state] [--worker] --json`, `job logs <id> --tail-bytes N`,
-  `job cancel <id> --json`;
+- `provider list`;
+- `worker list [--provider {runpod,colab}] --read-only --json`,
+  `worker show <id> --read-only --json`, `worker create [--provider …] …`,
+  `worker bootstrap/health <id>`, `worker start/stop/destroy`;
+- `job submit <spec> [--worker <id>] [--provider {runpod,colab}] --json`,
+  `job status <id> --json`, `job list [--state] [--worker] --json`,
+  `job logs <id> --tail-bytes N`, `job cancel <id> --json`;
 - `storage read <artifact> --expected-sha256 … --json`, `storage verify`,
   `storage download`, `storage list`;
 - the version-1 JobSpec JSON: `source{repository,commit}`, `command{argv}`,
@@ -137,8 +144,46 @@ silently. Two hazards therefore remain:
 
 ### wavCSE ↔ wavcse-infra integration status
 
-**Classification: `WAVCSE_ADAPTER_MISMATCH`** (with a second, independent
-`STALE_RESOLUTION_ONLY` concern — the embedded-fork preference above).
+**Classification: `RESOLVED` in the provider-neutral integration increment** (the
+independent `STALE_RESOLUTION_ONLY` concern — the embedded-fork preference — is
+unchanged and remains architectural debt).
+
+Implemented and validated on the development machine, with no provider call:
+
+- `jobspec.plan_provider` reads an explicit plan `provider`; a missing value is
+  deterministically RunPod, so legacy plans are byte-for-byte unaffected. A
+  Colab plan carries `worker: {gpu_type?, gpu_count}`, must not carry RunPod
+  fields (`cloud`, `image`, `template`, `container_disk_gb`, `volume_gb`,
+  `network_volume`, `data_centers`), and the reverse holds for RunPod.
+- `InfraCli.worker_create(provider=…)` sends only that provider's options:
+  `--provider colab --gpu <accelerator> --yes` for Colab, and the unchanged
+  RunPod argv (no `--provider`, since RunPod is the CLI default) otherwise.
+  `worker_list(provider=…)`, `job_submit(…, provider=…)` and `provider_list()`
+  complete the seam.
+- `worker.ensure_worker` dispatches by provider: RunPod keeps its
+  start → wait-ssh → bootstrap → health ladder and USD price guard; Colab
+  allocates once, reconciles the new `wavcse-<hex>` identity by listing diff,
+  records it on the lease, then runs bootstrap → health with **no** start/SSH.
+  Colab readiness is read from exit status (`worker_health(..., json_output=
+  False)`), because at the pinned commit the Colab branch ignores `--json`.
+- Ownership is no longer name-only: `ledger.worker_matches_lease` requires the
+  exact provider worker id **and** provider kind, so a Colab session is
+  attributed by the lease wavCSE created, never by a scope prefix. Sweep,
+  reaper, status and `available_worker_id` all use it.
+- The envelope declares `provider` and `budget.cost_unit`; RunPod keeps
+  `USD/hour` with hourly/total USD ceilings, Colab uses `CU` with
+  `allow_free_tier`, `max_incremental_rate_cu_per_hour` and `max_job_cu`, and
+  cross-provider budget fields are rejected. CU enforcement itself stays in
+  `wavcse-infra`; the ledger never writes a fake USD value for CU and closes a
+  Colab lease on wall-clock time in the CU domain.
+- Cleanup: a Colab lease ends by terminal release (`worker destroy`), because
+  Colab has no stop/resume state and no SSH.
+
+Job identity, the arm argv, the spec schema and the stage topology are
+unaffected by provider — placement is a submission-time choice
+(`job submit --provider`/`--worker`).
+
+Old status, preserved:
 
 The provider-neutral surfaces match: `job submit/status/logs/cancel/list`,
 `storage read/verify/list/download`, `worker list --read-only`, and the
@@ -164,11 +209,10 @@ repaired in this increment:
   Colab does not support, and the envelope budget is USD/hour while Colab free
   tier bills no CU and paid CU is deliberately never converted to USD.
 
-Consequence: the RunPod path through `improvements.compute` is intact, and the
-Colab path is **not drivable through the compute backend yet**. Resolving it is
-either a bounded wavCSE integration increment (provider-neutral plan/create/
-ownership plus a CU-mode envelope) or an explicit human decision to drive Colab
-outside `improvements.compute`. It is deliberately not decided here.
+Consequence, as of the previous increment: the RunPod path through
+`improvements.compute` was intact and the Colab path was not drivable. That is
+now superseded — the Colab path is drivable through the compute backend, and the
+RunPod path retains its previous argv, ladder, price guard and tests.
 
 ## Controller-only checks
 
@@ -255,9 +299,10 @@ configured policy, bootstrap to READY, run one trivial recorded job through the
 `wavcse-infra` commit and the observed billing mode. It is **not** performed in
 this increment, and no live provider work is authorized by this handoff.
 
-Because of the integration mismatch above, that smoke test must be driven through
-the `infra` CLI directly; `improvements.compute` cannot yet acquire or address a
-Colab worker.
+That smoke test can now be driven through either the `infra` CLI directly or
+`improvements.compute` (`worker-ensure` → `advance`), which owns Colab
+acquisition, attribution and release; the direct CLI path remains the smaller
+first step, and it validates the same `wavcse-infra` contract the backend calls.
 
 A compatible-GPU five-epoch benchmark remains the next paid/live scientific
 action; it is neither authorized nor performed here.

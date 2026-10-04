@@ -52,20 +52,40 @@ A legacy sibling checkout remains a temporary controller-cutover fallback only.
 When nothing validates, compute steps stay blocked with an explicit reason —
 never silently skipped, never substituted.
 
-### Provider shape — known limitation (recorded 2026-10-04)
+### Providers — Colab (primary) and RunPod (secondary)
 
-The control plane implements two providers, Colab (primary) and RunPod
-(secondary), over a `colab_exec` transport alongside SSH. This backend can drive
-**RunPod** only. `validate_plan` requires `worker.{gpu_type,cloud,image}`;
-`InfraCli.worker_create` always sends RunPod options (`--cloud`,
-`--gpu-count`, `--container-disk`, `--start-ssh`, `--require-direct-ssh`);
-worker ownership is attributed by a `wavcse-<scope>-<nonce>` worker name; and
-the envelope budget is USD/hour. Colab allocates its own `wavcse-<hex>` session
-identity, rejects `--name`/`--cloud`/`--image`/SSH/volume options, and prices in
-compute units that are deliberately never converted to USD. Colab's `job`,
-`storage` and status surfaces are provider-neutral and already match this
-backend. Driving Colab through this backend needs a provider-neutral
-plan/create/ownership seam and a CU-mode envelope; it is not implemented. See
+The control plane implements two providers over two execution transports:
+Colab on `colab_exec`, RunPod on SSH. This backend drives both through one
+provider-neutral seam; provider implementation stays in `wavcse-infra`
+(canonical commit `2d7640c7c6454b662ab92c6744beff946bc111fa`, version `0.1.0` —
+bind the exact commit, never the version string).
+
+| Concern | RunPod | Colab |
+| --- | --- | --- |
+| Plan `provider` | `runpod` (also the legacy default) | `colab` |
+| Worker intent | `cloud`, `image`/`template`, `container_disk_gb`, `volume_gb`, `network_volume`, `data_centers` | accelerator preference only |
+| Allocation | `worker create` with a generated scope-prefixed name, `--max-price`, SSH flags | `worker create --provider colab`: infra-owned `wavcse-<hex>` identity, no name/price/SSH/volume |
+| Preparation | start → wait-ssh → bootstrap → health | bootstrap → health; never start or wait-ssh |
+| Ownership | scope-prefixed name, then the exact lease identity | the exact lease identity only (the provider name carries no scope) |
+| Cost unit | `USD/hour` — hourly and total USD ceilings | `CU` — free-tier permission, incremental CU/hour and max job CU; never converted to USD |
+| Cleanup | `worker stop` (reversible) | terminal release (`worker destroy`) |
+
+`provider` is explicit in a plan and in an authorization; a missing value is
+deterministically RunPod. A plan's provider must equal its authorization's
+provider, and a provider-specific cost unit can never be mixed with the other
+provider's budget fields. Job identity and the arm argv are unaffected by
+provider: job placement is a submission-time `--provider`/`--worker` choice.
+
+`worker_health` takes `json_output=False` for Colab: at the pinned commit the
+Colab branch accepts `--json` but still prints a plain READY line, so Colab
+readiness is read from the exit status and provider/transport identity from
+`worker list`.
+
+**Architectural debt.** This repository also carries an embedded `infra/`
+subsystem (v0.1.1) that predates the standalone implementation and implements
+only the worker phases; it must never be the resolved control plane for a
+recorded run. Bind `WAVCSE_INFRA_CHECKOUT` (or `WAVCSE_INFRA_CLI`) to the
+canonical checkout. See
 `../taskrelation/research/execution/CONTROLLER_HANDOFF.md`.
 
 ## Runtime state (never committed)
