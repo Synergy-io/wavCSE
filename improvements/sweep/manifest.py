@@ -139,12 +139,38 @@ def job_key(study_id, combo, seed, commit):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
-def git_state(repo_root):
-    """The exact commit and whether the tree is dirty.
+def dirty_split(tracked_text, untracked_text, study_rel):
+    """Split ``git status`` output into what should block a sweep, and what should not.
+
+    The question the check answers is narrow: *are the sweep's own inputs the
+    committed ones?* A modified tracked file means the code or a committed
+    config is not what the repository says; an untracked file **inside the study
+    directory** means a config that was generated but never committed. Both
+    block.
+
+    An untracked file anywhere else does not. A colleague's scratch notes, an
+    editor file or a weekly slide deck sitting in the working tree has no
+    bearing on whether this sweep's configs are the committed record -- and
+    letting it block every launch would teach an operator to reach for
+    ``--allow-dirty``, which is how the check stops meaning anything.
+    """
+    tracked_entries = [line for line in (tracked_text or "").splitlines() if line.strip()]
+    study_entries = []
+    if study_rel and not study_rel.startswith(".."):
+        prefix = study_rel.rstrip("/") + "/"
+        for path in (untracked_text or "").splitlines():
+            path = path.strip()
+            if path and (path == study_rel or path.startswith(prefix)):
+                study_entries.append("?? " + path)
+    return tracked_entries, study_entries
+
+
+def git_state(repo_root, study_dir=None):
+    """The exact commit, and whether the sweep's own inputs are uncommitted.
 
     A sweep binds itself to a commit (the configs it generates are committed
-    before they run), so a dirty tree means the configs on disk are not the
-    configs that would be re-derived from the repository.
+    before they run), so the check is about *this study's* inputs rather than
+    about the working tree being pristine -- see ``dirty_split``.
     """
     def run(args):
         completed = subprocess.run(
@@ -156,9 +182,16 @@ def git_state(repo_root):
     code, head = run(["rev-parse", "HEAD"])
     if code != 0:
         raise SpecError("not a git repository: {}".format(repo_root))
-    code, status = run(["status", "--porcelain"])
-    return {"head": head, "dirty": bool(status.strip()),
-            "dirty_entries": [line for line in status.splitlines() if line.strip()]}
+    code, tracked = run(["status", "--porcelain", "--untracked-files=no"])
+    code, untracked = run(["ls-files", "--others", "--exclude-standard"])
+    study_rel = None
+    if study_dir:
+        study_rel = os.path.relpath(os.path.abspath(study_dir),
+                                    repo_root).replace(os.sep, "/")
+    tracked_entries, study_entries = dirty_split(tracked, untracked, study_rel)
+    entries = tracked_entries + study_entries
+    return {"head": head, "dirty": bool(entries), "dirty_entries": entries,
+            "tracked_dirty": tracked_entries, "study_untracked": study_entries}
 
 
 def _require(condition, field, message):

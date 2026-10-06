@@ -117,11 +117,12 @@ def cmd_plan(args):
 def cmd_configs(args):
     spec = _load(args)
     repo = manifest.repo_root(spec)
-    state = manifest.git_state(repo)
+    state = manifest.git_state(repo, spec["_study_dir"])
     if state["dirty"] and not args.allow_dirty:
-        print("refusing to generate configs from a dirty checkout: the generated "
-              "configs are the committed record of what ran. Commit or stash "
-              "first, or pass --allow-dirty.", file=sys.stderr)
+        print("refusing to generate configs while the sweep's own inputs are "
+              "uncommitted: the generated configs are the committed record of what "
+              "ran. Commit them (or stash the tracked changes), then re-run. "
+              "Untracked files elsewhere in the tree do not block this.", file=sys.stderr)
         for line in state["dirty_entries"][:10]:
             print("  {}".format(line), file=sys.stderr)
         return EXIT_USAGE

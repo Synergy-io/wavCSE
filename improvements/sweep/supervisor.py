@@ -432,12 +432,12 @@ def main(argv=None):
     if args.commit:
         commit = args.commit.strip().lower()
     else:
-        state = manifest.git_state(checkout)
+        state = manifest.git_state(checkout, spec["_study_dir"])
         if state["dirty"] and not args.allow_dirty:
-            print("refusing to run from a dirty checkout ({} entr{}); commit the "
-                  "generated configs first or pass --allow-dirty for a smoke run"
-                  .format(len(state["dirty_entries"]),
-                          "y" if len(state["dirty_entries"]) == 1 else "ies"),
+            print("refusing to run while the sweep's own inputs are uncommitted ({} "
+                  "entr{}); commit the generated configs first, or pass "
+                  "--allow-dirty for a smoke run".format(len(state["dirty_entries"]),
+                                                          "y" if len(state["dirty_entries"]) == 1 else "ies"),
                   file=sys.stderr)
             for line in state["dirty_entries"][:10]:
                 print("  {}".format(line), file=sys.stderr)

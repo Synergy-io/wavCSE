@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -131,6 +132,79 @@ class LoadSpecTest(unittest.TestCase):
         with self.assertRaises(manifest.SpecError) as caught:
             manifest.load_spec(path)
         self.assertIn("combos", str(caught.exception))
+
+
+class DirtySplitTest(unittest.TestCase):
+    """Only the sweep's own uncommitted inputs may block a launch."""
+
+    def test_untracked_elsewhere_does_not_block(self):
+        tracked, study = manifest.dirty_split(
+            "", "docs/\nmcp.json\nweekly/deck.pptx",
+            "improvements/taskrelation/research/studies/TR-TEST")
+        self.assertEqual(tracked, [])
+        self.assertEqual(study, [])
+
+    def test_untracked_inside_the_study_blocks(self):
+        tracked, study = manifest.dirty_split(
+            "", "other/file.txt\nimprovements/taskrelation/research/studies/"
+                "TR-TEST/configs/screen/top-k2.yml",
+            "improvements/taskrelation/research/studies/TR-TEST")
+        self.assertEqual(tracked, [])
+        self.assertEqual(len(study), 1)
+        self.assertIn("top-k2.yml", study[0])
+
+    def test_modified_tracked_file_blocks(self):
+        tracked, study = manifest.dirty_split(
+            " M improvements/mlflow_utils.py", "", "studies/TR-TEST")
+        self.assertEqual(tracked, [" M improvements/mlflow_utils.py"])
+        self.assertEqual(study, [])
+
+    def test_study_outside_the_checkout_is_ignored(self):
+        tracked, study = manifest.dirty_split("", "anything/x", "../outside")
+        self.assertEqual((tracked, study), ([], []))
+
+
+class GitStateTest(unittest.TestCase):
+    """The check, run against a real throwaway repository."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.repo = os.path.join(self.tmp, "repo")
+        self.study = os.path.join(self.repo, "studies", "TR-TEST")
+        os.makedirs(self.study)
+        for argv in (["init", "-q"], ["config", "user.email", "t@example.com"],
+                     ["config", "user.name", "t"]):
+            subprocess.run(["git"] + argv, cwd=self.repo, check=True,
+                           stdout=subprocess.DEVNULL)
+        with open(os.path.join(self.repo, "tracked.txt"), "w") as handle:
+            handle.write("x\n")
+        subprocess.run(["git", "add", "tracked.txt"], cwd=self.repo, check=True)
+        subprocess.run(["git", "commit", "-qm", "init"], cwd=self.repo, check=True)
+
+    def test_clean_repo_is_not_dirty(self):
+        state = manifest.git_state(self.repo, self.study)
+        self.assertFalse(state["dirty"])
+        self.assertEqual(len(state["head"]), 40)
+
+    def test_unrelated_untracked_file_still_allows_launch(self):
+        with open(os.path.join(self.repo, "notes.md"), "w") as handle:
+            handle.write("scratch\n")
+        self.assertFalse(manifest.git_state(self.repo, self.study)["dirty"])
+
+    def test_uncommitted_config_in_the_study_blocks(self):
+        with open(os.path.join(self.study, "combo.yml"), "w") as handle:
+            handle.write("seed: 42\n")
+        state = manifest.git_state(self.repo, self.study)
+        self.assertTrue(state["dirty"])
+        self.assertIn("combo.yml", " ".join(state["dirty_entries"]))
+
+    def test_modified_tracked_file_blocks(self):
+        with open(os.path.join(self.repo, "tracked.txt"), "a") as handle:
+            handle.write("changed\n")
+        state = manifest.git_state(self.repo, self.study)
+        self.assertTrue(state["dirty"])
+        self.assertIn("tracked.txt", " ".join(state["dirty_entries"]))
 
 
 class StageExpansionTest(unittest.TestCase):

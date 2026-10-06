@@ -26,7 +26,7 @@ rather than hidden:
 | envelope / budget | nothing bounds spend but the clock | `policy.max_wall_seconds` + a `DRAIN` flag; the supervisor reports elapsed time |
 | `jobspec` + evidence validator | no control-plane re-derivation of what ran | per-run identities recorded; checkpoints and metric files hashed into the ledger |
 | `reap` timer | no controller-side deadline enforcement | the supervisor's own loop and drain flag |
-| exact-commit job pinning | nothing pins the observed code | the sweep refuses to generate configs or start from a dirty checkout |
+| exact-commit job pinning | nothing pins the observed code | the sweep refuses a commit whose *own inputs* are uncommitted: a modified tracked file, or an untracked file inside the study directory (an uncommitted config). Untracked files elsewhere in the tree do not block a launch — a colleague's scratch file must not teach an operator to reach for `--allow-dirty` |
 
 The worker is assumed **already hired**: this drives an existing pod over ssh and
 does not provision, price or destroy one.
