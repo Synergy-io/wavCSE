@@ -1,34 +1,23 @@
 # DG-0007 — compute authorization (SCREEN ONLY)
 #
-# Granted by the researcher in the session of 2026-09-29 (recorded as DEC-0018).
-# It authorizes the three-arm seed-42 screen under the frozen protocol, and nothing
-# else: no confirmation seeds, no LOSO, no additional arms, no protocol or
-# hyperparameter changes, no additional persistent resources, no more than one
-# DG-0007 worker, no spend above the total, and no execution beyond the window.
-# An agent must not widen it; a change to any field is a new human grant.
+# Granted by the researcher on 2026-10-06, superseding the expired 2026-09-29
+# grant (DEC-0018). It authorizes the seed-42 screen under the frozen protocol
+# at the repointed worker binding (NVIDIA L4, US-MO-2, the existing 80 GB
+# volume, 150 GB container disk), and nothing else: no confirmation seeds, no
+# LOSO, no additional arms, no protocol or hyperparameter changes, no new
+# persistent resources, no spend above the total, and no execution beyond the
+# window. An agent must not widen it; a change to any field is a new human grant.
 schema_version: 1
 scope: DG-0007
-granted_by: Kevin Sanjula (human grant, DEC-0018)
-granted_at: "2026-09-29T21:11:20+00:00"
-expires_at: "2026-09-30T00:11:20+00:00"
-
-budget:
-  max_gpu_hourly_usd: 0.80      # ceiling handed to the control plane's price guard
-  max_total_gpu_usd: 3.00       # cumulative for this scope, from provider facts
-  max_wall_clock_hours: 3       # cumulative paid wall clock
-
-concurrency:
-  max_simultaneous_workers: 1
-  replacement_workers_allowed: true
-
+scope_kind: study
+granted_by: Kevin Sanjula
+granted_at: "2026-10-06T00:00:00+00:00"
+expires_at: "2026-10-07T00:00:00+00:00"
+budget:      {max_gpu_hourly_usd: 0.60, max_total_gpu_usd: 6.00, max_wall_clock_hours: 12}
+concurrency: {max_simultaneous_workers: 3, replacement_workers_allowed: true}
 resources:
   existing_network_volume_allowed: true
-  network_volume_selector:      # reuses an existing volume; never creates one
-    min_size_gb: 200
-    datacenter: EU-RO-1
+  network_volume_selector: {min_size_gb: 80, datacenter: US-MO-2}
   new_persistent_resources: false
-  container_disk_gb_max: 60
-
-stop_policy:
-  destroy_on_completion: true
-  retain_for_reuse_hours: 0
+  container_disk_gb_max: 150
+stop_policy: {destroy_on_completion: true, retain_for_reuse_hours: 0}
