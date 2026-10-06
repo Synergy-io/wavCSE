@@ -391,6 +391,36 @@ def study_relpath(spec, *parts):
     return relative.replace(os.sep, "/")
 
 
+def remote_paths(spec, checkout=None):
+    """Where the sweep's files live **on the pod**, not on this machine.
+
+    Every path handed to a remote command must be derived from the pod's own
+    checkout. Deriving them from the controller's study directory looks right
+    on a machine where both happen to use the same absolute path and is wrong
+    everywhere else -- the controller would pass its own `sweep_state`
+    directory to a supervisor running under a different root, and read logs
+    from a path that does not exist there.
+
+    Repo-relative paths are what make this safe: the configs already name their
+    output roots relative to the repository root, so the same relative layout
+    resolves correctly under any checkout.
+    """
+    remote = spec.get("remote") or {}
+    root = checkout or remote.get("checkout")
+    if not root:
+        raise SpecError("remote.checkout is not set in the spec; pass --checkout "
+                        "or add a remote block")
+    root = str(root)
+    if not root.startswith("/"):
+        raise SpecError("remote.checkout must be an absolute path on the pod, "
+                        "got {!r}".format(root))
+    study_rel = study_relpath(spec)
+    study = os.path.join(root, study_rel)
+    return {"checkout": root, "study_rel": study_rel, "study": study,
+            "state": os.path.join(study, "sweep_state"),
+            "spec": study_rel + "/sweep.json"}
+
+
 def estimate_seconds(spec, stage, per_run_seconds):
     jobs = len(stage_jobs(spec, stage))
     return jobs * float(per_run_seconds)

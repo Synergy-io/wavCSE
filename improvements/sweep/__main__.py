@@ -39,18 +39,41 @@ def _remote_host(spec, args):
     return manifest.validate_remote_host(spec)
 
 
-def _remote_checkout(spec):
-    remote = spec.get("remote") or {}
-    checkout = remote.get("checkout")
-    if not checkout:
+def _remote_view(spec, args):
+    """Pod-side paths for a remote verb (checkout, study, state, spec)."""
+    return manifest.remote_paths(spec, checkout=getattr(args, "checkout", None))
+
+
+def _local_view(spec, args):
+    """This-machine paths for the same verb."""
+    return {"study": spec["_study_dir"],
+            "state": args.state_dir or manifest.state_dir(spec)}
+
+
+def _verify_remote_commit(remote_module, host, view, expected, *, strict=True):
+    """Refuse to run unless the pod's checkout is the commit we mean.
+
+    The pod's checkout is what executes, so a stale or wrong HEAD there would
+    produce runs attributed to a commit that never ran. Comparing SHAs is cheap
+    and turns that into a clear message instead of an unexplainable result.
+    """
+    completed = remote_module.ssh(
+        host, "cd {} && git rev-parse HEAD".format(shlex.quote(view["checkout"])),
+        check=False)
+    actual = completed.stdout.decode("utf-8", "replace").strip()
+    if completed.returncode != 0:
         raise manifest.SpecError(
-            "remote.checkout is not set in the spec; a remote run has no working "
-            "directory without it")
-    return checkout
-
-
-def _study_relpath(spec):
-    return manifest.study_relpath(spec)
+            "cannot read HEAD in {} on {}: {}".format(
+                view["checkout"], host,
+                completed.stderr.decode("utf-8", "replace").strip()))
+    if actual != expected:
+        message = ("the pod's checkout is at {} but this sweep is bound to {}; "
+                   "check out the same commit on the pod before pushing or "
+                   "starting".format(actual[:12], expected[:12]))
+        if strict:
+            raise manifest.SpecError(message)
+        print("warning: {}".format(message), file=sys.stderr)
+    return actual
 
 
 def cmd_plan(args):
@@ -147,12 +170,12 @@ def cmd_push(args):
         print("no remote host (set remote.host in the spec or pass --host)",
               file=sys.stderr)
         return EXIT_USAGE
-    checkout = _remote_checkout(spec)
-    study_rel = _study_relpath(spec)
-    remote.rsync(host, os.path.join(spec["_study_dir"], "") ,
-                 "{}/{}/".format(checkout, study_rel))
-    print("pushed {} to {}:{}".format(spec["sweep_id"], host,
-                                      "{}/{}".format(checkout, study_rel)))
+    view = _remote_view(spec, args)
+    _verify_remote_commit(remote, host, view, manifest.git_state(
+        manifest.repo_root(spec), spec["_study_dir"])["head"])
+    remote.ssh(host, "mkdir -p {}".format(shlex.quote(view["study"])))
+    remote.rsync(host, os.path.join(spec["_study_dir"], ""), view["study"] + "/")
+    print("pushed {} to {}:{}".format(spec["sweep_id"], host, view["study"]))
     return EXIT_OK
 
 
@@ -186,17 +209,24 @@ def _state_read(spec, host, state_dir):
 def cmd_status(args):
     spec = _load(args)
     host = _remote_host(spec, args)
-    state_dir = args.state_dir or manifest.state_dir(spec)
+    view = _remote_view(spec, args) if host else _local_view(spec, args)
+    state_dir = view["state"]
     summary, records = _state_read(spec, host, state_dir)
     latest = ledger.index(records)
     counts = ledger.counts(records)
     running = sorted(key for key, record in latest.items()
                      if record.get("state") in (ledger.RUNNING, ledger.LAUNCHING))
+    drain_path = os.path.join(state_dir, "DRAIN")
+    if host:
+        from improvements.sweep import remote
+        draining = remote.exists(host, drain_path)
+    else:
+        draining = os.path.exists(drain_path)
     payload = {
         "study_id": spec["study_id"], "sweep_id": spec["sweep_id"],
         "host": host, "state_dir": state_dir, "counts": counts,
         "running": running, "records": len(latest),
-        "summary": summary, "drain": os.path.exists(os.path.join(state_dir, "DRAIN")),
+        "summary": summary, "drain": draining,
     }
     if args.json:
         print(json.dumps(payload, sort_keys=True, indent=2))
@@ -208,6 +238,8 @@ def cmd_status(args):
         print("   {:<10} {}".format(state_name, counts[state_name]))
     if running:
         print("in flight    : {}".format(", ".join(running)))
+    if draining:
+        print("drain        : requested")
     if summary:
         print("last summary : {} stage {} at {} ({:.0f}s, {})".format(
             summary.get("written_at"), summary.get("stage"),
@@ -219,8 +251,8 @@ def cmd_status(args):
 def cmd_logs(args):
     spec = _load(args)
     host = _remote_host(spec, args)
-    state_dir = args.state_dir or manifest.state_dir(spec)
-    path = os.path.join(state_dir, "logs", "{}.log".format(args.run))
+    view = _remote_view(spec, args) if host else _local_view(spec, args)
+    path = os.path.join(view["state"], "logs", "{}.log".format(args.run))
     if host:
         from improvements.sweep import remote
         command = "tail -n {} {}".format(int(args.tail), shlex.quote(path))
@@ -240,16 +272,18 @@ def cmd_logs(args):
 def cmd_stop(args):
     spec = _load(args)
     host = _remote_host(spec, args)
-    state_dir = args.state_dir or manifest.state_dir(spec)
+    view = _remote_view(spec, args) if host else _local_view(spec, args)
+    drain_path = os.path.join(view["state"], "DRAIN")
     content = "stop requested by operator\n"
     if host:
         from improvements.sweep import remote
-        remote.write_remote_file(host, os.path.join(state_dir, "DRAIN"), content)
+        remote.write_remote_file(host, drain_path, content)
     else:
-        os.makedirs(state_dir, exist_ok=True)
-        with open(os.path.join(state_dir, "DRAIN"), "w", encoding="utf-8") as handle:
+        os.makedirs(view["state"], exist_ok=True)
+        with open(drain_path, "w", encoding="utf-8") as handle:
             handle.write(content)
-    print("drain requested; running jobs are left to finish, nothing new starts")
+    print("drain requested at {}; running jobs finish, nothing new starts".format(
+        drain_path))
     return EXIT_OK
 
 
@@ -260,12 +294,11 @@ def cmd_pull(args):
     if not host:
         print("nothing to pull: the sweep runs on this host", file=sys.stderr)
         return EXIT_USAGE
-    checkout = _remote_checkout(spec)
-    study_rel = _study_relpath(spec)
-    local_study = spec["_study_dir"]
+    view = _remote_view(spec, args)
     for name in ("sweep_state", "outputs", "configs"):
-        remote.rsync(host, os.path.join(checkout, study_rel, name) + "/",
-                     os.path.join(local_study, name) + "/", source_is_remote=True)
+        remote.rsync(host, os.path.join(view["study"], name) + "/",
+                     os.path.join(spec["_study_dir"], name) + "/",
+                     source_is_remote=True)
         print("pulled {}".format(name))
     return EXIT_OK
 
@@ -278,29 +311,35 @@ def cmd_start(args):
         print("unknown stage {!r}; declared: {}".format(
             stage, ", ".join(sorted(spec["stages"]))), file=sys.stderr)
         return EXIT_USAGE
-    state_dir = args.state_dir or manifest.state_dir(spec)
     if host:
         from improvements.sweep import remote
-        checkout = _remote_checkout(spec)
+        view = _remote_view(spec, args)
+        _verify_remote_commit(remote, host, view, manifest.git_state(
+            manifest.repo_root(spec), spec["_study_dir"])["head"])
         python = shlex.split((spec.get("remote") or {}).get("python")
                              or "uv run --locked python")
+        # No --state-dir: the supervisor derives it from the pod's own study
+        # directory, which is the same place `status` reads. Passing the
+        # controller's path here would create a stray tree on the pod.
         argv = list(python) + ["-m", "improvements.sweep.supervisor",
-                               "--spec", _study_relpath(spec) + "/sweep.json",
+                               "--spec", view["spec"],
                                "--stage", stage,
-                               "--state-dir", state_dir,
-                               "--checkout", checkout]
+                               "--checkout", view["checkout"]]
         if args.once:
             argv.append("--once")
         if args.dry_run:
             argv.append("--dry-run")
         if args.allow_dirty:
             argv.append("--allow-dirty")
-        log_path = os.path.join(state_dir, "supervisor.log")
-        remote.ssh(host, "mkdir -p {}".format(shlex.quote(state_dir)))
-        remote.start_detached(host, checkout, argv, log_path)
-        print("supervisor started on {} (log {})".format(host, log_path))
+        log_path = os.path.join(view["state"], "supervisor.log")
+        remote.ssh(host, "mkdir -p {}".format(shlex.quote(view["state"])))
+        remote.start_detached(host, view["checkout"], argv, log_path)
+        print("supervisor started on {}:\n  state {}\n  log   {}\n"
+              "watch with: status --host {} [--json]".format(
+                  host, view["state"], log_path, host))
         return EXIT_OK
-    argv = ["--spec", args.spec, "--stage", stage, "--state-dir", state_dir]
+    view = _local_view(spec, args)
+    argv = ["--spec", args.spec, "--stage", stage, "--state-dir", view["state"]]
     if args.once:
         argv.append("--once")
     if args.dry_run:
@@ -346,6 +385,10 @@ def build_parser():
         child.add_argument("--state-dir", default=None)
         child.add_argument("--host", default=None,
                            help="override spec.remote.host")
+        child.add_argument("--checkout", default=None,
+                           help="override spec.remote.checkout: the pod's repository "
+                                "root. Kept on the command line so a machine-specific "
+                                "path never has to be committed into the spec")
         return child
 
     plan = add("plan", "dry-run: what the sweep would run, and the policy")

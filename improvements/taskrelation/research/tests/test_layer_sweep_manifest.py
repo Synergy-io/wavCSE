@@ -207,6 +207,57 @@ class GitStateTest(unittest.TestCase):
         self.assertIn("tracked.txt", " ".join(state["dirty_entries"]))
 
 
+class RemotePathsTest(unittest.TestCase):
+    """Pod-side paths must come from the pod's checkout, not from this machine."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.spec = manifest.load_spec(make_study(self.tmp, {
+            "combos": ["all"],
+            "remote": {"host": "pod.example", "checkout": "/workspace/wavCSE/wavCSE"},
+        })["spec_path"])
+
+    def test_paths_are_relative_to_the_remote_checkout(self):
+        view = manifest.remote_paths(self.spec)
+        study_rel = "improvements/taskrelation/research/studies/TR-TEST"
+        self.assertEqual(view["checkout"], "/workspace/wavCSE/wavCSE")
+        self.assertEqual(view["study_rel"], study_rel)
+        self.assertEqual(view["study"], "/workspace/wavCSE/wavCSE/" + study_rel)
+        self.assertEqual(view["state"],
+                         "/workspace/wavCSE/wavCSE/" + study_rel + "/sweep_state")
+        self.assertEqual(view["spec"], study_rel + "/sweep.json")
+
+    def test_local_paths_are_not_reused_for_the_pod(self):
+        view = manifest.remote_paths(self.spec)
+        self.assertNotIn(os.path.abspath(self.tmp), view["state"])
+        self.assertNotIn(self.spec["_study_dir"], view["state"])
+
+    def test_checkout_override_wins(self):
+        view = manifest.remote_paths(self.spec, checkout="/root/wavCSE/wavCSE")
+        self.assertTrue(view["study"].startswith("/root/wavCSE/wavCSE/"))
+
+    def test_relative_checkout_is_refused(self):
+        with self.assertRaises(manifest.SpecError):
+            manifest.remote_paths(self.spec, checkout="wavCSE/wavCSE")
+
+    def test_missing_checkout_is_refused(self):
+        spec = manifest.load_spec(make_study(self.tmp, {
+            "remote": {"host": "pod.example"}})["spec_path"])
+        with self.assertRaises(manifest.SpecError):
+            manifest.remote_paths(spec)
+
+    def test_placeholder_host_is_refused_only_when_a_verb_needs_it(self):
+        spec = manifest.load_spec(make_study(self.tmp, {
+            "remote": {"host": "CHANGE-ME", "checkout": "/srv/wavCSE"}},
+        )["spec_path"])
+        # Loading and local verbs are fine; resolving a host is not.
+        self.assertIsNone(manifest.validate_remote_host(
+            manifest.load_spec(make_study(self.tmp, {"remote": {}})["spec_path"])))
+        with self.assertRaises(manifest.SpecError):
+            manifest.validate_remote_host(spec)
+
+
 class StageExpansionTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

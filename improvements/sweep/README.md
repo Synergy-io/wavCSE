@@ -69,6 +69,26 @@ python -m improvements.sweep report  --spec $SPEC          # from MLflow, ranked
 Without a `remote.host`, `start` runs the supervisor **on this machine** — the
 same code path, which is how the scheduling logic is exercised in tests.
 
+### Remote runs: paths and overrides
+
+Pass `--host <ssh-target>` (and `--checkout <pod repo root>` if the pod's
+checkout differs from the spec's) to `push`/`pull`/`start`/`status`/`logs`/`stop`.
+Both are command-line overrides on purpose: the ssh target and the pod's paths
+are *environment*, not science, and committing them would dirty a tracked file —
+which the launch check correctly refuses.
+
+Every path a remote verb touches is derived from the **pod's** checkout
+(`improvements/sweep/manifest.py:remote_paths`), never from this machine's study
+directory: the controller's `sweep_state` path does not exist on a pod whose
+checkout lives somewhere else, and a supervisor started with it would create a
+stray tree. Use an `~/.ssh/config` alias rather than `host:port`, because the
+target is passed to `ssh` as a single argument.
+
+`push` and `start` also compare the pod's `git rev-parse HEAD` against this
+checkout's and refuse to proceed when they differ — the pod's checkout is what
+actually executes, so a stale HEAD there would attribute runs to a commit that
+never ran.
+
 ## How "as many as fit" is decided
 
 `supervisor` probes the host every `policy.probe_interval_s`, then asks

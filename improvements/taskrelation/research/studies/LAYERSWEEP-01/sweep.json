@@ -195,7 +195,8 @@
     "concurrency_basis": "HUMAN OVERRIDE, 2026-10-06: AGENTS.md invariant 16 caps simultaneous GPU training jobs at two. The researcher replaced the fixed cap with an automatic, resource-derived one for this sweep (answer to the concurrency question in this session). Recorded here because the invariant is being set aside deliberately, not silently."
   },
   "remote": {
-    "host": "CHANGE-ME",
+    "_comment": "host is deliberately null: the pod's ssh target is environment, not science, and putting it here would dirty a tracked file at launch time (the sweep refuses to run when its own inputs are uncommitted). Pass --host <target> to push/pull/start/status/logs/stop, and --checkout if the pod's repository root differs from the default below.",
+    "host": null,
     "checkout": "/workspace/wavCSE/wavCSE",
     "python": "uv run --locked python"
   }
