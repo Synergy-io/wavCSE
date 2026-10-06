@@ -1,0 +1,58 @@
+{
+  "_comment": [
+    "Template for a layer-combination sweep. Copy into a study directory as",
+    "sweep.json and replace `combos` with the combinations you are registering.",
+    "`config_template` is resolved relative to this file first, then to the",
+    "repository root. Run `python -m improvements.sweep plan --spec <this file>`",
+    "before anything else: it is read-only and prints exactly what would run."
+  ],
+  "schema_version": 1,
+  "study_id": "DG-00XX",
+  "sweep_id": "layersweep-smp25-normcorr",
+  "run_model": "mtrl",
+  "method": "mtrl_norm_corrected",
+  "task_type": "ks_si_er",
+  "upstream_model_type": "wavlm_large",
+  "config_template": "improvements/taskrelation/research/studies/DG-0007/configs/norm_corrected_mtrl.yml",
+  "experiment_name": "taskrelation-mtrl-layersweep",
+  "combos": [
+    "all",
+    "0-15",
+    "6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13"
+  ],
+  "stages": {
+    "screen": {
+      "seeds": [42]
+    },
+    "confirm": {
+      "seeds": [0, 1, 2, 3, 4],
+      "combos": [
+        "all",
+        "0-15"
+      ]
+    }
+  },
+  "policy": {
+    "max_concurrent": "auto",
+    "ceiling": 8,
+    "vram_per_run_gb": 2.5,
+    "ram_per_run_gb": 4.0,
+    "ram_reserve_gb": 8.0,
+    "cpu_cores_per_run": 4,
+    "min_free_disk_gb": 20.0,
+    "max_gpu_util_pct": 95,
+    "max_load_fraction": 0.9,
+    "workers_per_run": 2,
+    "probe_interval_s": 15,
+    "max_wall_seconds": 21600,
+    "device_index": 0,
+    "allow_cpu": false,
+    "concurrency_basis": "HUMAN OVERRIDE, <date>: AGENTS.md invariant 16 caps concurrent GPU training jobs at two; the researcher authorised an automatic, resource-derived cap for this sweep instead. Record the authorisation, do not leave this blank."
+  },
+  "remote": {
+    "_comment": "Set host to the pod's ssh target before any remote verb (push/pull/start/status/logs/stop). The placeholder is refused there with a clear message; plan/configs/report never touch the network.",
+    "host": "CHANGE-ME",
+    "checkout": "/workspace/wavCSE/wavCSE",
+    "python": "uv run --locked python"
+  }
+}

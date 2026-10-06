@@ -87,8 +87,33 @@ def build_run_name(category, model, task_type, suffix=None):
         name = f"{name}_{suffix}"
     return name
 
+class _RunNameValues(dict):
+    """Placeholder values for a config-supplied run-name template.
+
+    A template is only useful if a typo fails loudly: silently leaving
+    ``{combo}`` in a run name would produce a plausible-looking name that
+    groups nothing. Unknown keys therefore raise, and the message names the
+    keys that are available.
+    """
+
+    def __missing__(self, key):
+        raise ValueError(
+            "research.run_name template uses unknown placeholder {{{}}}; available "
+            "placeholders: {}".format(key, ", ".join(sorted(self))))
+
+    def copy(self):  # pragma: no cover - dict internals only
+        return _RunNameValues(self)
+
+
 def build_research_run_name(cfg, method, task_type):
-    """Build the preferred Study-aware run name, or return None."""
+    """Build the preferred Study-aware run name, or return None.
+
+    When the config supplies ``research.run_name`` (a ``str.format`` template),
+    that name wins: a sweep that must encode a per-run axis -- a layer
+    combination, say -- cannot do it through the fixed fields below, and the
+    alternative (renaming the run after it finishes) leaves the tracking UI
+    wrong for the entire training run.
+    """
     research_cfg = cfg.get("research", {})
     study_id = research_cfg.get("study_id")
     if not study_id:
@@ -98,13 +123,26 @@ def build_research_run_name(cfg, method, task_type):
         return str(value).strip().replace(" ", "-").replace("/", "-")
 
     seed = int(cfg.get("seed", 42))
+    values = _RunNameValues({
+        "study_id": clean(study_id),
+        "stage": clean(research_cfg.get("stage", "unspecified")),
+        "method": clean(research_cfg.get("method", method)),
+        "task_type": clean(task_type),
+        "representation": clean(research_cfg.get("representation", "unspecified")),
+        "seed": seed,
+        "combo": clean(research_cfg.get("combo", "unspecified")),
+        "layer_count": research_cfg.get("layer_count", ""),
+    })
+    template = research_cfg.get("run_name")
+    if template:
+        return str(template).format_map(values)
     return "__".join([
-        clean(study_id),
-        clean(research_cfg.get("stage", "unspecified")),
-        clean(research_cfg.get("method", method)),
-        clean(task_type),
-        clean(research_cfg.get("representation", "unspecified")),
-        f"s{seed:02d}",
+        values["study_id"],
+        values["stage"],
+        values["method"],
+        values["task_type"],
+        values["representation"],
+        "s{:02d}".format(seed),
     ])
 
 

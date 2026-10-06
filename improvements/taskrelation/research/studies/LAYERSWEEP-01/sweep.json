@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "study_id": "LAYERSWEEP-01",
+  "sweep_id": "layersweep-normcorr-mtrl-smp25",
+  "run_model": "mtrl",
+  "method": "mtrl_norm_corrected",
+  "task_type": "ks_si_er",
+  "upstream_model_type": "wavlm_large",
+  "config_template": "improvements/taskrelation/research/studies/DG-0007/configs/norm_corrected_mtrl.yml",
+  "experiment_name": "taskrelation-mtrl-layersweep",
+  "run_name_template": "{study_id}__{stage}__{combo}__{task_type}__{representation}__s{seed:02d}",
+  "parent_study": "DG-0007",
+  "baseline_study": "DG-0007-baseline",
+  "combos": [
+    {
+      "id": "top-k2",
+      "group": "top layer dropping",
+      "k": 2,
+      "layers": "0-22"
+    },
+    {
+      "id": "top-k4",
+      "group": "top layer dropping",
+      "k": 4,
+      "layers": "0-20"
+    },
+    {
+      "id": "top-k6",
+      "group": "top layer dropping",
+      "k": 6,
+      "layers": "0-18"
+    },
+    {
+      "id": "top-k8",
+      "group": "top layer dropping",
+      "k": 8,
+      "layers": "0-16"
+    },
+    {
+      "id": "evenalt-k2",
+      "group": "even alternate dropping",
+      "k": 2,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,23"
+    },
+    {
+      "id": "evenalt-k4",
+      "group": "even alternate dropping",
+      "k": 4,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,19,21,23"
+    },
+    {
+      "id": "evenalt-k6",
+      "group": "even alternate dropping",
+      "k": 6,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,15,17,19,21,23"
+    },
+    {
+      "id": "evenalt-k8",
+      "group": "even alternate dropping",
+      "k": 8,
+      "layers": "0,1,2,3,4,5,6,7,8,9,11,13,15,17,19,21,23"
+    },
+    {
+      "id": "oddalt-k2",
+      "group": "odd alternate dropping",
+      "k": 2,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,22,24"
+    },
+    {
+      "id": "oddalt-k4",
+      "group": "odd alternate dropping",
+      "k": 4,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,20,22,24"
+    },
+    {
+      "id": "oddalt-k6",
+      "group": "odd alternate dropping",
+      "k": 6,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,11,12,14,16,18,20,22,24"
+    },
+    {
+      "id": "oddalt-k8",
+      "group": "odd alternate dropping",
+      "k": 8,
+      "layers": "0,1,2,3,4,5,6,7,8,10,12,14,16,18,20,22,24"
+    },
+    {
+      "id": "sym-k2",
+      "group": "symmetric dropping",
+      "k": 2,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,11,14,15,16,17,18,19,20,21,22,23,24"
+    },
+    {
+      "id": "sym-k4",
+      "group": "symmetric dropping",
+      "k": 4,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,15,16,17,18,19,20,21,22,23,24"
+    },
+    {
+      "id": "sym-k6",
+      "group": "symmetric dropping",
+      "k": 6,
+      "layers": "0,1,2,3,4,5,6,7,8,9,16,17,18,19,20,21,22,23,24"
+    },
+    {
+      "id": "sym-k8",
+      "group": "symmetric dropping",
+      "k": 8,
+      "layers": "0,1,2,3,4,5,6,7,8,17,18,19,20,21,22,23,24"
+    },
+    {
+      "id": "bottom-k2",
+      "group": "bottom layer dropping",
+      "k": 2,
+      "layers": "2-24"
+    },
+    {
+      "id": "bottom-k4",
+      "group": "bottom layer dropping",
+      "k": 4,
+      "layers": "4-24"
+    },
+    {
+      "id": "bottom-k6",
+      "group": "bottom layer dropping",
+      "k": 6,
+      "layers": "6-24"
+    },
+    {
+      "id": "bottom-k8",
+      "group": "bottom layer dropping",
+      "k": 8,
+      "layers": "8-24"
+    },
+    {
+      "id": "contrib-k2",
+      "group": "contribution based dropping",
+      "k": 2,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,19,20,21,22,23,24"
+    },
+    {
+      "id": "contrib-k4",
+      "group": "contribution based dropping",
+      "k": 4,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,20,21,22,23,24"
+    },
+    {
+      "id": "contrib-k6",
+      "group": "contribution based dropping",
+      "k": 6,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,21,22,23,24"
+    },
+    {
+      "id": "contrib-k8",
+      "group": "contribution based dropping",
+      "k": 8,
+      "layers": "0,1,2,3,4,5,6,7,8,9,10,12,13,14,22,23,24"
+    }
+  ],
+  "stages": {
+    "screen": {
+      "seeds": [
+        42
+      ]
+    },
+    "confirm": {
+      "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "combos": [
+        "top-k2",
+        "sym-k2"
+      ]
+    }
+  },
+  "policy": {
+    "max_concurrent": "auto",
+    "ceiling": 8,
+    "vram_per_run_gb": 2.5,
+    "ram_per_run_gb": 4.0,
+    "ram_reserve_gb": 8.0,
+    "cpu_cores_per_run": 4,
+    "min_free_disk_gb": 20.0,
+    "max_gpu_util_pct": 95,
+    "max_load_fraction": 0.9,
+    "workers_per_run": 2,
+    "probe_interval_s": 15,
+    "max_wall_seconds": 21600,
+    "device_index": 0,
+    "allow_cpu": false,
+    "concurrency_basis": "HUMAN OVERRIDE, 2026-10-06: AGENTS.md invariant 16 caps simultaneous GPU training jobs at two. The researcher replaced the fixed cap with an automatic, resource-derived one for this sweep (answer to the concurrency question in this session). Recorded here because the invariant is being set aside deliberately, not silently."
+  },
+  "remote": {
+    "host": "CHANGE-ME",
+    "checkout": "/workspace/wavCSE/wavCSE",
+    "python": "uv run --locked python"
+  }
+}
