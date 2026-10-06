@@ -77,19 +77,30 @@ def read_json(host, path):
         raise RemoteError("{}:{} is not valid JSON: {}".format(host, path, exc))
 
 
-def start_detached(host, checkout, argv, log_path):
-    """Launch the supervisor on the remote host, detached from this session.
+def detach_command(checkout, argv, log_path, env_file=None):
+    """The remote shell command that starts a supervisor and survives the ssh.
 
-    ``setsid`` plus a redirect means the sweep survives the ssh connection that
-    started it -- the same intent as the repo's documented ``nohup ... & disown``
-    pattern for long local runs.
+    ``setsid`` plus a redirection means the sweep outlives the connection that
+    started it (the repo's documented ``nohup ... & disown`` intent).
+
+    ``env_file`` is sourced before the command when given, because a
+    non-interactive ``ssh host 'cmd'`` runs a shell that sources neither
+    ``~/.bashrc`` nor ``~/.profile``: credentials exported in an interactive
+    session are simply absent, and a run would start with no tracking
+    configured and log nowhere. It is a path, not a value, so no secret is
+    written into the command line or into any log.
     """
-    command = "cd {checkout} && setsid nohup {argv} > {log} 2>&1 < /dev/null & echo started $!".format(
-        checkout=shlex.quote(checkout),
-        argv=" ".join(shlex.quote(str(token)) for token in argv),
-        log=shlex.quote(log_path),
-    )
-    return ssh(host, command)
+    parts = ["cd {}".format(shlex.quote(checkout))]
+    if env_file:
+        parts.append("set -a && . {} && set +a".format(shlex.quote(env_file)))
+    parts.append("setsid nohup {} > {} 2>&1 < /dev/null & echo started $!".format(
+        " ".join(shlex.quote(str(token)) for token in argv), shlex.quote(log_path)))
+    return " && ".join(parts)
+
+
+def start_detached(host, checkout, argv, log_path, env_file=None):
+    """Launch the supervisor on the remote host, detached from this session."""
+    return ssh(host, detach_command(checkout, argv, log_path, env_file))
 
 
 def write_remote_file(host, path, content):

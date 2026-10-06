@@ -89,6 +89,13 @@ checkout's and refuse to proceed when they differ — the pod's checkout is what
 actually executes, so a stale HEAD there would attribute runs to a commit that
 never ran.
 
+Pass `--env-file /root/.sweep-env` (or set `remote.env_file`) to `start` so the
+pod sources its credentials before the supervisor runs. This is not optional
+polish: a non-interactive `ssh host 'cmd'` sources neither `~/.bashrc` nor
+`~/.profile`, so credentials exported in an interactive session are absent and
+the runs would start with tracking unconfigured and log nowhere. Only the
+*path* is passed — never a value — so no secret reaches a command line or log.
+
 ## How "as many as fit" is decided
 
 `supervisor` probes the host every `policy.probe_interval_s`, then asks

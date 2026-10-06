@@ -332,11 +332,15 @@ def cmd_start(args):
         if args.allow_dirty:
             argv.append("--allow-dirty")
         log_path = os.path.join(view["state"], "supervisor.log")
+        env_file = getattr(args, "env_file", None) or (spec.get("remote") or {}).get(
+            "env_file")
         remote.ssh(host, "mkdir -p {}".format(shlex.quote(view["state"])))
-        remote.start_detached(host, view["checkout"], argv, log_path)
+        remote.start_detached(host, view["checkout"], argv, log_path, env_file)
         print("supervisor started on {}:\n  state {}\n  log   {}\n"
-              "watch with: status --host {} [--json]".format(
-                  host, view["state"], log_path, host))
+              "  env   {}\n"
+              "watch with: status --spec {} --host {} [--json]".format(
+                  host, view["state"], log_path, env_file or "(inherited)",
+                  args.spec, host))
         return EXIT_OK
     view = _local_view(spec, args)
     argv = ["--spec", args.spec, "--stage", stage, "--state-dir", view["state"]]
@@ -389,6 +393,10 @@ def build_parser():
                            help="override spec.remote.checkout: the pod's repository "
                                 "root. Kept on the command line so a machine-specific "
                                 "path never has to be committed into the spec")
+        child.add_argument("--env-file", default=None,
+                           help="path on the pod with export lines (e.g. MLflow "
+                                "credentials) to source before starting; needed because "
+                                "a non-interactive ssh command sources no profile")
         return child
 
     plan = add("plan", "dry-run: what the sweep would run, and the policy")
