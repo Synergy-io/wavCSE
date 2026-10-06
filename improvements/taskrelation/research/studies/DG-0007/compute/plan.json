@@ -103,17 +103,17 @@
     }
   ],
   "worker": {
-    "gpu_type": "NVIDIA RTX 2000 Ada Generation",
+    "gpu_type": "NVIDIA L4",
     "cloud": "SECURE",
     "gpu_count": 1,
     "image": "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
-    "container_disk_gb": 60,
+    "container_disk_gb": 150,
     "data_centers": [
-      "EU-RO-1"
+      "US-MO-2"
     ],
     "network_volume": {
-      "min_size_gb": 200,
-      "datacenter": "EU-RO-1",
+      "min_size_gb": 80,
+      "datacenter": "US-MO-2",
       "volume_type": "STANDARD"
     }
   },
