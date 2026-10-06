@@ -37,6 +37,13 @@ from improvements.compute import resolve as resolve_module
 from improvements.compute import providers
 
 DEFAULT_TIMEOUT_SECONDS = 600.0
+# `job submit` stages the spec's declared inputs on the worker before it returns.
+# A multi-gigabyte input set legitimately runs far past the general-purpose bound
+# (DG-0007's 15 embedding tars, ~20 GB, exceeded 600 s on a cold worker), and killing
+# the call mid-staging leaves the job record inconsistent with the provider's job, so
+# a subsequently-succeeded job can be recorded FAILED. Bound only the staging call
+# more generously; every other call keeps the general timeout.
+SUBMIT_TIMEOUT_SECONDS = 3600.0
 _RESEARCH_SECRET_NAMES = ("MLFLOW_TRACKING_USERNAME", "MLFLOW_TRACKING_PASSWORD")
 
 # Substrings that name a genuinely transient condition. Everything else is
@@ -368,7 +375,8 @@ class InfraCli(object):
             provider = _require_provider(provider)
             if provider != providers.DEFAULT_PROVIDER:
                 args.extend(["--provider", provider])
-        return self.run(*args, json_output=True, check=False)
+        return self.run(*args, json_output=True, check=False,
+                        timeout=SUBMIT_TIMEOUT_SECONDS)
 
     def job_cancel(self, job_id):
         return self.run("job", "cancel", job_id, json_output=True, check=False)
