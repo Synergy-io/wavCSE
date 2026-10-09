@@ -32,7 +32,7 @@
     "matrix": {
       "run_id": "2026_09_21_05_30_35",
       "sources": {
-        "log": "improvements/clustering/logs/run_2026_09_21_05_30_30.log",
+        "log": "improvements/clustering/logs/epoch30/2_row_assignment/run_2026_09_21_05_30_30.log",
         "result_directory": "improvements/clustering/results_ncmtl/2026_09_21_05_30_35"
       },
       "sharing": {
@@ -84,7 +84,7 @@
     "row": {
       "run_id": "2026_09_21_07_14_51",
       "sources": {
-        "log": "improvements/clustering/logs/run_2026_09_21_07_14_40.log",
+        "log": "improvements/clustering/logs/epoch30/2_row_assignment/run_2026_09_21_07_14_40.log",
         "result_directory": "improvements/clustering/results_ncmtl/2026_09_21_07_14_51"
       },
       "sharing": {

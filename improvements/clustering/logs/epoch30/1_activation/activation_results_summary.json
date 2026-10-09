@@ -63,7 +63,7 @@
       "activation": "none",
       "run_id": "2026_09_21_04_05_26",
       "sources": {
-        "log": "improvements/clustering/logs/none_run_2026_09_21_04_05_21.log",
+        "log": "improvements/clustering/logs/epoch30/1_activation/none_run_2026_09_21_04_05_21.log",
         "result_directory": "improvements/clustering/results_ncmtl_activation_none/2026_09_21_04_05_26"
       },
       "validation": {
@@ -111,7 +111,7 @@
       "activation": "gelu",
       "run_id": "2026_09_20_19_50_08",
       "sources": {
-        "log": "improvements/clustering/logs/epoch30/activation/gelu_run_2026_09_20_19_49_55.log",
+        "log": "improvements/clustering/logs/epoch30/1_activation/gelu_run_2026_09_20_19_49_55.log",
         "result_directory": "improvements/clustering/results_ncmtl_activation_gelu/2026_09_20_19_50_08"
       },
       "validation": {
@@ -137,7 +137,7 @@
       "activation": "relu",
       "run_id": "2026_09_20_19_51_15",
       "sources": {
-        "log": "improvements/clustering/logs/epoch30/activation/relu_run_2026_09_20_19_51_10.log",
+        "log": "improvements/clustering/logs/epoch30/1_activation/relu_run_2026_09_20_19_51_10.log",
         "result_directory": "improvements/clustering/results_ncmtl_activation_relu/2026_09_20_19_51_15"
       },
       "validation": {

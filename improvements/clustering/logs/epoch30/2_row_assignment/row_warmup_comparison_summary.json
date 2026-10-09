@@ -25,7 +25,7 @@
       "warmup_epochs": 3,
       "sharing_epochs": 27,
       "sources": {
-        "log": "improvements/clustering/logs/run_2026_09_21_07_14_40.log",
+        "log": "improvements/clustering/logs/epoch30/2_row_assignment/run_2026_09_21_07_14_40.log",
         "result_directory": "improvements/clustering/results_ncmtl/2026_09_21_07_14_51"
       },
       "assignments": {
@@ -53,7 +53,7 @@
       "warmup_epochs": 5,
       "sharing_epochs": 25,
       "sources": {
-        "log": "improvements/clustering/logs/run_2026_09_21_08_06_00.log",
+        "log": "improvements/clustering/logs/epoch30/2_row_assignment/run_2026_09_21_08_06_00.log",
         "result_directory": "improvements/clustering/results_ncmtl/2026_09_21_08_06_10"
       },
       "assignments": {

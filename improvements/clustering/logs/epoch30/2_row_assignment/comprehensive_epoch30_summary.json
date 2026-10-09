@@ -31,7 +31,7 @@
   "matrix_baselines": {
     "current_seed42": {
       "run_id": "2026_09_21_05_30_35",
-      "log": "improvements/clustering/logs/run_2026_09_21_05_30_30.log",
+      "log": "improvements/clustering/logs/epoch30/2_row_assignment/run_2026_09_21_05_30_30.log",
       "results": "improvements/clustering/results_ncmtl/2026_09_21_05_30_35",
       "method": "whole-matrix K-Means++ with two clusters, three-epoch warm-up, and hard sharing",
       "cluster": {"groups": [["ks", "er"], ["si"]], "frozen_epoch": 6, "frozen_batch": 70},
@@ -47,9 +47,9 @@
     },
     "historical_auto_0p01": {
       "run_id": "2026_09_01_04_47_36",
-      "log": "improvements/clustering/logs/epoch30/auto_run_2026_09_01_04_47_30.log",
+      "log": "improvements/clustering/logs/epoch30/0_init_pool/auto_run_2026_09_01_04_47_30.log",
       "results": "improvements/clustering/results_ncmtl/2026_09_01_04_47_36",
-      "source_summary": "improvements/clustering/logs/epoch30/auto_init_alpha_results_summary.json",
+      "source_summary": "improvements/clustering/logs/epoch30/0_init_pool/auto_init_alpha_results_summary.json",
       "cluster": {"groups": [["ks", "er"], ["si"]], "frozen_epoch": 6},
       "validation_opt": {"epoch": 28, "all": 0.971238, "macro": 0.920791, "ks": 0.983672, "si": 0.972190, "er": 0.806510},
       "test_opt": {"all": 0.971673, "loss_all": 0.152102, "macro": 0.906437, "ks": 0.984784, "si": 0.975033, "er": 0.759494},
@@ -59,7 +59,7 @@
   "fixed_row_warmup": {
     "seed42_warmup3": {
       "run_id": "2026_09_21_07_14_51",
-      "log": "improvements/clustering/logs/run_2026_09_21_07_14_40.log",
+      "log": "improvements/clustering/logs/epoch30/2_row_assignment/run_2026_09_21_07_14_40.log",
       "results": "improvements/clustering/results_ncmtl/2026_09_21_07_14_51",
       "freeze": {"epoch": 3, "sharing_began_epoch": 4, "pair_counts": {"ks_si": 563, "ks_er": 1032, "si_er": 405}, "shared_rows": 2000},
       "confidence": {"median_relative_margin": 0.133103, "rows_below_0p10": 770},
@@ -75,7 +75,7 @@
     },
     "seed42_warmup5": {
       "run_id": "2026_09_21_08_06_10",
-      "log": "improvements/clustering/logs/run_2026_09_21_08_06_00.log",
+      "log": "improvements/clustering/logs/epoch30/2_row_assignment/run_2026_09_21_08_06_00.log",
       "results": "improvements/clustering/results_ncmtl/2026_09_21_08_06_10",
       "freeze": {"epoch": 5, "sharing_began_epoch": 6, "pair_counts": {"ks_si": 504, "ks_er": 1181, "si_er": 315}, "shared_rows": 2000},
       "pre_sharing_consecutive_stability": {"epoch_1_to_2": 0.8520, "epoch_2_to_3": 0.9405, "epoch_3_to_4": 0.9500, "epoch_4_to_5": 0.9585},
@@ -97,7 +97,7 @@
       "pre_sharing_stability": [0.8520, 0.9405, 0.9500],
       "all_rows": {
         "run_id": "2026_09_21_10_14_28",
-        "log": "improvements/clustering/logs/adaptive_all_seed42_run_2026_09_21_10_14_23.log",
+        "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/adaptive_all_seed42_run_2026_09_21_10_14_23.log",
         "results": "improvements/clustering/results_ncmtl/2026_09_21_10_14_28",
         "freeze": {"epoch": 4, "final_stability": 0.9500, "pair_counts": {"ks_si": 533, "ks_er": 1111, "si_er": 356}, "shared_rows": 2000, "independent_rows": 0},
         "validation": {
@@ -112,7 +112,7 @@
       },
       "gated_0p10": {
         "run_id": "2026_09_21_10_42_23",
-        "log": "improvements/clustering/logs/adaptive_gated_0p10_seed42_run_2026_09_21_10_42_18.log",
+        "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/adaptive_gated_0p10_seed42_run_2026_09_21_10_42_18.log",
         "results": "improvements/clustering/results_ncmtl_row_confidence_0p10/2026_09_21_10_42_23",
         "freeze": {"epoch": 4, "final_stability": 0.9500, "pair_counts": {"ks_si": 533, "ks_er": 1111, "si_er": 356}, "shared_pair_counts": {"ks_si": 258, "ks_er": 830, "si_er": 156}, "shared_rows": 1244, "independent_rows": 756, "coverage": 0.6220},
         "validation": {
@@ -129,7 +129,7 @@
     "seed43": {
       "all_rows": {
         "run_id": "2026_09_21_12_22_05",
-        "log": "improvements/clustering/logs/run_2026_09_21_12_21_59.log",
+        "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/run_2026_09_21_12_21_59.log",
         "results": "improvements/clustering/results_ncmtl_row_adaptive_all_seed43/2026_09_21_12_22_05",
         "freeze": {"epoch": 4, "final_stability": 0.9515, "pair_counts": {"ks_si": 509, "ks_er": 1242, "si_er": 249}, "shared_rows": 2000, "independent_rows": 0},
         "validation": {
@@ -144,7 +144,7 @@
       },
       "gated_0p10": {
         "run_id": "2026_09_21_12_31_23",
-        "log": "improvements/clustering/logs/run_2026_09_21_12_31_18.log",
+        "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/run_2026_09_21_12_31_18.log",
         "results": "improvements/clustering/results_ncmtl_row_adaptive_gated_0p10_seed43/2026_09_21_12_31_23",
         "freeze": {"epoch": 4, "final_stability": 0.9515, "pair_counts": {"ks_si": 509, "ks_er": 1242, "si_er": 249}, "shared_pair_counts": {"ks_si": 238, "ks_er": 836, "si_er": 75}, "shared_rows": 1149, "independent_rows": 851, "coverage": 0.5745},
         "validation": {
@@ -162,7 +162,7 @@
     "seed44": {
       "all_rows": {
         "run_id": "2026_09_21_12_26_49",
-        "log": "improvements/clustering/logs/run_2026_09_21_12_26_43.log",
+        "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/run_2026_09_21_12_26_43.log",
         "results": "improvements/clustering/results_ncmtl_row_adaptive_all_seed44/2026_09_21_12_26_49",
         "freeze": {"epoch": 4, "final_stability": 0.9420, "pair_counts": {"ks_si": 277, "ks_er": 1193, "si_er": 530}, "shared_rows": 2000, "independent_rows": 0},
         "validation": {
@@ -177,7 +177,7 @@
       },
       "gated_0p10": {
         "run_id": "2026_09_21_12_43_29",
-        "log": "improvements/clustering/logs/run_2026_09_21_12_43_23.log",
+        "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/run_2026_09_21_12_43_23.log",
         "results": "improvements/clustering/results_ncmtl_row_adaptive_gated_0p10_seed44/2026_09_21_12_43_29",
         "freeze": {"epoch": 4, "final_stability": 0.9420, "pair_counts": {"ks_si": 277, "ks_er": 1193, "si_er": 530}, "shared_pair_counts": {"ks_si": 105, "ks_er": 849, "si_er": 262}, "shared_rows": 1216, "independent_rows": 784, "coverage": 0.6080},
         "validation": {

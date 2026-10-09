@@ -47,7 +47,7 @@
   "runs": {
     "matrix": {
       "run_id": "2026_09_21_05_30_35",
-      "log": "improvements/clustering/logs/run_2026_09_21_05_30_30.log",
+      "log": "improvements/clustering/logs/epoch30/2_row_assignment/run_2026_09_21_05_30_30.log",
       "results": "improvements/clustering/results_ncmtl/2026_09_21_05_30_35",
       "method": "Whole-matrix K-Means++ with two task clusters; hard-share cluster centres periodically, then after every batch once frozen.",
       "warmup_epochs": 3,
@@ -64,7 +64,7 @@
     },
     "row_fixed_3": {
       "run_id": "2026_09_21_07_14_51",
-      "log": "improvements/clustering/logs/run_2026_09_21_07_14_40.log",
+      "log": "improvements/clustering/logs/epoch30/2_row_assignment/run_2026_09_21_07_14_40.log",
       "results": "improvements/clustering/results_ncmtl/2026_09_21_07_14_51",
       "method": "Freeze each row's closest task pair after exactly three independent epochs; hard-share every row from epoch 4.",
       "freeze_decision": {"epoch": 3, "reason": "fixed warm-up completed", "pair_counts": {"ks_si": 563, "ks_er": 1032, "si_er": 405}, "shared_rows": 2000, "independent_rows": 0},
@@ -81,7 +81,7 @@
     },
     "row_fixed_5": {
       "run_id": "2026_09_21_08_06_10",
-      "log": "improvements/clustering/logs/run_2026_09_21_08_06_00.log",
+      "log": "improvements/clustering/logs/epoch30/2_row_assignment/run_2026_09_21_08_06_00.log",
       "results": "improvements/clustering/results_ncmtl/2026_09_21_08_06_10",
       "method": "Freeze each row's closest task pair after exactly five independent epochs; hard-share every row from epoch 6.",
       "freeze_decision": {"epoch": 5, "reason": "fixed warm-up completed", "pair_counts": {"ks_si": 504, "ks_er": 1181, "si_er": 315}, "shared_rows": 2000, "independent_rows": 0},
@@ -98,7 +98,7 @@
     },
     "row_adaptive_all": {
       "run_id": "2026_09_21_10_14_28",
-      "log": "improvements/clustering/logs/run_2026_09_21_10_14_23.log",
+      "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/adaptive_all_seed42_run_2026_09_21_10_14_23.log",
       "results": "improvements/clustering/results_ncmtl/2026_09_21_10_14_28",
       "method": "During independent training, compare proposed closest-pair assignments across consecutive epochs. Freeze once at least 90% are unchanged for two consecutive eligible transitions; share all rows from the following epoch.",
       "warmup_rule": {"minimum_epochs": 3, "maximum_epochs": 10, "stability_threshold": 0.90, "patience": 2},
@@ -117,7 +117,7 @@
     },
     "row_adaptive_gate_0p10": {
       "run_id": "2026_09_21_10_42_23",
-      "log": "improvements/clustering/logs/run_2026_09_21_10_42_18.log",
+      "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/adaptive_gated_0p10_seed42_run_2026_09_21_10_42_18.log",
       "results": "improvements/clustering/results_ncmtl_row_confidence_0p10/2026_09_21_10_42_23",
       "method": "Same adaptive warm-up and proposed pairs as row_adaptive_all; only pairs with relative margin >= 0.10 are hard-shared. Other task rows remain independent.",
       "warmup_rule": {"minimum_epochs": 3, "maximum_epochs": 10, "stability_threshold": 0.90, "patience": 2},

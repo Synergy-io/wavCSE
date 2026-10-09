@@ -1,4 +1,4 @@
-"""Frozen closest-pair row sharing for the NCMTL row-level ablation."""
+"""Frozen closest-pair hard or confidence-aware soft NCMTL row sharing."""
 
 import csv
 import json
@@ -10,7 +10,13 @@ from .candidate_row_distances import compute_candidate_row_distances
 
 
 class RowTaskSharing:
-    """Assign each corresponding candidate row to its closest task pair."""
+    """Assign each candidate row to its closest pair and project that pair.
+
+    Soft mode freezes one coefficient per row at the assignment epoch:
+    beta = clip((relative_margin - soft_min) / (soft_full - soft_min), 0, 1).
+    The selected rows move a beta fraction toward their pair centre after each
+    optimizer update. Assignments and coefficients remain fixed thereafter.
+    """
 
     PAIRS = (("ks_si", 0, 1), ("ks_er", 0, 2), ("si_er", 1, 2))
 
@@ -24,6 +30,9 @@ class RowTaskSharing:
         warmup_stability_threshold: float = 0.90,
         warmup_stability_patience: int = 2,
         min_relative_margin: float = 0.0,
+        sharing_mode: str = "hard",
+        soft_min_margin: float = 0.0,
+        soft_full_margin: float = 0.10,
     ):
         if list(task_names) != ["ks", "si", "er"]:
             raise ValueError("Row task sharing requires tasks ['ks', 'si', 'er']")
@@ -36,6 +45,9 @@ class RowTaskSharing:
         self.warmup_stability_threshold = float(warmup_stability_threshold)
         self.warmup_stability_patience = int(warmup_stability_patience)
         self.min_relative_margin = float(min_relative_margin)
+        self.sharing_mode = str(sharing_mode).strip().lower()
+        self.soft_min_margin = float(soft_min_margin)
+        self.soft_full_margin = float(soft_full_margin)
         if self.warmup_min_epochs < 1:
             raise ValueError("row_warmup_min_epochs must be at least 1")
         if self.warmup_max_epochs < self.warmup_min_epochs:
@@ -50,9 +62,20 @@ class RowTaskSharing:
             raise ValueError("row_warmup_stability_patience must be at least 1")
         if not 0.0 <= self.min_relative_margin <= 1.0:
             raise ValueError("row_min_relative_margin must satisfy 0 <= value <= 1")
+        if self.sharing_mode not in {"hard", "soft"}:
+            raise ValueError("row_sharing_mode must be 'hard' or 'soft'")
+        if not 0.0 <= self.soft_min_margin <= 1.0:
+            raise ValueError("row_soft_min_margin must satisfy 0 <= value <= 1")
+        if not 0.0 < self.soft_full_margin <= 1.0:
+            raise ValueError("row_soft_full_margin must satisfy 0 < value <= 1")
+        if self.soft_full_margin <= self.soft_min_margin:
+            raise ValueError(
+                "row_soft_full_margin must be greater than row_soft_min_margin"
+            )
 
         self.assignments = None
         self.shared_row_mask = None
+        self.sharing_coefficients = None
         self.assignment_epoch = None
         self.ready_to_freeze = False
         self.freeze_reason = None
@@ -111,7 +134,19 @@ class RowTaskSharing:
             absolute_margins / second_distances,
             torch.zeros_like(second_distances),
         )
-        self.shared_row_mask = relative_margins >= self.min_relative_margin
+        if self.sharing_mode == "soft":
+            self.sharing_coefficients = torch.clamp(
+                (relative_margins - self.soft_min_margin)
+                / (self.soft_full_margin - self.soft_min_margin),
+                min=0.0,
+                max=1.0,
+            )
+            self.shared_row_mask = self.sharing_coefficients > 0.0
+        else:
+            self.shared_row_mask = relative_margins >= self.min_relative_margin
+            self.sharing_coefficients = self.shared_row_mask.to(
+                dtype=relative_margins.dtype
+            )
         self.assignment_epoch = int(epoch)
 
         with open(self.assignment_csv_path, "w", newline="") as assignment_file:
@@ -120,7 +155,7 @@ class RowTaskSharing:
                 [
                     "row", "pair_id", "selected_pair", "selected_distance",
                     "second_distance", "absolute_margin", "relative_margin",
-                    "sharing_decision",
+                    "sharing_coefficient", "sharing_decision",
                     "ks_si_distance", "ks_er_distance", "si_er_distance",
                 ]
             )
@@ -139,7 +174,8 @@ class RowTaskSharing:
                         second,
                         margin,
                         relative_margin,
-                        "shared" if bool(self.shared_row_mask[row_index]) else "independent",
+                        float(self.sharing_coefficients[row_index].item()),
+                        self._sharing_decision(row_index),
                         float(stacked[0, row_index].item()),
                         float(stacked[1, row_index].item()),
                         float(stacked[2, row_index].item()),
@@ -150,22 +186,57 @@ class RowTaskSharing:
         shared_counts = self.shared_assignment_counts()
         total = int(self.assignments.numel())
         shared_rows = int(torch.sum(self.shared_row_mask).item())
+        fully_shared_rows = int(torch.sum(
+            self.sharing_coefficients >= 1.0
+        ).item())
+        partially_shared_rows = int(torch.sum(
+            (self.sharing_coefficients > 0.0)
+            & (self.sharing_coefficients < 1.0)
+        ).item())
         summary = {
             "strategy": "closest_pair",
+            "sharing_mode": self.sharing_mode,
             "assignment_epoch": self.assignment_epoch,
             "frozen": True,
             "num_rows": total,
             "minimum_relative_margin": self.min_relative_margin,
+            "soft_min_margin": self.soft_min_margin,
+            "soft_full_margin": self.soft_full_margin,
             "pair_ids": {name: pair_id for pair_id, (name, _, _) in enumerate(self.PAIRS)},
             "counts": counts,
             "proportions": {name: count / total for name, count in counts.items()},
             "shared_pair_counts": shared_counts,
             "shared_rows": shared_rows,
+            "partially_shared_rows": partially_shared_rows,
+            "fully_shared_rows": fully_shared_rows,
             "independent_rows": total - shared_rows,
             "sharing_coverage": shared_rows / total,
+            "sharing_coefficient_statistics": self.sharing_coefficient_statistics(),
         }
         with open(self.assignment_summary_path, "w") as summary_file:
             json.dump(summary, summary_file, indent=2)
+
+    def _sharing_decision(self, row_index: int) -> str:
+        coefficient = float(self.sharing_coefficients[row_index].item())
+        if coefficient <= 0.0:
+            return "independent"
+        if self.sharing_mode == "hard":
+            return "shared"
+        if coefficient >= 1.0:
+            return "fully_shared"
+        return "partially_shared"
+
+    def sharing_coefficient_statistics(self) -> dict[str, float]:
+        if not self.initialized:
+            return {"mean": 0.0, "median": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
+        coefficients = self.sharing_coefficients.float()
+        return {
+            "mean": float(coefficients.mean().item()),
+            "median": float(coefficients.median().item()),
+            "std": float(coefficients.std(unbiased=False).item()),
+            "min": float(coefficients.min().item()),
+            "max": float(coefficients.max().item()),
+        }
 
     def observe_adaptive_warmup(self, weights, epoch: int) -> bool:
         """Observe independent candidates and decide whether warm-up can stop."""
@@ -262,31 +333,51 @@ class RowTaskSharing:
         if not self.initialized:
             return
         for pair_id, (_, first, second) in enumerate(self.PAIRS):
-            row_mask = (
+            cpu_row_mask = (
                 (self.assignments == pair_id) & self.shared_row_mask
-            ).to(weights[first].device)
+            )
+            row_mask = cpu_row_mask.to(weights[first].device)
             if not bool(torch.any(row_mask)):
                 continue
             row_indices = torch.nonzero(row_mask, as_tuple=False).squeeze(1)
-            center = (weights[first][row_mask] + weights[second][row_mask]) / 2.0
-            weights[first].index_copy_(0, row_indices, center)
-            weights[second].index_copy_(0, row_indices, center)
+            first_rows = weights[first][row_mask]
+            second_rows = weights[second][row_mask]
+            center = (first_rows + second_rows) / 2.0
+            coefficients = self.sharing_coefficients[cpu_row_mask].to(
+                device=weights[first].device,
+                dtype=weights[first].dtype,
+            ).unsqueeze(1)
+            weights[first].index_copy_(
+                0, row_indices, first_rows + coefficients * (center - first_rows)
+            )
+            weights[second].index_copy_(
+                0, row_indices, second_rows + coefficients * (center - second_rows)
+            )
 
     def cluster_loss(self, weights) -> torch.Tensor:
         if not self.initialized:
             return weights[0].new_zeros(())
         loss = weights[0].new_zeros(())
         for pair_id, (_, first, second) in enumerate(self.PAIRS):
-            row_mask = (
+            cpu_row_mask = (
                 (self.assignments == pair_id) & self.shared_row_mask
-            ).to(weights[first].device)
+            )
+            row_mask = cpu_row_mask.to(weights[first].device)
             if not bool(torch.any(row_mask)):
                 continue
             center = (
                 (weights[first][row_mask] + weights[second][row_mask]) / 2.0
             ).detach()
-            loss = loss + torch.sum((weights[first][row_mask] - center) ** 2)
-            loss = loss + torch.sum((weights[second][row_mask] - center) ** 2)
+            coefficients = self.sharing_coefficients[cpu_row_mask].to(
+                device=weights[first].device,
+                dtype=weights[first].dtype,
+            ).unsqueeze(1)
+            loss = loss + torch.sum(
+                coefficients * (weights[first][row_mask] - center) ** 2
+            )
+            loss = loss + torch.sum(
+                coefficients * (weights[second][row_mask] - center) ** 2
+            )
         return loss
 
     def record_observed_stability(self, epoch: int, raw_values: dict) -> None:

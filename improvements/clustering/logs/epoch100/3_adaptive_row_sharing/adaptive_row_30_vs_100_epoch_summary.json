@@ -37,7 +37,7 @@
       "minimum_relative_margin": 0.0,
       "run_id": "2026_09_21_15_03_15",
       "config": "improvements/clustering/configs/ncmtl_row_adaptive_all_seed42_100ep.yml",
-      "log": "improvements/clustering/logs/run_2026_09_21_15_03_06.log",
+      "log": "improvements/clustering/logs/epoch100/3_adaptive_row_sharing/run_2026_09_21_15_03_06.log",
       "results": "improvements/clustering/results_ncmtl_row_adaptive_all_seed42_100ep/2026_09_21_15_03_15",
       "freeze": {
         "epoch": 4,
@@ -67,7 +67,7 @@
       "minimum_relative_margin": 0.1,
       "run_id": "2026_09_21_15_01_16",
       "config": "improvements/clustering/configs/ncmtl_row_adaptive_gated_0p10_seed42_100ep.yml",
-      "log": "improvements/clustering/logs/run_2026_09_21_15_01_11.log",
+      "log": "improvements/clustering/logs/epoch100/3_adaptive_row_sharing/run_2026_09_21_15_01_11.log",
       "results": "improvements/clustering/results_ncmtl_row_adaptive_gated_0p10_seed42_100ep/2026_09_21_15_01_16",
       "freeze": {
         "epoch": 4,
@@ -91,28 +91,28 @@
     },
     {
       "method": "adaptive_all_rows", "epochs": 30, "seed": 42, "minimum_relative_margin": 0.0,
-      "run_id": "2026_09_21_10_14_28", "log": "improvements/clustering/logs/adaptive_all_seed42_run_2026_09_21_10_14_23.log", "results": "improvements/clustering/results_ncmtl/2026_09_21_10_14_28",
+      "run_id": "2026_09_21_10_14_28", "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/adaptive_all_seed42_run_2026_09_21_10_14_23.log", "results": "improvements/clustering/results_ncmtl/2026_09_21_10_14_28",
       "freeze": {"epoch": 4, "row_pair_counts": {"ks_si": 533, "ks_er": 1111, "si_er": 356}, "shared_rows": 2000, "independent_rows": 0},
       "validation": {"opt": {"epoch": 29, "accuracy_all": 0.972711, "macro_task_accuracy": 0.919029, "task_accuracy": {"ks": 0.983230, "si": 0.976390, "er": 0.797468}}},
       "test": {"opt": {"accuracy_all": 0.975510, "macro_task_accuracy": 0.914594, "task_accuracy": {"ks": 0.986686, "si": 0.979518, "er": 0.777577}}}
     },
     {
       "method": "adaptive_gated_0p10", "epochs": 30, "seed": 42, "minimum_relative_margin": 0.1,
-      "run_id": "2026_09_21_10_42_23", "log": "improvements/clustering/logs/adaptive_gated_0p10_seed42_run_2026_09_21_10_42_18.log", "results": "improvements/clustering/results_ncmtl_row_confidence_0p10/2026_09_21_10_42_23",
+      "run_id": "2026_09_21_10_42_23", "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/adaptive_gated_0p10_seed42_run_2026_09_21_10_42_18.log", "results": "improvements/clustering/results_ncmtl_row_confidence_0p10/2026_09_21_10_42_23",
       "freeze": {"epoch": 4, "row_pair_counts": {"ks_si": 533, "ks_er": 1111, "si_er": 356}, "shared_rows": 1244, "independent_rows": 756},
       "validation": {"opt": {"epoch": 30, "accuracy_all": 0.971168, "macro_task_accuracy": 0.916857, "task_accuracy": {"ks": 0.982936, "si": 0.973783, "er": 0.793852}}},
       "test": {"opt": {"accuracy_all": 0.973016, "macro_task_accuracy": 0.911860, "task_accuracy": {"ks": 0.986101, "si": 0.975518, "er": 0.773960}}}
     },
     {
       "method": "adaptive_all_rows", "epochs": 30, "seed": 43, "minimum_relative_margin": 0.0,
-      "run_id": "2026_09_21_12_22_05", "log": "improvements/clustering/logs/run_2026_09_21_12_21_59.log", "results": "improvements/clustering/results_ncmtl_row_adaptive_all_seed43/2026_09_21_12_22_05",
+      "run_id": "2026_09_21_12_22_05", "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/run_2026_09_21_12_21_59.log", "results": "improvements/clustering/results_ncmtl_row_adaptive_all_seed43/2026_09_21_12_22_05",
       "freeze": {"epoch": 4, "row_pair_counts": {"ks_si": 509, "ks_er": 1242, "si_er": 249}, "shared_rows": 2000, "independent_rows": 0},
       "validation": {"opt": {"epoch": 29, "accuracy_all": 0.970116, "macro_task_accuracy": 0.915025, "task_accuracy": {"ks": 0.983230, "si": 0.971611, "er": 0.790235}}},
       "test": {"opt": {"accuracy_all": 0.973720, "macro_task_accuracy": 0.911188, "task_accuracy": {"ks": 0.986247, "si": 0.976972, "er": 0.770344}}}
     },
     {
       "method": "adaptive_gated_0p10", "epochs": 30, "seed": 43, "minimum_relative_margin": 0.1,
-      "run_id": "2026_09_21_12_31_23", "log": "improvements/clustering/logs/run_2026_09_21_12_31_18.log", "results": "improvements/clustering/results_ncmtl_row_adaptive_gated_0p10_seed43/2026_09_21_12_31_23",
+      "run_id": "2026_09_21_12_31_23", "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/run_2026_09_21_12_31_18.log", "results": "improvements/clustering/results_ncmtl_row_adaptive_gated_0p10_seed43/2026_09_21_12_31_23",
       "freeze": {"epoch": 4, "row_pair_counts": {"ks_si": 509, "ks_er": 1242, "si_er": 249}, "shared_rows": 1149, "independent_rows": 851},
       "validation": {"opt": {"epoch": 13, "accuracy_all": 0.961557, "macro_task_accuracy": 0.900266, "task_accuracy": {"ks": 0.983819, "si": 0.955678, "er": 0.761302}}},
       "test": {"opt": {"accuracy_all": 0.959972, "macro_task_accuracy": 0.891271, "task_accuracy": {"ks": 0.986540, "si": 0.953097, "er": 0.734177}}},
@@ -120,14 +120,14 @@
     },
     {
       "method": "adaptive_all_rows", "epochs": 30, "seed": 44, "minimum_relative_margin": 0.0,
-      "run_id": "2026_09_21_12_26_49", "log": "improvements/clustering/logs/run_2026_09_21_12_26_43.log", "results": "improvements/clustering/results_ncmtl_row_adaptive_all_seed44/2026_09_21_12_26_49",
+      "run_id": "2026_09_21_12_26_49", "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/run_2026_09_21_12_26_43.log", "results": "improvements/clustering/results_ncmtl_row_adaptive_all_seed44/2026_09_21_12_26_49",
       "freeze": {"epoch": 4, "row_pair_counts": {"ks_si": 277, "ks_er": 1193, "si_er": 530}, "shared_rows": 2000, "independent_rows": 0},
       "validation": {"opt": {"epoch": 29, "accuracy_all": 0.971870, "macro_task_accuracy": 0.915132, "task_accuracy": {"ks": 0.984996, "si": 0.973783, "er": 0.786618}}},
       "test": {"opt": {"accuracy_all": 0.973400, "macro_task_accuracy": 0.913277, "task_accuracy": {"ks": 0.986979, "si": 0.975276, "er": 0.777577}}}
     },
     {
       "method": "adaptive_gated_0p10", "epochs": 30, "seed": 44, "minimum_relative_margin": 0.1,
-      "run_id": "2026_09_21_12_43_29", "log": "improvements/clustering/logs/run_2026_09_21_12_43_23.log", "results": "improvements/clustering/results_ncmtl_row_adaptive_gated_0p10_seed44/2026_09_21_12_43_29",
+      "run_id": "2026_09_21_12_43_29", "log": "improvements/clustering/logs/epoch30/3_adaptive_row_sharing/run_2026_09_21_12_43_23.log", "results": "improvements/clustering/results_ncmtl_row_adaptive_gated_0p10_seed44/2026_09_21_12_43_29",
       "freeze": {"epoch": 4, "row_pair_counts": {"ks_si": 277, "ks_er": 1193, "si_er": 530}, "shared_rows": 1216, "independent_rows": 784},
       "validation": {"opt": {"epoch": 13, "accuracy_all": 0.960014, "macro_task_accuracy": 0.905845, "task_accuracy": {"ks": 0.981318, "si": 0.953216, "er": 0.783002}}},
       "test": {"opt": {"accuracy_all": 0.960292, "macro_task_accuracy": 0.898088, "task_accuracy": {"ks": 0.984199, "si": 0.954187, "er": 0.755877}}},
@@ -168,7 +168,7 @@
     ]
   },
   "sources": {
-    "thirty_epoch_full_summary": "improvements/clustering/logs/epoch30/row_assignment/comprehensive_epoch30_summary.json",
+    "thirty_epoch_full_summary": "improvements/clustering/logs/epoch30/2_row_assignment/comprehensive_epoch30_summary.json",
     "hundred_epoch_test_metric_files": "Each 100-epoch run's results directory contains eval_metrics_opt.txt, eval_metrics_best.txt, and eval_metrics_epoch.txt.",
     "hundred_epoch_validation_metric_files": "Each 100-epoch run's train_ks_si_er.txt contains exact best/opt validation task accuracies and rounded per-epoch trajectories."
   }

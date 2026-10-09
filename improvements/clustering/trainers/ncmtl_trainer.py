@@ -76,6 +76,15 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         self.row_min_relative_margin = float(
             ncmtl_cfg.get("row_min_relative_margin", 0.0)
         )
+        self.row_sharing_mode = str(
+            ncmtl_cfg.get("row_sharing_mode", "hard")
+        ).strip().lower()
+        self.row_soft_min_margin = float(
+            ncmtl_cfg.get("row_soft_min_margin", 0.0)
+        )
+        self.row_soft_full_margin = float(
+            ncmtl_cfg.get("row_soft_full_margin", 0.10)
+        )
         self.kmeans_random_state = int(ncmtl_cfg.get("kmeans_random_state", 42))
         self.kmeans_n_init = int(ncmtl_cfg.get("kmeans_n_init", 1))
         self.kmeans_max_iter = int(ncmtl_cfg.get("kmeans_max_iter", 100))
@@ -131,6 +140,9 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                 warmup_stability_threshold=self.row_warmup_stability_threshold,
                 warmup_stability_patience=self.row_warmup_stability_patience,
                 min_relative_margin=self.row_min_relative_margin,
+                sharing_mode=self.row_sharing_mode,
+                soft_min_margin=self.row_soft_min_margin,
+                soft_full_margin=self.row_soft_full_margin,
             )
             if self.sharing_granularity == "row"
             else None
@@ -141,7 +153,9 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             "clusters=%d | alpha=%g | interval=%d | warmup_epochs=%d | "
             "kmeans_n_init=%d | label_smoothing=%g | gradient_clip_norm=%s | "
             "row_distance_diagnostics=%s | sharing_granularity=%s | "
-            "row_warmup_mode=%s | row_min_relative_margin=%g",
+            "row_warmup_mode=%s | row_min_relative_margin=%g | "
+            "row_sharing_mode=%s | row_soft_min_margin=%g | "
+            "row_soft_full_margin=%g",
             self.model.candidate_dim,
             self.model.identical_candidate_initialization,
             self.num_clusters,
@@ -155,6 +169,9 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             self.sharing_granularity,
             self.row_warmup_mode,
             self.row_min_relative_margin,
+            self.row_sharing_mode,
+            self.row_soft_min_margin,
+            self.row_soft_full_margin,
         )
 
     def _process_data_loader(self, data_loader, train_mode: bool):
@@ -192,9 +209,12 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                     self.model.get_candidate_weight_tensors()
                 )
                 logging.info(
-                    "ncmtl_row_assignments_frozen | epoch=%d | counts=%s",
+                    "ncmtl_row_assignments_frozen | epoch=%d | counts=%s | "
+                    "sharing_mode=%s | coefficient_stats=%s",
                     assignment_epoch,
                     self.row_task_sharing.assignment_counts(),
+                    self.row_sharing_mode,
+                    self.row_task_sharing.sharing_coefficient_statistics(),
                 )
         stats = super()._process_data_loader(data_loader, train_mode=train_mode)
         if train_mode and self._latest_row_distance_snapshot is not None:
@@ -443,6 +463,12 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                     - sum(self.row_task_sharing.shared_assignment_counts().values())
                 ),
                 "minimum_relative_margin": self.row_min_relative_margin,
+                "row_sharing_mode": self.row_sharing_mode,
+                "soft_min_margin": self.row_soft_min_margin,
+                "soft_full_margin": self.row_soft_full_margin,
+                "sharing_coefficient_statistics": (
+                    self.row_task_sharing.sharing_coefficient_statistics()
+                ),
             }
             with open(self.cluster_summary_path, "w") as summary_file:
                 json.dump(summary, summary_file, indent=2)

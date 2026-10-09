@@ -25,6 +25,7 @@ from improvements.clustering.utils.ncmtl_clustering import (
 from improvements.clustering.utils.candidate_row_distances import (
     compute_candidate_row_distances,
 )
+from improvements.clustering.utils.row_task_sharing import RowTaskSharing
 
 
 def build_model(
@@ -444,6 +445,60 @@ class NCMTLTrainerTests(unittest.TestCase):
                 int(torch.sum(~trainer.row_task_sharing.shared_row_mask).item()),
                 8,
             )
+
+    def test_confidence_aware_soft_sharing_uses_frozen_coefficients(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sharing = RowTaskSharing(
+                directory,
+                ["ks", "si", "er"],
+                sharing_mode="soft",
+                soft_min_margin=0.10,
+                soft_full_margin=0.50,
+            )
+            weights = [
+                torch.tensor([[0.0], [0.0], [0.0]]),
+                torch.tensor([[0.7], [0.95], [2.0]]),
+                torch.tensor([[1.7], [1.95], [10.0]]),
+            ]
+            sharing.initialize(weights, epoch=3)
+
+            self.assertTrue(torch.allclose(
+                sharing.sharing_coefficients,
+                torch.tensor([0.5, 0.0, 1.0]),
+                atol=1e-6,
+            ))
+            coefficients_before = sharing.sharing_coefficients.clone()
+            self.assertAlmostEqual(float(sharing.cluster_loss(weights)), 2.1225, places=5)
+
+            sharing.share(weights)
+            self.assertTrue(torch.equal(
+                sharing.sharing_coefficients, coefficients_before
+            ))
+            self.assertTrue(torch.allclose(weights[0][0], torch.tensor([0.175])))
+            self.assertTrue(torch.allclose(weights[1][0], torch.tensor([0.525])))
+            self.assertTrue(torch.allclose(weights[0][1], torch.tensor([0.0])))
+            self.assertTrue(torch.allclose(weights[1][1], torch.tensor([0.95])))
+            self.assertTrue(torch.allclose(weights[0][2], weights[1][2]))
+
+            with open(sharing.assignment_summary_path) as summary_file:
+                summary = json.load(summary_file)
+            self.assertEqual(summary["sharing_mode"], "soft")
+            self.assertEqual(summary["independent_rows"], 1)
+            self.assertEqual(summary["partially_shared_rows"], 1)
+            self.assertEqual(summary["fully_shared_rows"], 1)
+
+    def test_soft_sharing_configuration_is_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(
+                ValueError, "greater than row_soft_min_margin"
+            ):
+                RowTaskSharing(
+                    directory,
+                    ["ks", "si", "er"],
+                    sharing_mode="soft",
+                    soft_min_margin=0.20,
+                    soft_full_margin=0.20,
+                )
 
 
 if __name__ == "__main__":

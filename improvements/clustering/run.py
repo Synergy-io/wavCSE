@@ -90,6 +90,13 @@ def _log_final_mlflow_state(trainer, model):
             mlflow.log_param(
                 "row_min_relative_margin", trainer.row_min_relative_margin
             )
+            mlflow.log_param("row_sharing_mode", trainer.row_sharing_mode)
+            mlflow.log_param(
+                "row_soft_min_margin", trainer.row_soft_min_margin
+            )
+            mlflow.log_param(
+                "row_soft_full_margin", trainer.row_soft_full_margin
+            )
             mlflow.log_param(
                 "clusters_frozen", trainer.row_task_sharing.initialized
             )
