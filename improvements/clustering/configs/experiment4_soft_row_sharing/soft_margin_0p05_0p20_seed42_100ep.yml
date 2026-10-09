@@ -4,7 +4,7 @@ seed: 42
 
 device:
   type: cuda
-  index: 1
+  index: 0
 
 paths:
   root_data_path: ~/voice_dataset
@@ -68,6 +68,7 @@ training:
   batch_size: 2048
   learning_rate: 0.0025
   label_smoothing: 0.1
+  gradient_clip_norm: 1.0
   weight_decay: 0.00000005
   saved_checkpoint_count: 3
 
