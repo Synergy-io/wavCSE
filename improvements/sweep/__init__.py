@@ -7,14 +7,13 @@ setting costs one training process and no upstream re-extraction. That makes a
 sweep of many combos cheap to *declare* and expensive only in wall clock, which
 is exactly the case where running several at once is worth having.
 
-This legacy local runner is not the private
-``wavcse_research.execution`` authorized paid-compute backend: it has no
-envelope or crash-independent provider cleanup. It may analyze and execute
-layer combinations on an operator-controlled machine, but must not be used
-as a substitute for the standalone ``infra`` worker and job lifecycle.
+This local runner is not the private ``wavcse_research.execution`` authorized
+paid-compute backend. Remote commands address only a declared, non-billable
+static SSH host through standalone ``infra worker`` transport; they refuse
+RunPod and Colab. The supervisor enforces ``policy.max_wall_seconds`` and
+reports elapsed time, but it is not a spend envelope.
 
-* there is no envelope, so nothing bounds spend except wall clock; the
-  supervisor enforces ``policy.max_wall_seconds`` and reports elapsed time.
+Compared with a recorded infrastructure job:
 * there is no ``jobspec``/evidence validator, so each run's outputs are hashed
   into the sweep manifest instead of being re-derived by the control plane.
 * there is no ``reap`` timer; a drain flag and the supervisor's own loop are

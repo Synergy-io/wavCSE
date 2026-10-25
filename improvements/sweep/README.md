@@ -13,23 +13,23 @@ training process and **no upstream re-extraction**. A sweep is therefore cheap
 to declare and expensive only in wall clock — exactly the case where running
 several at once is worth having.
 
-This legacy local sweep runs on an operator-supplied, already-running machine;
-it is not the private `wavcse_research.execution` authorized paid-compute
-backend. Do not treat its local process limits as a spend envelope or a
-substitute for standalone `infra` worker/job ownership. Its purpose is
-parallel layer-combination training, not provisioning.
+This local sweep runs on this machine or a declared, operator-owned
+`static_ssh` host. Remote transport is exclusively the standalone
+`infra worker` CLI; it does not accept a raw SSH alias, RunPod Pod or Colab
+session. Paid GPU runs use the private `wavcse_research.execution` envelope and
+recorded exact-commit jobs, never this detached-supervisor path.
 
 Tradeoffs relative to the private execution backend:
 
 | given up | consequence | mitigation in this package |
 | --- | --- | --- |
-| envelope / budget | nothing bounds spend but the clock | `policy.max_wall_seconds` + a `DRAIN` flag; the supervisor reports elapsed time |
+| paid envelope / budget | not applicable to a declared non-billable static host; this path does not grant spend | `policy.max_wall_seconds` + a `DRAIN` flag bound the local supervisor |
 | `jobspec` + evidence validator | no control-plane re-derivation of what ran | per-run identities recorded; checkpoints and metric files hashed into the ledger |
 | `reap` timer | no controller-side deadline enforcement | the supervisor's own loop and drain flag |
 | exact-commit job pinning | nothing pins the observed code | the sweep refuses a commit whose *own inputs* are uncommitted: a modified tracked file, or an untracked file inside the study directory (an uncommitted config). Untracked files elsewhere in the tree do not block a launch — a colleague's scratch file must not teach an operator to reach for `--allow-dirty` |
 
-The worker is assumed **already hired**: this drives an existing pod over ssh and
-does not provision, price or destroy one.
+The remote host is declared under `[[static.workers]]` in standalone infra.
+It is never provisioned, priced or destroyed by the sweep.
 
 ## Public executable layout
 
@@ -55,9 +55,10 @@ python -m improvements.sweep plan    --spec $SPEC --json
 # 2. write the per-combo configs, then COMMIT them (refuses a dirty tree)
 python -m improvements.sweep configs --spec $SPEC
 
-# 3. get them onto the pod and start the supervisor there
-python -m improvements.sweep push    --spec $SPEC
-python -m improvements.sweep start   --spec $SPEC --stage screen
+# 3. set WAVCSE_INFRA_CHECKOUT; use a declared static worker ID and a checkout
+#    beneath that worker's configured root. This path cannot launch paid RunPod.
+python -m improvements.sweep push  --spec $SPEC --host <static-worker-id> --checkout <worker-repo-root>
+python -m improvements.sweep start --spec $SPEC --stage screen --host <static-worker-id> --checkout <worker-repo-root>
 
 # 4. watch, inspect, stop, collect
 python -m improvements.sweep status  --spec $SPEC [--json]
@@ -72,30 +73,24 @@ same code path, which is how the scheduling logic is exercised in tests.
 
 ### Remote runs: paths and overrides
 
-Pass `--host <ssh-target>` (and `--checkout <pod repo root>` if the pod's
-checkout differs from the spec's) to `push`/`pull`/`start`/`status`/`logs`/`stop`.
-Both are command-line overrides on purpose: the ssh target and the pod's paths
-are *environment*, not science, and committing them would dirty a tracked file —
-which the launch check correctly refuses.
+Pass `--host <declared-static-worker-id>` and
+`--checkout <checkout-beneath-the-worker-root>` to remote
+`push`/`pull`/`start`/`status`/`logs`/`stop`. Bind
+`WAVCSE_INFRA_CHECKOUT` to standalone `wavcse-infra`; an optional
+`WAVCSE_INFRA_CLI` must resolve to that same checkout. Neither a sibling nor
+an executable on PATH is discovered. The worker ID comes from its
+`[[static.workers]]` declaration, not an SSH alias, and the infra CLI refuses
+paths outside its declared root.
 
-Every path a remote verb touches is derived from the **pod's** checkout
-(`improvements/sweep/manifest.py:remote_paths`), never from this machine's study
-directory: the controller's `sweep_state` path does not exist on a pod whose
-checkout lives somewhere else, and a supervisor started with it would create a
-stray tree. Use an `~/.ssh/config` alias rather than `host:port`, because the
-target is passed to `ssh` as a single argument.
+Remote paths are derived from that worker's checkout
+(`improvements/sweep/manifest.py:remote_paths`), never from the local Study
+directory. Paid RunPod/Colab worker IDs are refused before a sweep command.
 
-`push` and `start` also compare the pod's `git rev-parse HEAD` against this
-checkout's and refuse to proceed when they differ — the pod's checkout is what
-actually executes, so a stale HEAD there would attribute runs to a commit that
-never ran.
-
-Pass `--env-file /root/.sweep-env` (or set `remote.env_file`) to `start` so the
-pod sources its credentials before the supervisor runs. This is not optional
-polish: a non-interactive `ssh host 'cmd'` sources neither `~/.bashrc` nor
-`~/.profile`, so credentials exported in an interactive session are absent and
-the runs would start with tracking unconfigured and log nowhere. Only the
-*path* is passed — never a value — so no secret reaches a command line or log.
+`push` and `start` compare the static host's `git rev-parse HEAD` against
+the committed public checkout and refuse a mismatch. `start` can source a
+worker-local `--env-file <absolute-path>` before launching the supervisor;
+infra constructs and executes that detached command without copying
+credential values to this machine's command line.
 
 ## How "as many as fit" is decided
 

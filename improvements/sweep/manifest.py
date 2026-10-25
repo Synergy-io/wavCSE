@@ -311,12 +311,10 @@ _PLACEHOLDER_HOSTS = ("change-me", "changeme", "todo", "tbd", "none", "example")
 
 
 def validate_remote_host(spec):
-    """Refuse a placeholder host, at the point a verb is about to ssh.
+    """Refuse a placeholder static worker ID before a remote operation.
 
-    Called by the verbs that need a host rather than by ``load_spec``: a spec
-    copied from the template carries ``remote.host: "CHANGE-ME"``, and refusing
-    it at load time would stop ``plan``/``configs`` -- which never touch the
-    network -- from being the first thing an operator can usefully run.
+    ``plan`` and ``configs`` still work without an infra binding; transport
+    verbs resolve this ID against a declared static_ssh host in standalone infra.
     """
     remote = spec.get("remote") or {}
     host = remote.get("host")
@@ -324,8 +322,8 @@ def validate_remote_host(spec):
         return None
     if str(host).strip().lower() in _PLACEHOLDER_HOSTS:
         raise SpecError(
-            "remote.host is still the placeholder {!r}; set it to the pod's ssh "
-            "target, or remove the `remote` block to run on this machine".format(host))
+            "remote.host is still the placeholder {!r}; set it to a declared "
+            "static_ssh worker ID, or omit the remote block to run locally".format(host))
     if remote.get("checkout") and not str(remote["checkout"]).startswith("/"):
         raise SpecError("remote.checkout must be an absolute path on the remote "
                         "host, got {!r}".format(remote["checkout"]))

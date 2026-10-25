@@ -22,6 +22,7 @@ import sys
 
 from improvements.sweep import (config_gen, ledger, manifest, report, resources,
                                 supervisor)
+from improvements.sweep.remote import RemoteError
 
 EXIT_OK = 0
 EXIT_USAGE = 2
@@ -51,15 +52,10 @@ def _local_view(spec, args):
 
 
 def _verify_remote_commit(remote_module, host, view, expected, *, strict=True):
-    """Refuse to run unless the pod's checkout is the commit we mean.
-
-    The pod's checkout is what executes, so a stale or wrong HEAD there would
-    produce runs attributed to a commit that never ran. Comparing SHAs is cheap
-    and turns that into a clear message instead of an unexplainable result.
-    """
-    completed = remote_module.ssh(
-        host, "cd {} && git rev-parse HEAD".format(shlex.quote(view["checkout"])),
-        check=False)
+    """Refuse to run unless the declared host's checkout has this exact commit."""
+    completed = remote_module.exec(
+        host, ["git", "-C", view["checkout"], "rev-parse", "HEAD"], check=False
+    )
     actual = completed.stdout.decode("utf-8", "replace").strip()
     if completed.returncode != 0:
         raise manifest.SpecError(
@@ -67,9 +63,9 @@ def _verify_remote_commit(remote_module, host, view, expected, *, strict=True):
                 view["checkout"], host,
                 completed.stderr.decode("utf-8", "replace").strip()))
     if actual != expected:
-        message = ("the pod's checkout is at {} but this sweep is bound to {}; "
-                   "check out the same commit on the pod before pushing or "
-                   "starting".format(actual[:12], expected[:12]))
+        message = ("the static host's checkout is at {} but this sweep is bound to {}; "
+                   "check out the same commit on the declared host before pushing "
+                   "or starting".format(actual[:12], expected[:12]))
         if strict:
             raise manifest.SpecError(message)
         print("warning: {}".format(message), file=sys.stderr)
@@ -173,7 +169,6 @@ def cmd_push(args):
     view = _remote_view(spec, args)
     _verify_remote_commit(remote, host, view, manifest.git_state(
         manifest.repo_root(spec), spec["_study_dir"])["head"])
-    remote.ssh(host, "mkdir -p {}".format(shlex.quote(view["study"])))
     remote.rsync(host, os.path.join(spec["_study_dir"], ""), view["study"] + "/")
     print("pushed {} to {}:{}".format(spec["sweep_id"], host, view["study"]))
     return EXIT_OK
@@ -189,7 +184,7 @@ def _state_read(spec, host, state_dir):
             host, summary_path) else None
         records = []
         if remote.exists(host, ledger_path):
-            completed = remote.ssh(host, "cat {}".format(shlex.quote(ledger_path)))
+            completed = remote.exec(host, ["cat", ledger_path])
             for line in completed.stdout.decode("utf-8", "replace").splitlines():
                 line = line.strip()
                 if line:
@@ -255,8 +250,7 @@ def cmd_logs(args):
     path = os.path.join(view["state"], "logs", "{}.log".format(args.run))
     if host:
         from improvements.sweep import remote
-        command = "tail -n {} {}".format(int(args.tail), shlex.quote(path))
-        completed = remote.ssh(host, command, check=False)
+        completed = remote.exec(host, ["tail", "-n", str(int(args.tail)), path], check=False)
         sys.stdout.write(completed.stdout.decode("utf-8", "replace"))
         return EXIT_OK if completed.returncode == 0 else EXIT_UNAVAILABLE
     if not os.path.exists(path):
@@ -334,7 +328,7 @@ def cmd_start(args):
         log_path = os.path.join(view["state"], "supervisor.log")
         env_file = getattr(args, "env_file", None) or (spec.get("remote") or {}).get(
             "env_file")
-        remote.ssh(host, "mkdir -p {}".format(shlex.quote(view["state"])))
+        # Infra creates the log directory below the declared static-host root.
         remote.start_detached(host, view["checkout"], argv, log_path, env_file)
         print("supervisor started on {}:\n  state {}\n  log   {}\n"
               "  env   {}\n"
@@ -388,15 +382,12 @@ def build_parser():
         child.add_argument("--stage", default=None)
         child.add_argument("--state-dir", default=None)
         child.add_argument("--host", default=None,
-                           help="override spec.remote.host")
+                           help="declared static_ssh worker ID from standalone infra")
         child.add_argument("--checkout", default=None,
-                           help="override spec.remote.checkout: the pod's repository "
-                                "root. Kept on the command line so a machine-specific "
-                                "path never has to be committed into the spec")
+                           help="worker checkout beneath its declared static root")
         child.add_argument("--env-file", default=None,
-                           help="path on the pod with export lines (e.g. MLflow "
-                                "credentials) to source before starting; needed because "
-                                "a non-interactive ssh command sources no profile")
+                           help="worker-local env file path to source before start; "
+                                "credential values never enter the CLI argv")
         return child
 
     plan = add("plan", "dry-run: what the sweep would run, and the policy")
@@ -410,16 +401,16 @@ def build_parser():
     configs.add_argument("--allow-dirty", action="store_true")
     configs.set_defaults(func=cmd_configs)
 
-    push = add("push", "copy the study directory to the remote checkout")
+    push = add("push", "sync the study directory to a declared static host")
     push.set_defaults(func=cmd_push)
 
-    start = add("start", "run the supervisor (locally, or on spec.remote.host)")
+    start = add("start", "run the supervisor locally or on a declared static host")
     start.add_argument("--once", action="store_true")
     start.add_argument("--dry-run", action="store_true")
     start.add_argument("--allow-dirty", action="store_true")
     start.set_defaults(func=cmd_start)
 
-    status = add("status", "ledger and summary, from the pod or locally")
+    status = add("status", "ledger and summary, from the static host or locally")
     status.add_argument("--json", action="store_true")
     status.set_defaults(func=cmd_status)
 
@@ -431,7 +422,7 @@ def build_parser():
     stop = add("stop", "write the DRAIN flag: admit nothing new")
     stop.set_defaults(func=cmd_stop)
 
-    pull = add("pull", "rsync outputs and sweep_state back from the pod")
+    pull = add("pull", "sync outputs and sweep_state from a declared static host")
     pull.set_defaults(func=cmd_pull)
 
     report_cmd = add("report", "aggregate the sweep from MLflow")
@@ -453,7 +444,7 @@ def main(argv=None):
     except manifest.SpecError as exc:
         print("sweep spec error: {}".format(exc), file=sys.stderr)
         return EXIT_USAGE
-    except (config_gen.ConfigError, OSError) as exc:
+    except (config_gen.ConfigError, RemoteError, OSError) as exc:
         print("sweep error: {}".format(exc), file=sys.stderr)
         return EXIT_USAGE
 
