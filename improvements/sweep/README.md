@@ -13,13 +13,13 @@ training process and **no upstream re-extraction**. A sweep is therefore cheap
 to declare and expensive only in wall clock — exactly the case where running
 several at once is worth having.
 
-This package deliberately does **not** go through `improvements.compute`. That
-backend is a paid-compute contract: one authorized envelope, one deterministic
-job per (arm, seed), one job in flight per scope, evidence staged and verified
-by its own validator. Its `advance` transition submits nothing while a job of
-the scope is in flight, so it cannot express "twenty trainings at once on one
-hired device" — which is the whole point here. What that trade costs, stated
-rather than hidden:
+This legacy local sweep runs on an operator-supplied, already-running machine;
+it is not the private `wavcse_research.execution` authorized paid-compute
+backend. Do not treat its local process limits as a spend envelope or a
+substitute for standalone `infra` worker/job ownership. Its purpose is
+parallel layer-combination training, not provisioning.
+
+Tradeoffs relative to the private execution backend:
 
 | given up | consequence | mitigation in this package |
 | --- | --- | --- |
@@ -31,21 +31,22 @@ rather than hidden:
 The worker is assumed **already hired**: this drives an existing pod over ssh and
 does not provision, price or destroy one.
 
-## Layout it creates, per study
+## Public executable layout
 
+```text
+improvements/taskrelation/experiments/<STUDY>/
+  sweep.json                           # combos, stages, seeds and local policy
+  configs/<stage>/<combo-id>.yml       # generated, committed before launch
+  outputs/<combo-id>/{results,checkpoints}/  # ignored runtime data
+  sweep_state/                         # ignored local ledger and logs
 ```
-improvements/taskrelation/research/studies/<STUDY>/
-  PLAN.md            # hypothesis, competing explanation, decision rule
-  sweep.json         # combos (layers + group + k), stages, seeds, policy, remote
-  configs/<stage>/<combo-id>.yml   # generated, COMMITTED before launch
-  outputs/<combo-id>/{results,checkpoints}/   # gitignored
-  sweep_state/                              # gitignored: runs.jsonl, logs/, identity/, SWEEP.json, DRAIN
-```
+
+Study plans, decisions and analyses stay in private `wavcse-research`.
 
 ## Command flow
 
 ```bash
-SPEC=improvements/taskrelation/research/studies/<STUDY>/sweep.json
+SPEC=improvements/taskrelation/experiments/<STUDY>/sweep.json
 
 # 1. read-only: what would run, and the policy (works with the host unset)
 python -m improvements.sweep plan    --spec $SPEC
@@ -152,11 +153,11 @@ without that key produces exactly the name it always did
 
 ```bash
 uv run --locked python -m unittest discover \
-  -s improvements/taskrelation/research/tests \
-  -t improvements/taskrelation/research/tests -p "test_layer_sweep_*.py"
+  -s improvements/taskrelation/tests \
+  -t . -p "test_layer_sweep_*.py"
 uv run --locked python -m unittest discover \
-  -s improvements/taskrelation/research/tests \
-  -t improvements/taskrelation/research/tests -p "test_research_run_name.py"
+  -s improvements/taskrelation/tests \
+  -t . -p "test_research_run_name.py"
 ```
 
 The layer grammar the spec accepts is asserted for **parity with the frozen

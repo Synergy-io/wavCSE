@@ -1,9 +1,8 @@
 # wavCSE-MTRL — NORMALIZATION-CORRECTED variant (row normalization removed)
 #
 # =============================================================================
-# Audit lineage (do not edit this header; see
-# improvements/taskrelation/research/audits/2026-09-29-mtrl-theory-to-implementation-audit.md
-# and the correction log at the end of that report)
+# Audit lineage: Study DG-0007 isolates row-normalization defect D2; the
+# scientific audit and decisions are retained in private research records.
 #
 # predecessor : the historical classical-MTRL in-category control, i.e.
 #               mtrl_poolingwinner_25L_config.yml (normalize_w: true)

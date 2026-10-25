@@ -1,13 +1,10 @@
 # wavCSE-MSSL — Multi-task Sparse Structure Learning
 
-**Status: the faithful published arm of the Task Relation Learning variant
-benchmark.** Registered as Study **TR-0007** in
-`../research/studies/TR-0007/`; authorized by `../research/DECISIONS.md`
-DEC-0013 (benchmark of published variants) and DEC-0014 §5 (MSSL keeps its
-faithful-implementation status because it passed the LT-0002 family-B
-source gate and its input is literally the task-parameter summary matrix).
-DEC-0015 (human, 2026-09-29) fixed this arm's formulation at the published
-Eq. (3)/(8) objective before any run.
+**Status: faithful published p-MSSL arm for the Task Relation Learning
+benchmark.** Its model and configs are public; TR-0007 and TR-0013 research
+decisions, approvals, run ledgers and outcomes belong to private
+`wavcse-research`. DEC-0015 (human, 2026-09-29) fixed the published Eq. (3)/(8)
+formulation before any screen. No single screen is a confirmed improvement.
 
 This folder is a self-contained `0N-<name>/` architecture attempt — own model
 (`mssl_model.py`), trainer (`mssl_trainer.py`), config (`mssl_config.yml`) and
@@ -95,8 +92,8 @@ carries no pair-specific information.
 
 ## Declared deviations from the paper
 
-Recorded in the Study before any run (see `mssl_model.py`'s module docstring
-and `../research/studies/TR-0007/`):
+The following deviations were declared before TR-0007 ran (the model module
+also documents the implementation):
 
 1. **Summary adapter.** The paper's per-task parameter vector is a whole linear
    model; with a shared trunk and 12 / 1251 / 4-class heads there is no such
@@ -119,10 +116,9 @@ and `../research/studies/TR-0007/`):
    values, awaiting the human decision — under which `0.01` is the value this
    config freezes.
    **Status note (2026-09-29, TR-0013):** the human approved that item as its own
-   screen (`TR-0013`), and it is implemented as study-local configs
-   (`../research/studies/TR-0013/configs/mssl-l2-0p01.yml`, `…-0p1.yml`) rather
-   than by editing this config — `0.01` stays the value this folder's config
-   freezes, and the TR-0013 runs carry their own `lambda_2_selection` label.
+   screen (`TR-0013`), implemented as public configs
+   (`../experiments/TR-0013/configs/mssl-l2-0p01.yml` and `mssl-l2-0p1.yml`)
+   rather than editing this base config. Its runs carry their own selection label.
 
 ## Mechanism instrumentation
 
@@ -136,14 +132,13 @@ without touching training:
   training batch): `||∂L_task/∂θ||` and `||∂(coupling)/∂θ||` over all trainable
   parameters and over the classifier heads, their ratio, and the coupling's
   value. The probe uses `torch.autograd.grad(..., retain_graph=True)`, which
-  writes no optimizer `.grad` buffer; `../research/tests/test_mssl_mechanism_probe.py`
+  writes no optimizer `.grad` buffer; `../tests/test_mssl_mechanism_probe.py`
   asserts a training step with the probe is bit-identical to one without it.
 
 Both files also go to MLflow (`omega/`, `mechanism/`). The bundle exists because
-the arm's scale behaviour is its measured failure mode (TR-0007's
-coupling-scale domination, `../research/studies/TR-0007/analysis.md`): a result
-for this arm is only interpretable beside the coupling's magnitude, the
-relation/task gradient ratio, the summary geometry and the support.
+TR-0007 exposed coupling-scale domination; a result for this arm is only
+interpretable alongside the coupling magnitude, relation/task gradient ratio,
+summary geometry and support.
 
 ## Running
 
@@ -168,8 +163,8 @@ method, task set, representation, seed) and land in the MLflow experiment
 
 ## Protocol
 
-The arm runs under `../research/VARIANT_BENCHMARK_PROTOCOL.md`, fixed before
-any candidate was implemented: `wavlm_large` with all 25 transformer layers,
+The matched benchmark holds the following settings fixed across both controls:
+`wavlm_large` with all 25 transformer layers,
 frame pooling `mean`, layer pooling `smp` 0.5, task set `ks_si_er`, the shared
 1024→512→2000 trunk with dropout 0.4/0.6, 30 epochs, batch 2048 with
 `drop_last_train: true`, AdamW at lr 0.0025 / weight decay 5e-8, l1 1e-7 /
@@ -185,11 +180,7 @@ ordinary ER split leaks speakers.
 
 ## Evidence
 
-`../research/studies/TR-0007/` is where this arm's evidence lives: the
-pre-registration (`PLAN.md`) and run note (`NOTE.md`) and, per protocol §7,
-every result and every attempted configuration. MLflow/DagsHub keeps the
-execution record; the repository keeps the interpretation.
-`../research/studies/TR-0013/` holds the second screen of the same arm — the
-`lambda_2` axis, validation-selected over the paper's two smallest grid values
-`{0.01, 0.1}` — with its own pre-registration, configs, mechanism artifacts and
-analysis.
+Study IDs TR-0007 and TR-0013 link this public implementation to the private
+research record. Their executable configs and analyzers are under
+`../experiments/`; result JSON, notes, authorizations, mechanism evidence and
+scientific decisions are retained outside this public repository.

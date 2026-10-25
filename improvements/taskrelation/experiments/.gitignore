@@ -1,0 +1,11 @@
+**/outputs/
+**/logs/
+**/runs/
+**/artifacts/
+**/mechanism/
+**/result.json
+**/screen_result.json
+**/confirmation_result.json
+**/coupling_scale_result.json
+**/noise_shape_result.json
+**/held_out_reads.jsonl

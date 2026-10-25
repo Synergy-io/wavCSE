@@ -7,13 +7,11 @@ setting costs one training process and no upstream re-extraction. That makes a
 sweep of many combos cheap to *declare* and expensive only in wall clock, which
 is exactly the case where running several at once is worth having.
 
-It deliberately does not use ``improvements.compute``. That backend is a paid
-compute contract: one authorized envelope, one deterministic job per
-(arm, seed), one job in flight per scope, evidence staged and digest-verified
-by its own validator. A sweep wants the opposite shape -- many small trainings
-concurrently on one hired device, admitted and drained by live RAM/GPU
-pressure -- so this package is a direct runner instead. The trade is recorded
-rather than hidden:
+This legacy local runner is not the private
+``wavcse_research.execution`` authorized paid-compute backend: it has no
+envelope or crash-independent provider cleanup. It may analyze and execute
+layer combinations on an operator-controlled machine, but must not be used
+as a substitute for the standalone ``infra`` worker and job lifecycle.
 
 * there is no envelope, so nothing bounds spend except wall clock; the
   supervisor enforces ``policy.max_wall_seconds`` and reports elapsed time.

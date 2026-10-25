@@ -13,7 +13,7 @@
   "method": "mtrl_norm_corrected",
   "task_type": "ks_si_er",
   "upstream_model_type": "wavlm_large",
-  "config_template": "improvements/taskrelation/research/studies/DG-0007/configs/norm_corrected_mtrl.yml",
+  "config_template": "improvements/taskrelation/experiments/DG-0007/configs/norm_corrected_mtrl.yml",
   "experiment_name": "taskrelation-mtrl-layersweep",
   "combos": [
     "all",

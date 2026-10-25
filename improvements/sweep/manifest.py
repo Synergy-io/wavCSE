@@ -130,9 +130,8 @@ def is_selected(combo, selection):
 def job_key(study_id, combo, seed, commit):
     """Deterministic identity of one (study, combo, seed, commit).
 
-    The same idea as ``improvements.compute.jobspec.job_key``: identity is
-    derived from committed state, never from a timestamp, so restarting a
-    supervisor cannot silently launch a second copy of the same run.
+    It is not clock-based, so restarting a supervisor cannot silently launch
+    a second copy of the same run.
     """
     payload = "{}::{}::{}::{}".format(study_id, combo, int(seed),
                                       str(commit).strip().lower())

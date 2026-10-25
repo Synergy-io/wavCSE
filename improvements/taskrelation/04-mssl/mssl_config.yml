@@ -5,8 +5,8 @@
 # Published method: Goncalves, Von Zuben & Banerjee (2016), "Multi-task Sparse
 # Structure Learning", JMLR 17(33) -- p-MSSL. Every setting outside `model`'s
 # MSSL keys and the `mssl:` block is copied verbatim from the control, so the
-# arm differs from the control only in the relation mechanism (see
-# improvements/taskrelation/research/VARIANT_BENCHMARK_PROTOCOL.md, section 5).
+# arm differs from the control only in the relation mechanism. Study TR-0007
+# retains the formal comparison decision outside this public repository.
 
 log_level: INFO
 seed: 42  # improvements/seed_utils.py -- override here or with --seed for multi-seed runs
@@ -123,4 +123,4 @@ research:
   parent_study: LT-0002
   agent_generated: true
   status: pre_registered
-  run_note_file: improvements/taskrelation/research/studies/TR-0007/NOTE.md
+  run_note: "TR-0007 executable configuration; scientific assessment is retained in private research records."
