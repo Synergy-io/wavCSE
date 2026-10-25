@@ -5,8 +5,7 @@ study-identity configs, so run as committed none of the three arms would carry
 the study's identity -- `build_research_run_name` falls back to a legacy
 timestamped name, `resolve_run_note` returns None, and `set_standard_tags`
 publishes `study_id`, `stage`, `parent_study` and `representation` as None,
-contradicting `/AGENTS.md` invariant 12 and
-`VARIANT_BENCHMARK_PROTOCOL.md` §7.
+so no arm carries its committed Study identity.
 
 These tests run the REAL helpers over the REAL committed configs -- they parse
 YAML only to hand it to the same functions the runner calls -- and they fail if

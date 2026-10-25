@@ -354,8 +354,7 @@ wildly; other users' jobs consume tens of GB/hour). The run is marked FAILED
 on DagsHub and its local checkpoint dir contained a corrupt partial
 `train_ks_si_er_best.pth`, since deleted. Not an MTRL code problem —
 wavCSE's checkpoint writer just fails the same way for any run when the disk
-is full (this exact failure mode is already a known gotcha in the repo's
-CLAUDE.md).
+is full.
 
 **Recovery / hardening done before the rerun:**
 

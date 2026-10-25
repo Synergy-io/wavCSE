@@ -156,7 +156,7 @@ def main():
                 f"Only {free_gb:.1f} GB free on the filesystem holding "
                 f"{expanded_root} -- aborting before training to avoid a "
                 f"mid-run checkpoint failure. Free space on the shared disk "
-                f"and retry (see CLAUDE.md gotchas)."
+                f"and retry."
             )
 
     # ----------------------------
