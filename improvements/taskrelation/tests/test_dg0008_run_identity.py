@@ -1,9 +1,8 @@
 """DG-0008 must carry the Study's canonical provenance on every member run.
 
 The registered DG-0008 implementation wrote ``run.json``/``run_identity.json``
-but never opened an MLflow run, so ``AGENTS.md`` invariant 12 and
-``VARIANT_BENCHMARK_PROTOCOL.md`` §7 were unsatisfied for every one of the 201
-members.  These tests run the REAL committed config through the REAL helpers
+but never opened an MLflow run, so none of the 201 members carried real
+tracking provenance. These tests run the committed config through the helpers
 ``run_dg0008.py`` calls -- ``member_method``, ``open_member_run``,
 ``build_research_run_name``, ``set_standard_tags``, ``log_config_params``,
 ``log_trainer_history`` and ``resolve_run_note`` -- and assert that:

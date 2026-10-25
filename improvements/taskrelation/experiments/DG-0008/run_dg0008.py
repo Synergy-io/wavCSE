@@ -6,7 +6,7 @@ test split; the endpoint is produced only by ``evaluate_dg0008.py`` after the
 Stage-1 validity gate passes.
 
 Every member opens a real MLflow run *before* training, named and tagged from
-``configs/dg0008.yaml``'s ``research`` block (``AGENTS.md`` invariant 12).
+``configs/dg0008.yaml``'s ``research`` block (the DG-0008 provenance contract).
 Tracking failure aborts the member rather than letting it train without
 provenance, and the finished run publishes the per-epoch history, the
 fixed-final validation ER accuracy, the identity/manifest digests and the
@@ -114,9 +114,9 @@ def member_method(research_cfg, arm):
 def open_member_run(member_config, method, cell):
     """Set up tracking and open this member's MLflow run; any failure is fatal.
 
-    ``AGENTS.md`` invariant 12 makes provenance mandatory, so tracking is
-    started with no fallback: if the tracking URI or experiment cannot be
-    reached, the member aborts instead of training anonymously.
+    DG-0008 requires a real study-scoped run, so tracking has no fallback:
+    if the tracking URI or experiment cannot be reached, the member aborts
+    instead of training anonymously.
     """
 
     mlflow_utils.setup_mlflow(member_config)
@@ -303,8 +303,7 @@ def build_member(cfg, cell, arm, fold, seed, artifacts_directory, index, out_roo
         key_to_index(train_vectors), [manifest["n_er"] for manifest in epoch_manifests]
     )
 
-    # Provenance is mandatory (AGENTS.md invariant 12): open the real run with no
-    # fallback, then train and publish every record inside it.
+    # Open the real study-scoped run before training; tracking failure is fatal.
     with open_member_run(member_config, method, cell):
         mlflow_utils.set_standard_tags(
             MEMBER_CATEGORY, MEMBER_MODEL, member_config,

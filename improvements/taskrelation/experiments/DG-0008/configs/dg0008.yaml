@@ -86,7 +86,7 @@ mlflow:
 # improvements/mlflow_utils.py's build_research_run_name/set_standard_tags and
 # resolve_run_note).  The per-arm method is resolved from `methods` by
 # run_dg0008.py and written back into `method` before naming/tagging the run, so
-# every one of the 201 members carries the Study's identity (AGENTS.md #12).
+# every one of the 201 members carries the committed Study identity.
 # ----------------------------
 research:
   study_id: DG-0008

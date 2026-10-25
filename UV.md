@@ -35,8 +35,9 @@ Notes:
 - Old conda workflow (`conda activate opencv`) is gone — the conda
   environments were removed. Use `uv run` or `source .venv/bin/activate`
   instead.
-- DVC is installed inside the venv. Run `uv run dvc pull` (or activate first)
-  to fetch `embedding.tar.gz`.
+- Embeddings are prepared outside the repository. Set `paths.root_emb_path`
+  in the training config to their existing root; `uv sync` installs code only
+  and does not fetch or unpack training artifacts.
 
 ## How it behaves on the shared machine
 
@@ -50,8 +51,8 @@ Notes:
   never accidentally run a wrong named env.
 - uv keeps a global cache (`~/.cache/uv`) and hardlinks packages into each
   venv, so after the first `uv sync`, additional clones cost almost no disk
-  space. If `df -h` shows the root disk near full, see the repo CLAUDE.md
-  gotchas before starting long training runs.
+  space. If `df -h` shows the root disk near full, clear space before a long
+  run to avoid a partial checkpoint write.
 
 ## Troubleshooting
 

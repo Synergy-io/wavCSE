@@ -111,10 +111,10 @@ GPU. Admission is held when any of these fails:
 Nothing already running is ever killed: pressure stops admissions, it does not
 interrupt a half-trained run.
 
-**Deviation from `AGENTS.md` invariant 16** (at most two simultaneous GPU
-training jobs) is a researcher decision for a sweep that wants an
-automatic cap; it must be recorded in `policy.concurrency_basis`, not left
-implicit.
+The historical two-job concurrency limit was overridden for a specific
+research sweep with a resource-derived cap. A new sweep must record its own
+researcher decision in `policy.concurrency_basis`; the old override is not
+standing authorization to launch more jobs.
 
 ## Restart safety and identity
 

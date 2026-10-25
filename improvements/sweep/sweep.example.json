@@ -47,10 +47,10 @@
     "max_wall_seconds": 21600,
     "device_index": 0,
     "allow_cpu": false,
-    "concurrency_basis": "HUMAN OVERRIDE, <date>: AGENTS.md invariant 16 caps concurrent GPU training jobs at two; the researcher authorised an automatic, resource-derived cap for this sweep instead. Record the authorisation, do not leave this blank."
+    "concurrency_basis": "HUMAN DECISION, <date>: explain the requested concurrency cap and any departure from the historical two-job limit. A previous sweep's override is not standing authorization."
   },
   "remote": {
-    "_comment": "Set host to the pod's ssh target before any remote verb (push/pull/start/status/logs/stop). The placeholder is refused there with a clear message; plan/configs/report never touch the network.",
+    "_comment": "Set host to a declared, non-billable static_ssh worker before any remote verb (push/pull/start/status/logs/stop). The placeholder is refused there; plan/configs/report never touch the network.",
     "host": "CHANGE-ME",
     "checkout": "/workspace/wavCSE/wavCSE",
     "python": "uv run --locked python"

@@ -315,7 +315,7 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
                 f"Only {free_gb:.1f} GB free on the filesystem holding "
                 f"{root_key} ({root}) -- aborting before training to avoid a "
                 f"mid-run checkpoint failure. Free space on the shared disk "
-                f"and retry (see CLAUDE.md gotchas)."
+                f"and retry."
             )
     logging.info(
         "Disk guard passed: %.1f GB free on %s",
