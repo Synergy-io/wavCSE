@@ -39,6 +39,7 @@ _IMPROVEMENTS_DIR = os.path.dirname(_THIS_DIR)              # .../improvements
 _REPO_ROOT = os.path.dirname(_IMPROVEMENTS_DIR)              # .../wavCSE (git repo root)
 _DOWNSTREAM_DIR = os.path.join(_REPO_ROOT, "downstream")
 
+sys.path.insert(0, _REPO_ROOT)          # exposes improvements as a package
 sys.path.insert(0, _DOWNSTREAM_DIR)     # exposes dataset/, model/, trainer/, evaluator/, utils/ as top-level
 sys.path.insert(0, _IMPROVEMENTS_DIR)   # exposes mlflow_utils as top-level
 sys.path.insert(0, _THIS_DIR)           # exposes kfold_iemocap, run_base as top-level
@@ -47,6 +48,10 @@ import mlflow
 import mlflow_utils
 from loading_utils import get_loader_device
 from seed_utils import set_seed
+from improvements.device_utils import assert_training_device
+from improvements.eval_utils import evaluation_run_ids
+from improvements import embedding_root
+from improvements.run_identity import emit_run_identity
 
 from torch.utils.data import Subset
 
@@ -97,7 +102,7 @@ class _LOSOLoadEmbedding(LoadEmbedding):
 
 def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root):
     root_data_path = cfg["paths"]["root_data_path"]
-    root_emb_path = cfg["paths"]["root_emb_path"]
+    root_emb_path = embedding_root.resolve_root(cfg["paths"]["root_emb_path"])
 
     upstream_model_type = cfg["upstream"]["model_type"]
     selected_transformer_layers = cfg["upstream"]["selected_transformer_layers"]
@@ -174,6 +179,14 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
         validation_data=val_data,
         ignore_index=ignore_index
     )
+
+    # State this fold's run identity explicitly, before training starts.
+    emit_run_identity(
+        trainer, model="wavcse-baseline-er-kfold", task_type=task_type,
+        seed=cfg.get("seed"),
+        extra={"fold_index": fold_index, "num_folds": num_folds},
+    )
+
     trainer.train()
 
     for tag in ["best", "opt"]:
@@ -184,7 +197,12 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
     task_array = trainer.task_array
     er_idx = task_array.index("er")
 
+    # Bind evaluation to this fold's own run, never to the newest directory
+    # under the fold root (see improvements/eval_utils.py).
+    results_run_id, checkpoint_run_id = evaluation_run_ids(trainer)
+
     fold_er_metrics = {}
+    fold_task_metrics = {}
     for tag in ["opt", "best", "epoch"]:
         evaluator = MultiTasksModelEvaluator(
             model=model,
@@ -195,16 +213,22 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
             dataset=test_data,
             checkpoints_root=fold_checkpoints_root,
             checkpoint_tag=tag,
-            ignore_index=ignore_index
+            ignore_index=ignore_index,
+            results_run_id=results_run_id,
+            checkpoint_run_id=checkpoint_run_id,
         )
         stats = evaluator.write_metrics()
         evaluator.write_predictions_csv()
         mlflow_utils.log_eval_stats(stats, tag, task_array)
 
-        fold_er_metrics[tag] = {
-            "acc": stats.accuracy_task[er_idx],
-            "loss": stats.avg_loss_task[er_idx],
+        fold_task_metrics[tag] = {
+            task: {
+                "acc": stats.accuracy_task[index],
+                "loss": stats.avg_loss_task[index],
+            }
+            for index, task in enumerate(task_array)
         }
+        fold_er_metrics[tag] = fold_task_metrics[tag]["er"]
 
     mlflow.log_artifacts(trainer.results_dir, artifact_path="results")
 
@@ -213,6 +237,7 @@ def _run_fold(fold_index, cfg, task_type, device, results_root, checkpoints_root
         "held_out_test_speaker": loader.held_out_test_speaker,
         "held_out_val_speaker": loader.held_out_val_speaker,
         "er_metrics": fold_er_metrics,
+        "task_metrics": fold_task_metrics,
     }
 
 
@@ -255,6 +280,14 @@ def main():
     results_root = cfg["paths"]["results_root"]
     checkpoints_root = cfg["paths"]["checkpoints_root"]
 
+    research_cfg = cfg.get("research", {})
+    study_id = research_cfg.get("study_id")
+    stage = research_cfg.get("stage")
+    if study_id:
+        output_parts = [str(study_id), str(stage or "unspecified"), task_type]
+        results_root = os.path.join(results_root, *output_parts)
+        checkpoints_root = os.path.join(checkpoints_root, *output_parts)
+
     # ----------------------------
     # Pre-run disk guard: this is a shared machine whose root disk has
     # repeatedly hit ~0 bytes free mid-run (a checkpoint save then fails
@@ -278,15 +311,31 @@ def main():
 
     setup_logging(log_level=log_level)
     device = set_device(device_type=device_type, device_index=device_index)
+    # A run that declares cuda must not silently train on CPU (downstream/ is
+    # frozen; see improvements/device_utils.py).
+    assert_training_device(
+        device_type, device_index, device, context="run_base_er_kfold"
+    )
 
     mlflow_utils.setup_mlflow(cfg)
-    run_name = mlflow_utils.build_run_name("base", "original", task_type, suffix="kfold")
+    run_suffix = "_".join(
+        str(x) for x in (study_id, stage, "kfold") if x
+    )
+    run_name = mlflow_utils.build_run_name(
+        "base", "original", task_type, suffix=run_suffix
+    )
 
     fold_results = []
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
-        mlflow_utils.set_standard_tags("base", "original", cfg)
+        run_note = research_cfg.get("run_note")
+        if run_note:
+            run_note = f"{run_note} Task set: {task_type}."
+        mlflow_utils.set_standard_tags("base", "original", cfg, extra_tags={
+            "task_set": task_type,
+            "mlflow.note.content": run_note,
+        })
         mlflow.log_param("task_type", task_type)
         mlflow.log_params({
             "kfold_protocol": "leave_one_speaker_out",
@@ -296,12 +345,21 @@ def main():
 
         for fold_index in range(args.num_folds):
             with mlflow.start_run(run_name=f"fold_{fold_index}", nested=True):
+                fold_note = (
+                    f"{run_note} Fold {fold_index}."
+                    if run_note else f"{study_id} {stage} fold {fold_index}."
+                )
+                mlflow_utils.set_standard_tags("base", "original", cfg, extra_tags={
+                    "task_set": task_type,
+                    "fold_index": fold_index,
+                    "mlflow.note.content": fold_note,
+                })
                 fold_result = _run_fold(
                     fold_index, cfg, task_type, device, results_root, checkpoints_root
                 )
                 fold_results.append(fold_result)
 
-        summary = {"folds": fold_results, "aggregate": {}}
+        summary = {"folds": fold_results, "aggregate": {}, "task_aggregate": {}}
         for tag in ["opt", "best", "epoch"]:
             accs = [f["er_metrics"][tag]["acc"] for f in fold_results]
             losses = [f["er_metrics"][tag]["loss"] for f in fold_results]
@@ -320,6 +378,26 @@ def main():
                 f"kfold_er_{tag}_loss_mean": loss_mean,
                 f"kfold_er_{tag}_loss_std": loss_std,
             })
+
+        for task in task_type.split("_"):
+            summary["task_aggregate"][task] = {}
+            for tag in ["opt", "best", "epoch"]:
+                accs = [f["task_metrics"][tag][task]["acc"] for f in fold_results]
+                losses = [f["task_metrics"][tag][task]["loss"] for f in fold_results]
+                acc_mean, acc_std = statistics.mean(accs), statistics.pstdev(accs)
+                loss_mean, loss_std = statistics.mean(losses), statistics.pstdev(losses)
+                summary["task_aggregate"][task][tag] = {
+                    "acc_mean": acc_mean,
+                    "acc_std": acc_std,
+                    "loss_mean": loss_mean,
+                    "loss_std": loss_std,
+                }
+                mlflow.log_metrics({
+                    f"kfold_task_{task}_{tag}_acc_mean": acc_mean,
+                    f"kfold_task_{task}_{tag}_acc_std": acc_std,
+                    f"kfold_task_{task}_{tag}_loss_mean": loss_mean,
+                    f"kfold_task_{task}_{tag}_loss_std": loss_std,
+                })
 
         os.makedirs(results_root, exist_ok=True)
         summary_path = os.path.join(results_root, "kfold_summary.json")

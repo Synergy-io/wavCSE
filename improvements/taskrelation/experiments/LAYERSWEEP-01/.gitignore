@@ -1,0 +1,4 @@
+# Configs are the committed record of what ran: keep them tracked.
+# Everything a run produces is machine state or raw output and stays out of Git.
+outputs/
+sweep_state/

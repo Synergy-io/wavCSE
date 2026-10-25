@@ -1,5 +1,19 @@
 # wavCSE-GBC — Global Bias Coupling
 
+**Status (2026-09-21 scope reset): ARCHIVED / OUT OF CURRENT FORMAL SCOPE**
+(`../research/DECISIONS.md` DEC-0003). GBC is an original project design with no
+verified published Task Relation Learning match, so it cannot carry this
+project's literature-derived contribution claim. The implementation, configs and
+notes below are preserved as-is.
+
+* no autonomous research cycles are to be spent on GBC unless the human
+  explicitly reactivates it;
+* its two runs must not be used to motivate, rank or gate literature-grounded
+  Task Relation Learning methods — MTRL is the branch's formal baseline method
+  (DEC-0001), and `../research/BACKLOG.md` governs what may be studied next.
+
+---
+
 **2026-09-01 — citation correction.** This architecture used to be
 attributed to "Zhang et al. (2010)"/"Bayesian Online Multi-label
 Classification (BOMC)." That citation does not hold up:

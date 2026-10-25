@@ -10,6 +10,8 @@ downstream/evaluator) -- no subclassing.
 Author: Kevin Sanjula
 """
 
+import os
+import subprocess
 from datetime import datetime
 
 import mlflow
@@ -35,6 +37,34 @@ def setup_mlflow(cfg):
         mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(experiment_name)
 
+def resolve_git_commit():
+    """Return the checked-out commit used by the current execution."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return result.stdout.strip() or None
+
+
+def resolve_run_note(cfg):
+    """Resolve an inline note or a repository-relative note file."""
+    research_cfg = cfg.get("research", {})
+    note_path = research_cfg.get("run_note_file")
+    if note_path:
+        if not os.path.isabs(note_path):
+            repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            note_path = os.path.join(repo_root, note_path)
+        with open(note_path, "r") as note_file:
+            return note_file.read().strip()
+    return research_cfg.get("run_note")
+
 
 def log_config_params(cfg):
     flat = _flatten_dict({k: v for k, v in cfg.items() if k != "mlflow"})
@@ -57,6 +87,64 @@ def build_run_name(category, model, task_type, suffix=None):
         name = f"{name}_{suffix}"
     return name
 
+class _RunNameValues(dict):
+    """Placeholder values for a config-supplied run-name template.
+
+    A template is only useful if a typo fails loudly: silently leaving
+    ``{combo}`` in a run name would produce a plausible-looking name that
+    groups nothing. Unknown keys therefore raise, and the message names the
+    keys that are available.
+    """
+
+    def __missing__(self, key):
+        raise ValueError(
+            "research.run_name template uses unknown placeholder {{{}}}; available "
+            "placeholders: {}".format(key, ", ".join(sorted(self))))
+
+    def copy(self):  # pragma: no cover - dict internals only
+        return _RunNameValues(self)
+
+
+def build_research_run_name(cfg, method, task_type):
+    """Build the preferred Study-aware run name, or return None.
+
+    When the config supplies ``research.run_name`` (a ``str.format`` template),
+    that name wins: a sweep that must encode a per-run axis -- a layer
+    combination, say -- cannot do it through the fixed fields below, and the
+    alternative (renaming the run after it finishes) leaves the tracking UI
+    wrong for the entire training run.
+    """
+    research_cfg = cfg.get("research", {})
+    study_id = research_cfg.get("study_id")
+    if not study_id:
+        return None
+
+    def clean(value):
+        return str(value).strip().replace(" ", "-").replace("/", "-")
+
+    seed = int(cfg.get("seed", 42))
+    values = _RunNameValues({
+        "study_id": clean(study_id),
+        "stage": clean(research_cfg.get("stage", "unspecified")),
+        "method": clean(research_cfg.get("method", method)),
+        "task_type": clean(task_type),
+        "representation": clean(research_cfg.get("representation", "unspecified")),
+        "seed": seed,
+        "combo": clean(research_cfg.get("combo", "unspecified")),
+        "layer_count": research_cfg.get("layer_count", ""),
+    })
+    template = research_cfg.get("run_name")
+    if template:
+        return str(template).format_map(values)
+    return "__".join([
+        values["study_id"],
+        values["stage"],
+        values["method"],
+        values["task_type"],
+        values["representation"],
+        "s{:02d}".format(seed),
+    ])
+
 
 def set_standard_tags(category, model, cfg, extra_tags=None):
     """Sets the coarse cross-experiment grouping tags every run should carry.
@@ -68,15 +156,39 @@ def set_standard_tags(category, model, cfg, extra_tags=None):
     clustering-*/decomposition-* experiment at once, not just within one.
     """
     pooling_cfg = cfg.get("pooling", {})
+    research_cfg = cfg.get("research", {})
+    layer_pooling = pooling_cfg.get("layer_pooling_type")
+    layer_pooling_param = pooling_cfg.get("layer_pooling_param")
+    pooling = (
+        f"{layer_pooling}:{layer_pooling_param}"
+        if layer_pooling_param is not None else layer_pooling
+    )
     tags = {
         "category": category,
+        "family": research_cfg.get("family"),
         "model": model,
+        "method": research_cfg.get("method", model),
+        "hypothesis_slug": research_cfg.get("hypothesis_slug"),
+        "task_set": research_cfg.get("task_set"),
+        "representation": research_cfg.get("representation"),
+        "pooling": pooling,
+        "study_id": research_cfg.get("study_id"),
+        "stage": research_cfg.get("stage"),
+        "seed": cfg.get("seed"),
         "pooling_frame": pooling_cfg.get("frame_pooling_type"),
-        "pooling_layer": pooling_cfg.get("layer_pooling_type"),
+        "pooling_layer": layer_pooling,
+        "layers": cfg.get("upstream", {}).get("selected_transformer_layers"),
+        "parent_study": research_cfg.get("parent_study"),
+        "baseline_study": research_cfg.get("baseline_study"),
+        "agent_generated": research_cfg.get("agent_generated"),
+        "git_commit": resolve_git_commit(),
+        "status": research_cfg.get("status"),
+        "mlflow.note.content": resolve_run_note(cfg),
     }
     if extra_tags:
         tags.update(extra_tags)
     mlflow.set_tags({k: v for k, v in tags.items() if v is not None})
+
 
 
 def make_live_trainer(base_trainer_cls):

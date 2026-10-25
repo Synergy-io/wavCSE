@@ -4,20 +4,22 @@
 
 ```
 improvements/
-├── base/            # plain wavCSE downstream model, MLflow-tracked (no new architecture)
-├── taskrelation/     # Kevin -- GBC, TSM, PMR
-├── lowrank/          # Chehan -- not yet implemented
-├── clustering/        # Induwara -- NCMTL three-task candidate-network clustering
-├── decomposition/    # Pathumi -- not yet implemented
-├── mlflow_utils.py    # shared MLflow helpers, used by base/ and importable by any owner folder
-└── run_improvements.py  # runs taskrelation variants
+├── base/             # Plain baseline and pooling experiments
+├── taskrelation/     # MTRL/MSSL models, public experiments and behavior tests
+├── execution/        # Worker-side exact-commit staging and embedding layout
+├── sweep/            # Legacy local layer-combination runner
+├── lowrank/
+├── clustering/
+├── decomposition/
+├── mlflow_utils.py
+└── run_improvements.py
 ```
 
 ## Prerequisites
 
 - Upstream embeddings already extracted to disk (see `upstream/` -- this folder only runs the downstream stage).
-- Conda env `opencv` with `mlflow` and `python-dotenv` installed (`environment.yml`).
-- `.env` at the repo root (`wavCSE/wavCSE/.env`, copy from `.env.example`) with:
+- Install the locked Python environment with `uv sync --locked`.
+- Configure `.env` at the checkout root (copy `.env.example`) with:
   ```
   MLFLOW_TRACKING_URI=https://dagshub.com/Ke-vin-S/wavCSE.mlflow
   MLFLOW_TRACKING_USERNAME=<your dagshub username>
@@ -86,13 +88,20 @@ disown
 ```
 Each backgrounds a separate process -- run both if you want both baselines, or just one. Progress: `tail -f /tmp/run_base_<task_type>.log`, or watch the run live on the MLflow/DagsHub page above.
 
-## Run a taskrelation variant (existing)
+## Run a task-relation model
+
+From the repository root:
 
 ```bash
-python run_improvements.py --model [gbc|tsm|pmr|original|all] --task_type ks_si_er
+uv run python -m improvements.run_improvements --model mssl \
+  --task_type ks_si_er --config improvements/taskrelation/04-mssl/mssl_config.yml
 ```
-Tracked in MLflow the same way as `base/` (params/live epoch metrics/test
-metrics/artifacts). Config is hardcoded to `taskrelation/configs/`.
+
+The Study-ID folders under `taskrelation/experiments/` contain public
+executables and configs. Research records, literature and authorizations live
+in private `wavcse-research`; controller orchestration uses its
+`wavcse_research.execution` module. Public `execution/` is worker-only and
+never provisions infrastructure.
 
 ## Experiment naming & tagging convention
 
@@ -109,7 +118,7 @@ prefix:
 | base | `wavcse-baseline` | -- |
 | base + kfold | `wavcse-baseline-er-kfold` | -- |
 | base + small improvement (not a full new architecture) | `wavcse-base-<improvement-slug>` | `wavcse-base-poolingsweep` |
-| taskrelation (Kevin -- GBC/TSM/PMR) | `taskrelation-<model>` | `taskrelation-gbc`, `-tsm`, `-pmr` |
+| taskrelation (Kevin -- MTRL) | `taskrelation-<model>` | `taskrelation-mtrl`, `-mtrl-er-kfold` |
 | lowrank (Chehan) | `lowrank-<variant>` | once a variant is named |
 | clustering (Induwara) | `clustering-<variant>` | once a variant is named |
 | decomposition (Pathumi) | `decomposition-<variant>` | once a variant is named |

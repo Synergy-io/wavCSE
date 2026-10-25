@@ -2,11 +2,11 @@
 Run script for the plain wavCSE downstream model (no new MTL architecture),
 with MLflow experiment tracking (backed by a DagsHub-hosted tracking server).
 
-This deliberately reuses downstream/dataset/load_embedding.py,
-downstream/model/downstream_model.py, downstream/trainer/trainer_model.py,
-and downstream/evaluator/evaluator_model.py UNMODIFIED -- downstream/ is not
-touched by this script. MLflow logging only reads their public
-attributes/return values after the fact (see improvements/mlflow_utils.py).
+This reuses the downstream model, loader and trainer without modifying the
+frozen baseline. Task-weighted sampling, when configured, is applied by an
+improvements-owned trainer after the baseline constructs its ordinary loader.
+MLflow logging reads the trainer's public attributes/return values
+(see improvements/mlflow_utils.py).
 
 Usage:
     python run_base.py --task_type ks_si_er --config configs/base_config.yml [--device_index 0]
@@ -30,17 +30,23 @@ _IMPROVEMENTS_DIR = os.path.dirname(_THIS_DIR)              # .../improvements
 _REPO_ROOT = os.path.dirname(_IMPROVEMENTS_DIR)              # .../wavCSE (git repo root)
 _DOWNSTREAM_DIR = os.path.join(_REPO_ROOT, "downstream")
 
-sys.path.insert(0, _DOWNSTREAM_DIR)     # exposes dataset/, model/, trainer/, evaluator/, utils/ as top-level
-sys.path.insert(0, _IMPROVEMENTS_DIR)   # exposes mlflow_utils as top-level
+sys.path.insert(0, _REPO_ROOT)         # exposes improvements as a package
+sys.path.insert(0, _DOWNSTREAM_DIR)    # exposes dataset/, model/, trainer/, evaluator/, utils/
+sys.path.insert(0, _IMPROVEMENTS_DIR)  # exposes mlflow_utils as top-level
 
 import mlflow
 import mlflow_utils
 from loading_utils import get_loader_device
 from seed_utils import set_seed
+from improvements.device_utils import assert_training_device
+from improvements.eval_utils import evaluation_run_ids
+from improvements import embedding_root
+from improvements.run_identity import emit_run_identity, research_identity
+from improvements.gradient_diagnostics import make_gradient_diagnostic_trainer
 
 from dataset.load_embedding import LoadEmbedding
 from model.downstream_model import DownstreamMultiTaskModel
-from trainer.trainer_model import MultiTasksModelTrainer
+from improvements.taskrelation.weighted_sampling import TaskWeightedTrainer
 from evaluator.evaluator_model import MultiTasksModelEvaluator
 from utils.load_config import load_config
 from utils.setup_device import set_device
@@ -48,7 +54,7 @@ from utils.setup_logging import setup_logging
 from utils.parse_transformer_layers import parse_transformer_layers
 
 
-_LiveMlflowTrainer = mlflow_utils.make_live_trainer(MultiTasksModelTrainer)
+_LiveMlflowTrainer = mlflow_utils.make_live_trainer(TaskWeightedTrainer)
 
 
 def main():
@@ -82,11 +88,22 @@ def main():
 
     device_type = cfg["device"]["type"]
     device_index = args.device_index if args.device_index is not None else cfg["device"]["index"]
+    cfg["device"]["index"] = device_index
 
     root_data_path = cfg["paths"]["root_data_path"]
-    root_emb_path = cfg["paths"]["root_emb_path"]
+    # A job that prepared a verified layout names it explicitly; otherwise this is the
+    # configured root, unchanged.
+    root_emb_path = embedding_root.resolve_root(cfg["paths"]["root_emb_path"])
     results_root = cfg["paths"]["results_root"]
     checkpoints_root = cfg["paths"]["checkpoints_root"]
+
+    research_cfg = cfg.get("research", {})
+    study_id = research_cfg.get("study_id")
+    stage = research_cfg.get("stage")
+    if study_id:
+        output_parts = [str(study_id), str(stage or "unspecified"), task_type]
+        results_root = os.path.join(results_root, *output_parts)
+        checkpoints_root = os.path.join(checkpoints_root, *output_parts)
 
     upstream_model_type = cfg["upstream"]["model_type"]
     selected_transformer_layers = cfg["upstream"]["selected_transformer_layers"]
@@ -117,6 +134,11 @@ def main():
 
     setup_logging(log_level=log_level)
     device = set_device(device_type=device_type, device_index=device_index)
+    # A run that declares cuda must not silently train on CPU (downstream/ is
+    # frozen; see improvements/device_utils.py).
+    assert_training_device(
+        device_type, device_index, device, context="run_base --task_type " + task_type
+    )
 
     # ----------------------------
     # Pre-run disk guard: this is a shared machine whose root disk has
@@ -141,11 +163,17 @@ def main():
     # MLflow setup
     # ----------------------------
     mlflow_utils.setup_mlflow(cfg)
-    run_name = mlflow_utils.build_run_name("base", "original", task_type)
+    run_name = mlflow_utils.build_research_run_name(
+        cfg, "wavcse-baseline", task_type
+    ) or mlflow_utils.build_run_name("base", "original", task_type)
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
-        mlflow_utils.set_standard_tags("base", "original", cfg)
+        run_note = mlflow_utils.resolve_run_note(cfg)
+        mlflow_utils.set_standard_tags("base", "original", cfg, extra_tags={
+            "task_set": task_type,
+            "mlflow.note.content": run_note,
+        })
         mlflow.log_param("task_type", task_type)
 
         # ----------------------------
@@ -184,7 +212,13 @@ def main():
         # ----------------------------
         # Train
         # ----------------------------
-        trainer = _LiveMlflowTrainer(
+        trainer_cls = _LiveMlflowTrainer
+        if training_cfg.get("gradient_diagnostics", {}).get("enabled", False):
+            trainer_cls = mlflow_utils.make_live_trainer(
+                make_gradient_diagnostic_trainer(TaskWeightedTrainer)
+            )
+        trainer = trainer_cls(
+
             model=model,
             device=device,
             task_type=task_type,
@@ -193,8 +227,22 @@ def main():
             checkpoints_root=checkpoints_root,
             training_data=train_data,
             validation_data=val_data,
-            ignore_index=ignore_index
+            ignore_index=ignore_index,
+            seed=seed,
         )
+
+        # State the run identity explicitly, before training starts. Same
+        # run-identity contract as improvements/run_improvements.py, so one
+        # record answers *which arm of which study at which commit* produced the
+        # artifact regardless of which entry point trained it.
+        emit_run_identity(
+            trainer, model="wavcse-baseline", task_type=task_type, seed=seed,
+            extra=research_identity(
+                research_cfg, mlflow_utils.resolve_git_commit(),
+                default_method="wavcse-baseline",
+            ),
+        )
+
         trainer.train()
 
         for tag in ["best", "opt"]:
@@ -206,6 +254,9 @@ def main():
         # Evaluate opt / best / epoch checkpoints
         # ----------------------------
         task_array = trainer.task_array
+        # Bind evaluation to this process's own run, never to the newest
+        # directory under the root (see improvements/eval_utils.py).
+        results_run_id, checkpoint_run_id = evaluation_run_ids(trainer)
         for tag in ["opt", "best", "epoch"]:
             evaluator = MultiTasksModelEvaluator(
                 model=model,
@@ -216,7 +267,9 @@ def main():
                 dataset=test_data,
                 checkpoints_root=checkpoints_root,
                 checkpoint_tag=tag,
-                ignore_index=ignore_index
+                ignore_index=ignore_index,
+                results_run_id=results_run_id,
+                checkpoint_run_id=checkpoint_run_id,
             )
             stats = evaluator.write_metrics()
             evaluator.write_predictions_csv()

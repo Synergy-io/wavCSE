@@ -54,7 +54,12 @@ from utils.parse_transformer_layers import parse_transformer_layers
 
 from improvements.loading_utils import get_loader_device
 from improvements.seed_utils import set_seed
+from improvements.device_utils import assert_training_device
+from improvements.eval_utils import evaluation_run_ids
+from improvements import embedding_root
+from improvements.run_identity import emit_run_identity, research_identity
 from improvements import mlflow_utils
+from improvements.gradient_diagnostics import make_gradient_diagnostic_trainer
 
 # "gbc"/"tsm"/"pmr" are all task-relation-learning variants (Kevin's branch).
 # When other members add their own architecture folders (lowrank/, clustering/,
@@ -68,6 +73,7 @@ MODEL_CATEGORY = {
     "tsm": "taskrelation",
     "pmr": "taskrelation",
     "mtrl": "taskrelation",
+    "mssl": "taskrelation",
 }
 
 # "01-mtrl" (and any future "0N-<name>" self-contained architecture folder)
@@ -87,6 +93,7 @@ def _load_module_from_path(module_name: str, file_path: str):
 # taskrelation/configs/ dir (see CONFIG_PATH_OVERRIDES usage in main()).
 CONFIG_PATH_OVERRIDES = {
     "mtrl": os.path.join("taskrelation", "01-mtrl", "mtrl_config.yml"),
+    "mssl": os.path.join("taskrelation", "04-mssl", "mssl_config.yml"),
     "gbc": os.path.join("taskrelation", "03-gbc", "gbc_config.yml"),
 }
 
@@ -140,6 +147,24 @@ def build_model(model_type: str, cfg: dict, task_type: str, layer_pooling_param)
             omega_epsilon=model_cfg.get("omega_epsilon", 1e-4),
             normalize_w=model_cfg.get("normalize_w", False),
         )
+    elif model_type == "mssl":
+        mssl_dir = os.path.join(os.path.dirname(__file__), "taskrelation", "04-mssl")
+        mssl_module = _load_module_from_path(
+            "mssl_model", os.path.join(mssl_dir, "mssl_model.py")
+        )
+        # mssl_lambda_2 is the one MSSL knob the published method does not fix
+        # (its Algorithm 1 selects it on data), so it is required from the
+        # config: a bare [] lookup raises KeyError instead of silently
+        # inheriting a placeholder penalty.
+        return mssl_module.DownstreamMultiTaskModelMSSL(
+            **common_args,
+            mssl_lambda_2=model_cfg["mssl_lambda_2"],
+            mssl_lambda_0=model_cfg.get("mssl_lambda_0", 1.0),
+            mssl_lambda_1=model_cfg.get("mssl_lambda_1", 0.0),
+            mssl_admm_rho=model_cfg.get("mssl_admm_rho"),
+            mssl_admm_iterations=model_cfg.get("mssl_admm_iterations", 2000),
+            normalize_w=model_cfg.get("normalize_w", True),
+        )
     elif model_type == "original":
         from model.downstream_model import DownstreamMultiTaskModel
         return DownstreamMultiTaskModel(**common_args)
@@ -151,10 +176,15 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
                   validation_data, ignore_index):
     """Factory for building the appropriate trainer."""
     training_cfg = cfg["training"]
+    def live_trainer(trainer_cls):
+        if training_cfg.get("gradient_diagnostics", {}).get("enabled", False):
+            trainer_cls = make_gradient_diagnostic_trainer(trainer_cls)
+        return mlflow_utils.make_live_trainer(trainer_cls)
+
 
     if model_type == "tsm":
         from improvements.taskrelation.trainers.tsm_trainer import MultiTasksModelTrainerTSM
-        trainer_cls = mlflow_utils.make_live_trainer(MultiTasksModelTrainerTSM)
+        trainer_cls = live_trainer(MultiTasksModelTrainerTSM)
         tsm_cfg = cfg.get("tsm", {})
         return trainer_cls(
             model=model,
@@ -191,7 +221,7 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
         mtrl_trainer_module = _load_module_from_path(
             "mtrl_trainer", os.path.join(mtrl_dir, "mtrl_trainer.py")
         )
-        trainer_cls = mlflow_utils.make_live_trainer(
+        trainer_cls = live_trainer(
             mtrl_trainer_module.MultiTasksModelTrainerMTRL
         )
         mtrl_cfg = cfg.get("mtrl", {})
@@ -208,10 +238,15 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
             mtrl_warmup_epochs=mtrl_cfg.get("warmup_epochs", 3),
             omega_update_frequency=mtrl_cfg.get("omega_update_frequency", 1),
         )
-    else:
-        # GBC and original use the standard trainer
-        from trainer.trainer_model import MultiTasksModelTrainer
-        trainer_cls = mlflow_utils.make_live_trainer(MultiTasksModelTrainer)
+    elif model_type == "mssl":
+        mssl_dir = os.path.join(os.path.dirname(__file__), "taskrelation", "04-mssl")
+        mssl_trainer_module = _load_module_from_path(
+            "mssl_trainer", os.path.join(mssl_dir, "mssl_trainer.py")
+        )
+        trainer_cls = live_trainer(
+            mssl_trainer_module.MultiTasksModelTrainerMSSL
+        )
+        mssl_cfg = cfg.get("mssl", {})
         return trainer_cls(
             model=model,
             device=device,
@@ -222,6 +257,29 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
             training_data=training_data,
             validation_data=validation_data,
             ignore_index=ignore_index,
+            mssl_warmup_epochs=mssl_cfg.get("warmup_epochs", 3),
+            omega_update_frequency=mssl_cfg.get("omega_update_frequency", 1),
+            # Provenance of the lambda_2 value, carried into the run's mechanism
+            # artifact so the recorded diagnostics state which selection rule
+            # produced the penalty they were measured under.
+            lambda_2_selection=mssl_cfg.get("lambda_2_selection", "unspecified"),
+        )
+    else:
+        # GBC and original use the baseline trainer, with optional
+        # improvements-owned task weighting for DG-0005-style configs.
+        from improvements.taskrelation.weighted_sampling import TaskWeightedTrainer
+        trainer_cls = live_trainer(TaskWeightedTrainer)
+        return trainer_cls(
+            model=model,
+            device=device,
+            task_type=task_type,
+            training_cfg=training_cfg,
+            results_root=cfg["paths"]["results_root"],
+            checkpoints_root=cfg["paths"]["checkpoints_root"],
+            training_data=training_data,
+            validation_data=validation_data,
+            ignore_index=ignore_index,
+            seed=cfg.get("seed"),
         )
 
 
@@ -269,6 +327,15 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
         cfg.get("device", {}).get("type", "cuda"),
         device_index if device_index is not None else cfg.get("device", {}).get("index", 0)
     )
+    # A run that declares cuda must not silently train on CPU (see
+    # improvements/device_utils.py). downstream/ is frozen, so the assertion is
+    # made here, at the boundary the entry point owns.
+    assert_training_device(
+        cfg.get("device", {}).get("type", "cuda"),
+        device_index if device_index is not None else cfg.get("device", {}).get("index", 0),
+        device,
+        context="run_improvements --model {}".format(model_type),
+    )
 
     # Parse transformer layers
     transformer_layer_array = parse_transformer_layers(
@@ -279,7 +346,7 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
 
     # Load embeddings
     loader = LoadEmbedding(
-        root_emb_path=os.path.expanduser(cfg["paths"]["root_emb_path"]),
+        root_emb_path=embedding_root.resolve_root(cfg["paths"]["root_emb_path"]),
         root_data_path=os.path.expanduser(cfg["paths"]["root_data_path"]),
         upstream_model_type=cfg["upstream"]["model_type"],
         frame_pooling_type=cfg["pooling"]["frame_pooling_type"],
@@ -306,14 +373,41 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
     # ----------------------------
     category = MODEL_CATEGORY.get(model_type, "taskrelation")
     mlflow_utils.setup_mlflow(cfg)
-    run_name = mlflow_utils.build_run_name(category, model_type, task_type)
-
+    run_name = mlflow_utils.build_research_run_name(
+        cfg, model_type, task_type
+    ) or mlflow_utils.build_run_name(category, model_type, task_type)
     from evaluator.evaluator_model import MultiTasksModelEvaluator
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
-        mlflow_utils.set_standard_tags(category, model_type, cfg)
+        mlflow_utils.set_standard_tags(
+            category,
+            model_type,
+            cfg,
+            extra_tags={
+                "task_set": task_type,
+                # The raw config string ("all") is already carried by the
+                # `layers` tag; the resolved count is what a reader needs to
+                # verify the protocol's layer policy without re-deriving it
+                # from the config (01-mtrl / base runs carry the same tag).
+                "layer_count": len(transformer_layer_array),
+            },
+        )
         mlflow.log_param("task_type", task_type)
+        # Worker/GPU provenance: a result must be traceable to the machine that
+        # produced it, and the compute backend's environment names the worker
+        # without leaking anything secret. Never a reason a run may fail.
+        try:
+            worker_gpu = torch.cuda.get_device_name(device) if torch.cuda.is_available() else "cpu"
+        except Exception as exc:  # pragma: no cover - defensive only
+            worker_gpu = "unknown ({})".format(type(exc).__name__)
+        mlflow.log_param("worker_gpu", worker_gpu)
+        mlflow.set_tag("worker_gpu", worker_gpu)
+        for env_key in ("INFRA_WORKER_ID", "INFRA_WORKER_NAME", "INFRA_JOB_ID",
+                        "INFRA_PROVIDER", "INFRA_GPU", "INFRA_GIT_COMMIT"):
+            value = os.environ.get(env_key)
+            if value:
+                mlflow.set_tag(env_key.lower(), value)
 
         # Build model
         model = build_model(model_type, cfg, task_type, layer_pooling_param)
@@ -323,6 +417,20 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
         trainer = build_trainer(
             model_type, model, device, task_type, cfg,
             train_data, val_data, ignore_index
+        )
+
+        # State the run identity explicitly, before training starts, so nothing
+        # downstream has to infer "which run" from the newest directory. The
+        # study/arm fields come from the shared contract in
+        # improvements/run_identity.py -- `model` alone cannot separate two arms
+        # of one study, since both are model="mtrl".
+        emit_run_identity(
+            trainer, model=model_type, task_type=task_type,
+            seed=resolved_seed,
+            extra=research_identity(
+                cfg.get("research"), mlflow_utils.resolve_git_commit(),
+                default_method=model_type,
+            ),
         )
 
         # Train
@@ -335,6 +443,9 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
 
         # Evaluate
         task_array = trainer.task_array
+        # Bind evaluation to this process's own run, never to the newest
+        # directory under the root (see improvements/eval_utils.py).
+        results_run_id, checkpoint_run_id = evaluation_run_ids(trainer)
         for tag in ["opt", "best", "epoch"]:
             try:
                 evaluator = MultiTasksModelEvaluator(
@@ -347,6 +458,8 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
                     dataset=test_data,
                     checkpoint_tag=tag,
                     ignore_index=ignore_index,
+                    results_run_id=results_run_id,
+                    checkpoint_run_id=checkpoint_run_id,
                 )
                 stats = evaluator.write_metrics()
                 evaluator.write_predictions_csv()
@@ -360,13 +473,23 @@ def run_single_model(model_type: str, task_type: str, config_path: str,
     return model
 
 
-def main():
+def main(argv=None):
+    """Run the requested model variants; return a process exit code.
+
+    An implementation or runtime failure in any requested arm is reported and
+    makes the process exit non-zero, because callers (and, under the compute
+    backend, `infra job submit`) treat exit 0 as a successful execution. A
+    scientifically negative result is NOT a failure: it comes out of a run that
+    completed and wrote its outputs, so it still exits 0 and is interpreted
+    later as evidence.
+    """
+
     parser = argparse.ArgumentParser(
         description="Run wavCSE architectural improvements"
     )
     parser.add_argument(
         "--model", type=str, default="all",
-        choices=["gbc", "tsm", "pmr", "mtrl", "original", "all"],
+        choices=["gbc", "tsm", "pmr", "mtrl", "mssl", "original", "all"],
         help="Which model variant to run"
     )
     parser.add_argument(
@@ -388,7 +511,7 @@ def main():
              "e.g. by taskrelation/02-lnp/ whose configs live outside "
              "taskrelation/configs/."
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.config is not None and args.model == "all":
         parser.error("--config cannot be combined with --model all")
@@ -400,11 +523,15 @@ def main():
     config_dir = os.path.join(os.path.dirname(__file__), "taskrelation", "configs")
 
     if args.model == "all":
+        # Study arms (mssl) are run explicitly, never as part of `all`: they
+        # carry a `research:` block and a pre-registered study, so folding them
+        # into the generic sweep would launch unregistered Studyless runs.
         models_to_run = ["gbc", "tsm", "pmr", "mtrl"]
     else:
         models_to_run = [args.model]
 
     results = {}
+    failures = []
     for mtype in models_to_run:
         if args.config is not None:
             # Explicit --config override (see the argparse help; used by
@@ -418,23 +545,38 @@ def main():
         else:
             config_path = os.path.join(config_dir, f"{mtype}_config.yml")
         if not os.path.exists(config_path):
-            print(f"Warning: No config found for {mtype} at {config_path}")
+            # A requested arm whose config is missing could not run at all.
+            # Skipping it silently used to exit 0, which reported success for
+            # work that never happened.
+            message = (
+                f"No config found for {mtype} at {config_path}; the requested "
+                f"arm did not run"
+            )
+            print(f"Error: {message}", file=sys.stderr)
+            failures.append((mtype, message))
             continue
         try:
             results[mtype] = run_single_model(
                 mtype, args.task_type, config_path, args.device_index, args.seed
             )
         except Exception as e:
-            print(f"Error running {mtype}: {e}")
+            print(f"Error running {mtype}: {e}", file=sys.stderr)
             import traceback
             traceback.print_exc()
+            failures.append((mtype, "{}: {}".format(type(e).__name__, e)))
 
     print("\n" + "="*60)
+    if failures:
+        print("  RUN FAILED for {}".format(", ".join(name for name, _ in failures)))
+        print("="*60)
+        for name, reason in failures:
+            print("  {}: {}".format(name, reason), file=sys.stderr)
+        return 1
     print("  All model runs completed.")
     print("="*60)
 
-    return results
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

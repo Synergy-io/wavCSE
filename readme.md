@@ -27,12 +27,15 @@ Upstream embedding extraction must be completed before downstream training.
 
 ```text
 wavCSE/
-├── upstream/          # Upstream SSL based embedding extraction
-├── downstream/        # Downstream multi task training and evaluation
-├── pyproject.toml     # Dependencies (managed with uv)
-├── uv.lock            # Locked dependency versions
-└── README.md          # Project documentation
-```
+├── upstream/                        # Frozen SSL embedding extraction
+├── downstream/                      # Frozen baseline training
+├── improvements/
+│   ├── taskrelation/                # Public MTRL/MSSL models
+│   │   ├── experiments/             # Reproducible runners and configs by Study ID
+│   │   └── tests/                   # Model and experiment behavior
+│   └── execution/                   # Exact-commit worker adapter only
+├── pyproject.toml
+└── uv.lock
 
 ---
 
@@ -254,6 +257,31 @@ All experimental settings are controlled via YAML configuration files, including
 This design enables fully reproducible experiments without modifying code.
 
 ---
+
+## Model improvements and repository ownership
+
+Run improvement models as modules from the checkout root, for example:
+
+```bash
+uv run python -m improvements.run_improvements --model mssl --task_type ks_si_er \
+  --config improvements/taskrelation/04-mssl/mssl_config.yml
+make check
+```
+
+`improvements/taskrelation/experiments/<Study ID>/` contains executable
+study scripts and reusable configurations, not results or approvals. Public
+`improvements/execution/worker_stage.py` runs at the exact public model commit
+and accepts a SHA-verified plan from the private controller; it needs no private
+Python imports. Research records, literature, authorization envelopes and
+controller orchestration belong to private `Synergy-io/wavcse-research`.
+Provider lifecycle, storage and job operations belong to standalone
+`Ke-vin-S/wavcse-infra`; this public repository contains no embedded infra
+implementation.
+
+Ordinary training still reads embeddings from the config's
+`paths.root_emb_path`. Prepare that external artifact tree before training;
+the worker adapter verifies its declared embedding layout rather than fetching
+it implicitly.
 
 ## Usage Notes
 
