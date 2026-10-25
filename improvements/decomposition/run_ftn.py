@@ -6,10 +6,14 @@ Usage:
 """
 
 import argparse
+import logging
 import os
+import random
 import sys
 from datetime import datetime
 
+import numpy as np
+import torch
 from dotenv import load_dotenv
 
 
@@ -28,7 +32,10 @@ from seed_utils import set_seed
 
 from dataset.load_embedding import LoadEmbedding
 from improvements.decomposition.models.ftn_model import DownstreamMultiTaskModelFTN
-from improvements.decomposition.trainers.ftn_trainer import MultiTasksModelTrainerFTN
+from improvements.decomposition.trainers.ftn_trainer import (
+    MultiTasksModelTrainerFTN,
+    _TaskLossDispatcher,
+)
 from evaluator.evaluator_model import MultiTasksModelEvaluator
 from utils.load_config import load_config
 from utils.parse_transformer_layers import parse_transformer_layers
@@ -53,6 +60,7 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
         diagnostics = {f"{phase}_balanced_task_acc": balanced_accuracy}
 
         if phase == "train":
+            diagnostics.update(self.consume_shared_gradient_stats())
             gradient_stats = self.consume_gradient_norm_stats()
             if gradient_stats is not None:
                 diagnostics.update(
@@ -63,18 +71,42 @@ class _LiveMlflowTrainer(MultiTasksModelTrainerFTN):
                 )
 
         if phase == "val":
-            diagnostics["shared_adapter_identity_distance"] = (
-                self.model.get_shared_adapter_identity_distance()
-            )
+            shared_weight_norm = self.model.get_shared_weight_norm()
+            diagnostics["shared_fc2_weight_norm"] = shared_weight_norm
             diagnostics.update(
                 {
                     f"delta_norm_{task}": norm
                     for task, norm in self.model.get_delta_norms().items()
                 }
             )
-
+            diagnostics.update(
+                {
+                    f"relative_delta_norm_{task}": norm
+                    for task, norm in self.model.get_relative_delta_norms().items()
+                }
+            )
+            diagnostics.update(
+                {
+                    f"delta_cosine_similarity_{pair}": similarity
+                    for pair, similarity in (
+                        self.model.get_delta_cosine_similarities().items()
+                    )
+                }
+            )
         mlflow.log_metrics(diagnostics, step=epoch)
         return super()._epoch_report_line(epoch, phase, stats)
+
+
+class _LabelSmoothingEvaluator(MultiTasksModelEvaluator):
+    """Evaluate with the same per-task loss criteria used by FTN training."""
+
+    def __init__(self, *args, er_label_smoothing: float, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.loss_fn = _TaskLossDispatcher(self.task_array, er_label_smoothing)
+
+    def _process_batch(self, batch):
+        self.loss_fn.reset()
+        return super()._process_batch(batch)
 
 
 def _owner_relative_path(path: str) -> str:
@@ -95,18 +127,43 @@ def _config_path(path: str) -> str:
 
 
 def _parameter_counts(model: DownstreamMultiTaskModelFTN) -> dict[str, int]:
-    updates = [sum(p.numel() for p in module.parameters()) for module in model.task_updates]
+    per_task = [sum(p.numel() for p in update.parameters()) for update in model.task_updates]
+    if len(set(per_task)) != 1:
+        raise ValueError(f"Expected equal per-task adapter sizes, got {per_task}")
+    adapter_total = sum(per_task)
     return {
         "total_parameters": sum(p.numel() for p in model.parameters()),
         "trainable_parameters": sum(
             p.numel() for p in model.parameters() if p.requires_grad
         ),
-        "shared_adapter_parameters": sum(
-            p.numel() for p in model.shared_adapter.parameters()
+        "shared_fc2_parameters": sum(
+            p.numel() for p in model.hidden_layer.parameters()
         ),
-        "task_update_parameters_total": sum(updates),
-        "task_update_parameters_per_task": updates[0],
+        "task_adapter_parameters_per_task": per_task[0],
+        "task_adapter_parameters_total": adapter_total,
+        "ftn_specific_parameters_total": adapter_total,
+        "task_update_parameters_per_task": per_task[0],
+        "task_update_parameters_total": adapter_total,
+        "ftn_rank_ks": model.ftn_rank,
+        "ftn_rank_si": model.ftn_rank,
+        "ftn_rank_er": model.ftn_rank,
+        "ftn_total_rank": model.ftn_rank * len(model.TASK_ORDER),
+        "rank": model.ftn_rank,
+        "ftn_rank": model.ftn_rank,
     }
+
+
+def _set_seed(seed: int) -> None:
+    """Seed experiment RNGs without forcing unsupported deterministic kernels."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    if torch.backends.cudnn.is_available():
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def main() -> None:
@@ -122,10 +179,6 @@ def main() -> None:
     parser.add_argument(
         "--device_index", type=int, default=None, help="Override the config GPU index"
     )
-    parser.add_argument(
-        "--seed", type=int, default=None,
-        help="Random seed (overrides config file's seed:, default 42 if neither set)",
-    )
     args = parser.parse_args()
 
     if args.task_type != DownstreamMultiTaskModelFTN.SUPPORTED_TASK_TYPE:
@@ -134,10 +187,9 @@ def main() -> None:
     load_dotenv(os.path.join(_REPO_ROOT, ".env"))
     cfg = load_config(_config_path(args.config))
     setup_logging(log_level=cfg["log_level"])
-
-    seed = args.seed if args.seed is not None else cfg.get("seed", 42)
-    set_seed(seed)
-    cfg["seed"] = seed
+    seed = int(cfg.get("seed", 42))
+    _set_seed(seed)
+    logging.info("Experiment seed: %d", seed)
 
     device_index = (
         args.device_index if args.device_index is not None else cfg["device"]["index"]
@@ -160,16 +212,19 @@ def main() -> None:
     task_type = args.task_type
 
     mlflow_utils.setup_mlflow(cfg)
-    ftn_rank = cfg["model"]["ftn_rank"]
+    model_cfg = cfg["model"]
+    er_label_smoothing = float(cfg["training"].get("er_label_smoothing", 0.0))
     run_name = (
-        f"ftn_r{ftn_rank}_{task_type}_"
+        f"ftn_r{model_cfg['ftn_rank']}_erls{int(er_label_smoothing * 100):03d}_"
+        f"ks_si_er_"
         f"{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}"
     )
 
     with mlflow.start_run(run_name=run_name):
         mlflow_utils.log_config_params(cfg)
         mlflow.log_param("task_type", task_type)
-        mlflow.log_param("ftn_rank", ftn_rank)
+        mlflow.log_param("architecture", "shared_fc2_private_adapter")
+        mlflow.log_param("er_label_smoothing", er_label_smoothing)
 
         loader = LoadEmbedding(
             root_data_path=cfg["paths"]["root_data_path"],
@@ -185,7 +240,6 @@ def main() -> None:
             subset_percentage=cfg["dataset"]["subset_percentage"],
         )
 
-        model_cfg = cfg["model"]
         model = DownstreamMultiTaskModelFTN(
             upstream_model_type=cfg["upstream"]["model_type"],
             task_type=task_type,
@@ -209,13 +263,14 @@ def main() -> None:
             training_data=train_data,
             validation_data=val_data,
             ignore_index=cfg["dataset"]["ignore_index"],
+            diagnostics_cfg=cfg.get("diagnostics", {}),
         )
         trainer.train()
 
         results_run_id = os.path.basename(trainer.results_dir)
         checkpoint_run_id = os.path.basename(trainer.ckpt_dir)
         for tag in ("opt", "best", "epoch"):
-            evaluator = MultiTasksModelEvaluator(
+            evaluator = _LabelSmoothingEvaluator(
                 model=model,
                 device=device,
                 task_type=task_type,
@@ -227,6 +282,7 @@ def main() -> None:
                 ignore_index=cfg["dataset"]["ignore_index"],
                 results_run_id=results_run_id,
                 checkpoint_run_id=checkpoint_run_id,
+                er_label_smoothing=er_label_smoothing,
             )
             stats = evaluator.write_metrics()
             evaluator.write_predictions_csv()
@@ -237,6 +293,15 @@ def main() -> None:
                 f"final_delta_norm_{task}": norm
                 for task, norm in model.get_delta_norms().items()
             }
+        )
+        mlflow.log_metrics(
+            {
+                f"final_relative_delta_norm_{task}": norm
+                for task, norm in model.get_relative_delta_norms().items()
+            }
+        )
+        mlflow.log_metric(
+            "final_shared_fc2_weight_norm", model.get_shared_weight_norm()
         )
         mlflow.log_artifacts(trainer.ckpt_dir, artifact_path="checkpoints")
         mlflow.log_artifacts(trainer.results_dir, artifact_path="results")
