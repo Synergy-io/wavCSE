@@ -2,9 +2,11 @@
 
 import os
 import sys
+import tempfile
 import unittest
 
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset, Subset
 
 REPO_ROOT = os.path.abspath(
@@ -15,7 +17,10 @@ for path in (DOWNSTREAM_DIR, REPO_ROOT):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from dataset.custom_emb_dataloader import build_task_weighted_sampler
+from improvements.taskrelation.weighted_sampling import (
+    TaskWeightedTrainer,
+    build_task_weighted_sampler,
+)
 
 
 class PatternDataset(Dataset):
@@ -99,6 +104,49 @@ class TaskWeightedSamplerTests(unittest.TestCase):
                 seed=None,
             )
 
+
+    def test_training_loader_uses_weighted_batches(self):
+        class SampledCombinedDataset(CombinedDatasetStub):
+            def __getitem__(self, index):
+                task = 1 if index >= len(self.datasets[0]) else 0
+                return torch.tensor([float(index)]), torch.tensor([task, -1])
+
+        dataset = Subset(SampledCombinedDataset(self.root.datasets), list(range(120)))
+        with tempfile.TemporaryDirectory() as directory:
+            trainer = TaskWeightedTrainer(
+                model=nn.Linear(1, 2),
+                device=torch.device("cpu"),
+                task_type="ks_er",
+                training_cfg={
+                    "num_epochs": 1,
+                    "batch_size": 12,
+                    "learning_rate": 0.001,
+                    "shuffle_train": True,
+                    "drop_last_train": False,
+                    "pin_memory": False,
+                    "task_sampling_weights": {"er": 5.0},
+                },
+                results_root=os.path.join(directory, "results"),
+                checkpoints_root=os.path.join(directory, "checkpoints"),
+                training_data=dataset,
+                validation_data=dataset,
+                seed=42,
+            )
+            sampled_indices = [
+                int(value)
+                for embeddings, _ in trainer.train_dataloader
+                for value in embeddings[:, 0]
+            ]
+            validation_indices = [
+                int(value)
+                for embeddings, _ in trainer.val_dataloader
+                for value in embeddings[:, 0]
+            ]
+
+        self.assertEqual(len(sampled_indices), len(dataset))
+        er_count = sum(index >= 100 for index in sampled_indices)
+        self.assertGreaterEqual(er_count, (len(dataset) - er_count) * 0.5)
+        self.assertEqual(validation_indices, list(range(len(dataset))))
 
 if __name__ == "__main__":
     unittest.main()

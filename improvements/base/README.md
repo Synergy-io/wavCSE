@@ -8,9 +8,11 @@ against. It exists to add MLflow experiment tracking (backed by a
 DagsHub-hosted tracking server) without touching `downstream/`.
 
 - `run_base.py` -- orchestration script: loads embeddings, builds the plain
-  `DownstreamMultiTaskModel`, trains and evaluates it via the unmodified
-  `downstream/trainer` and `downstream/evaluator`, and logs params/metrics/
-  artifacts to MLflow using `improvements/mlflow_utils.py`.
+  `DownstreamMultiTaskModel`, trains with the baseline trainer extended by
+  `improvements/taskrelation/weighted_sampling.py`, evaluates with the unchanged
+  downstream evaluator, and logs params/metrics/artifacts to MLflow using
+  `improvements/mlflow_utils.py`. With no sampling weights, the ordinary
+  downstream training loader is retained.
 - `configs/base_config.yml` -- full copy of `downstream/configs/build_model.yml`'s
   schema plus an `mlflow:` block (`tracking_uri`, `experiment_name`).
 - `run_base_er_kfold.py` / `kfold_iemocap.py` / `configs/base_kfold_config.yml`
@@ -34,6 +36,18 @@ disown
 Can be run from any working directory -- all paths (downstream/, improvements/,
 this folder's own config) are resolved relative to `run_base.py`'s own location,
 not the working directory.
+
+### DG-0005 task-weighted training
+
+Set `training.task_sampling_weights` in a DG-0005 config to opt into a
+deterministic, replacement-sampling training loader. The improvement-owned
+trainer keeps the same epoch exposure (`num_samples = len(training_data)`),
+collation and loader settings; validation stays unweighted. It requires the
+run seed and never changes `downstream/`. Both `run_base.py` and
+`run_improvements.py --model original` select this trainer. Inspect the
+membership and realized sampling counts with
+`uv run python improvements/taskrelation/experiments/DG-0005/validate_sampling.py`
+from the repository root; this command needs the configured embeddings.
 
 ## MLflow / DagsHub setup
 

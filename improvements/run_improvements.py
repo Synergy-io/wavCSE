@@ -265,9 +265,10 @@ def build_trainer(model_type: str, model, device, task_type, cfg, training_data,
             lambda_2_selection=mssl_cfg.get("lambda_2_selection", "unspecified"),
         )
     else:
-        # GBC and original use the standard trainer
-        from trainer.trainer_model import MultiTasksModelTrainer
-        trainer_cls = live_trainer(MultiTasksModelTrainer)
+        # GBC and original use the baseline trainer, with optional
+        # improvements-owned task weighting for DG-0005-style configs.
+        from improvements.taskrelation.weighted_sampling import TaskWeightedTrainer
+        trainer_cls = live_trainer(TaskWeightedTrainer)
         return trainer_cls(
             model=model,
             device=device,

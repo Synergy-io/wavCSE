@@ -16,7 +16,7 @@ for path in (REPO_ROOT, DOWNSTREAM_DIR, IMPROVEMENTS_DIR):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from dataset.custom_emb_dataloader import build_task_weighted_sampler
+from improvements.taskrelation.weighted_sampling import build_task_weighted_sampler
 from dataset.load_embedding import LoadEmbedding
 from loading_utils import get_loader_device
 from utils.load_config import load_config

@@ -129,7 +129,6 @@ class _Harness(unittest.TestCase):
             training_data=self.dataset,
             validation_data=self.dataset,
             ignore_index=-1,
-            seed=seed,
             aux_loss_enabled=aux,
             epoch_steps=[STEPS for _ in range(5)],
             target_task="er",

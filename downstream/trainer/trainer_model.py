@@ -43,10 +43,7 @@ from trainer.trainer_utils import (
 )
 
 from utils.constant_mapping import TaskKeywordMapping
-from dataset.custom_emb_dataloader import (
-    CustomEmbDataLoader,
-    build_task_weighted_sampler,
-)
+from dataset.custom_emb_dataloader import CustomEmbDataLoader
 
 class MultiTasksModelTrainer:
     def __init__(
@@ -60,7 +57,6 @@ class MultiTasksModelTrainer:
         training_data=None,
         validation_data=None,
         ignore_index: int = -1,
-        seed: Optional[int] = None,
     ):
         self.model = model
         self.device = device
@@ -199,23 +195,6 @@ class MultiTasksModelTrainer:
         if training_data is None or validation_data is None:
             raise ValueError("Pass training_data and validation_data (not dataloaders).")
 
-        task_sampling_weights = training_cfg.get("task_sampling_weights")
-        train_sampler = None
-        if task_sampling_weights is not None:
-            train_sampler = build_task_weighted_sampler(
-                training_data,
-                self.task_array,
-                task_sampling_weights,
-                seed,
-            )
-            logging.info(
-                "Task-weighted training sampler enabled | weights=%s | "
-                "num_samples=%d | seed=%d",
-                task_sampling_weights,
-                len(training_data),
-                seed,
-            )
-
         self.train_dataloader = CustomEmbDataLoader(
             training_data,
             batch_size=self.batch_size,
@@ -223,7 +202,6 @@ class MultiTasksModelTrainer:
             pin_memory=self.pin_memory,
             drop_last=self.drop_last_train,
             num_workers=self.num_workers,
-            sampler=train_sampler,
         )
 
         self.val_dataloader = CustomEmbDataLoader(

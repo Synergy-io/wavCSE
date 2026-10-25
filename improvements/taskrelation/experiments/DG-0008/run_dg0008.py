@@ -295,7 +295,6 @@ def build_member(cfg, cell, arm, fold, seed, artifacts_directory, index, out_roo
         training_data=train_dataset,
         validation_data=val_dataset,
         ignore_index=cfg["dataset"]["ignore_index"],
-        seed=seed,
         aux_loss_enabled=(arm == "pair"),
         epoch_steps=[manifest["step_keys"] for manifest in epoch_manifests],
         target_task=cfg["dg0008"]["target_task"],

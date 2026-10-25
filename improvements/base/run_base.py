@@ -2,11 +2,11 @@
 Run script for the plain wavCSE downstream model (no new MTL architecture),
 with MLflow experiment tracking (backed by a DagsHub-hosted tracking server).
 
-This deliberately reuses downstream/dataset/load_embedding.py,
-downstream/model/downstream_model.py, downstream/trainer/trainer_model.py,
-and downstream/evaluator/evaluator_model.py UNMODIFIED -- downstream/ is not
-touched by this script. MLflow logging only reads their public
-attributes/return values after the fact (see improvements/mlflow_utils.py).
+This reuses the downstream model, loader and trainer without modifying the
+frozen baseline. Task-weighted sampling, when configured, is applied by an
+improvements-owned trainer after the baseline constructs its ordinary loader.
+MLflow logging reads the trainer's public attributes/return values
+(see improvements/mlflow_utils.py).
 
 Usage:
     python run_base.py --task_type ks_si_er --config configs/base_config.yml [--device_index 0]
@@ -46,7 +46,7 @@ from improvements.gradient_diagnostics import make_gradient_diagnostic_trainer
 
 from dataset.load_embedding import LoadEmbedding
 from model.downstream_model import DownstreamMultiTaskModel
-from trainer.trainer_model import MultiTasksModelTrainer
+from improvements.taskrelation.weighted_sampling import TaskWeightedTrainer
 from evaluator.evaluator_model import MultiTasksModelEvaluator
 from utils.load_config import load_config
 from utils.setup_device import set_device
@@ -54,7 +54,7 @@ from utils.setup_logging import setup_logging
 from utils.parse_transformer_layers import parse_transformer_layers
 
 
-_LiveMlflowTrainer = mlflow_utils.make_live_trainer(MultiTasksModelTrainer)
+_LiveMlflowTrainer = mlflow_utils.make_live_trainer(TaskWeightedTrainer)
 
 
 def main():
@@ -215,7 +215,7 @@ def main():
         trainer_cls = _LiveMlflowTrainer
         if training_cfg.get("gradient_diagnostics", {}).get("enabled", False):
             trainer_cls = mlflow_utils.make_live_trainer(
-                make_gradient_diagnostic_trainer(MultiTasksModelTrainer)
+                make_gradient_diagnostic_trainer(TaskWeightedTrainer)
             )
         trainer = trainer_cls(
 

@@ -21,6 +21,7 @@ import sys
 
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 
 from .manifest import ManifestError, canonical_json_bytes, sha256_hex
 from .sampler import ManifestEpochSampler
@@ -32,7 +33,6 @@ for _path in (_REPO_ROOT, os.path.join(_REPO_ROOT, "downstream")):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-from dataset.custom_emb_dataloader import CustomEmbDataLoader  # noqa: E402
 from trainer.trainer_model import MultiTasksModelTrainer  # noqa: E402
 from trainer.trainer_utils import BatchStats, masked_accuracy, masked_ce_loss  # noqa: E402
 
@@ -218,10 +218,12 @@ class DG0008Trainer(MultiTasksModelTrainer):
         train_dataset = getattr(self, "train_dataset", None) or self.train_dataloader.dataset
         for epoch in range(self.num_epochs):
             sampler = ManifestEpochSampler(self.epoch_steps[epoch], self.key_to_index_store)
-            loader = CustomEmbDataLoader(
+            loader = DataLoader(
                 train_dataset,
                 batch_size=self.batch_size,
+                shuffle=False,
                 sampler=sampler,
+                collate_fn=self.train_dataloader.collate_fn,
                 pin_memory=self.pin_memory,
                 drop_last=self.drop_last_train,
                 num_workers=self.num_workers,
