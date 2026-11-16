@@ -16,6 +16,7 @@ for path in (ROOT, os.path.join(ROOT, "downstream")):
 from improvements.lowrank.models.ramusa_model import DownstreamMultiTaskModelRAMUSA
 from improvements.lowrank.trainers.ramusa_trainer import MultiTasksModelTrainerRAMUSA
 from improvements.lowrank.utils.ramusa import compute_truncated_trace_penalty, update_effective_rank
+from pooling.pooling import Pooling
 
 
 class SyntheticDataset(Dataset):
@@ -40,6 +41,13 @@ def model():
 
 
 class RAMUSATests(unittest.TestCase):
+    def test_weighted_pooling_tracks_selected_layer_count(self):
+        pooling = Pooling("weighted", pooling_param=23)
+        output = pooling.get_vector_after_pooling(torch.randn(2, 23, 4), dim=1)
+        self.assertEqual(tuple(output.shape), (2, 4))
+        with self.assertRaisesRegex(ValueError, "expected 23 layers, got 25"):
+            pooling.get_vector_after_pooling(torch.randn(2, 25, 4), dim=1)
+
     def test_shapes_and_task_guard(self):
         network = model()
         self.assertEqual(len(network.adapters), 3)

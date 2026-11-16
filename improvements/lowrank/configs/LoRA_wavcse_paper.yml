@@ -1,0 +1,87 @@
+# RAMUSA low-rank alternative for the wavCSE paper setup.
+# The wavCSE backbone and training recipe are preserved; only the NCMTL-specific
+# clustering block is replaced with the low-rank RAMUSA regularization block.
+
+log_level: INFO
+
+device:
+  type: cuda
+  index: 1
+
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/dataset/embedding
+  results_root: results_lowrank_wavcse_paper
+  checkpoints_root: checkpoints_lowrank_wavcse_paper
+
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: 6,1,0,3,2,5,4,7,8,9,10,11,12,17,14,13
+
+dataset:
+  subset_percentage: 100
+  ignore_index: -1
+
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: lnp
+  layer_pooling_param: 16
+
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  adapter_dim: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+
+ramusa:
+  enabled: true
+  lambda: 0.1
+  tau: 1.0
+  num_stages: 5
+  epochs_per_stage: 6
+  adaptive_tau:
+    enabled: false
+    min_spectral_gap: 0.2
+    smoothing_beta: 0.7
+    epsilon: 1.0e-8
+    allow_rank_zero_after_stage1: false
+    allow_zero_penalty_rank: true
+    min_validation_gain: 0.001
+    negative_transfer_penalty: 0.5
+    validation_probe:
+      enabled: false
+      epochs: 1
+
+training:
+  num_epochs: 30
+  batch_size: 2048
+  learning_rate: 0.0025
+  label_smoothing: 0.0
+  weight_decay: 0.00000005
+  saved_checkpoint_count: 1
+  shuffle_train: true
+  shuffle_val: false
+  pin_memory: false
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 0
+  scheduler_patience: 1
+  scheduler_factor: 0.5
+  l1_lambda: 0.0000001
+  l2_lambda: 0.00001
+
+evaluation:
+  batch_size: 1
+  shuffle: false
+  pin_memory: false
+  drop_last: false
+  num_workers: 0
+tensorboard:
+  enabled: false
+  gradient_log_interval: 10
+  histogram_epoch_interval: 1
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: lowrank-wavcse-paper

@@ -1,0 +1,109 @@
+# RAMUSA-inspired neural reduced-rank training for KS, speaker ID, and ER.
+# Configuration for GPU 1 (paired with ramusa_config.yml on GPU 0)
+log_level: INFO
+
+device:
+  type: cuda
+  index: 1
+
+paths:
+  root_data_path: ~/voice_dataset
+  root_emb_path: ~/dataset/embedding
+  results_root: results_ramusa_gpu1
+  checkpoints_root: checkpoints_ramusa_gpu1
+
+upstream:
+  model_type: wavlm_large
+  selected_transformer_layers: all
+
+dataset:
+  subset_percentage: 10
+  ignore_index: -1
+
+pooling:
+  frame_pooling_type: mean
+  frame_pooling_param: null
+  layer_pooling_type: mix
+  layer_pooling_param: 0.5
+
+model:
+  embedding_dim_shared1: 512
+  embedding_dim_shared2: 2000
+  adapter_dim: 2000
+  dropout_prob_shared1: 0.4
+  dropout_prob_shared2: 0.6
+
+ramusa:
+  enabled: true
+  lambda: 0.1
+  tau: 1.0
+  num_stages: 5
+  epochs_per_stage: 20
+  
+  # Adaptive tau configuration
+  # Set enabled: true to use dynamic tau selection between stages
+  adaptive_tau:
+    enabled: false
+    
+    # Minimum relative spectral gap to consider a meaningful separation
+    min_spectral_gap: 0.20
+    
+    # EMA smoothing coefficient for tau updates
+    # Higher beta -> more stable but slower adaptation
+    # Recommended: 0.60 - 0.80
+    smoothing_beta: 0.70
+    
+    # Numerical epsilon for gap computation
+    epsilon: 1.0e-8
+    
+    # Allow rank 0 (all singular values penalized) after stage 1
+    allow_rank_zero_after_stage1: false
+    
+    # Allow rank 3 (no penalty, only for 3 tasks)
+    allow_zero_penalty_rank: true
+    
+    # Minimum validation improvement to accept new tau
+    # If improvement < this value, keep previous configuration
+    min_validation_gain: 0.001
+    
+    # Penalty for negative transfer (task collapse)
+    negative_transfer_penalty: 0.5
+    
+    # Validation probe configuration
+    # Probes candidates by running short training and evaluating on validation set
+    validation_probe:
+      enabled: true        # Set to true to enable expensive but accurate probing
+      epochs: 1             # Number of epochs to train per candidate probe
+
+training:
+  num_epochs: 100
+  batch_size: 2048
+  learning_rate: 0.0025
+  label_smoothing: 0.1
+  weight_decay: 0.00000005
+  shuffle_train: true
+  shuffle_val: false
+  pin_memory: false
+  drop_last_train: true
+  drop_last_val: false
+  num_workers: 0
+  scheduler_patience: 3
+  scheduler_factor: 0.5
+  l1_lambda: 0.0000001
+  l2_lambda: 0.00001
+
+evaluation:
+  batch_size: 2048
+  shuffle: false
+  pin_memory: false
+  drop_last: false
+  num_workers: 0
+
+tensorboard:
+  enabled: false
+  gradient_log_interval: 100
+  histogram_epoch_interval: 5
+
+mlflow:
+  tracking_uri: https://dagshub.com/Ke-vin-S/wavCSE.mlflow
+  experiment_name: wavcse-ramusa

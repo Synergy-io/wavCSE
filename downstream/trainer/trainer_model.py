@@ -80,7 +80,7 @@ class MultiTasksModelTrainer:
         # ----------------------------
         # run dirs
         # ----------------------------
-        run_id = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        run_id = datetime.now().strftime("%Y_%m_%d_%H_%M_%S_%f")
         self.results_dir = os.path.join(results_root, run_id)
         self.ckpt_dir = os.path.join(checkpoints_root, run_id)
         os.makedirs(self.results_dir, exist_ok=True)

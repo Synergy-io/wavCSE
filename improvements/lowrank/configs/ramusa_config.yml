@@ -16,14 +16,14 @@ upstream:
   selected_transformer_layers: all
 
 dataset:
-  subset_percentage: 10
+  subset_percentage: 100
   ignore_index: -1
 
 pooling:
   frame_pooling_type: mean
   frame_pooling_param: null
-  layer_pooling_type: mix
-  layer_pooling_param: 0.5
+  layer_pooling_type: weighted
+  layer_pooling_param: null
 
 model:
   embedding_dim_shared1: 512
@@ -36,11 +36,46 @@ ramusa:
   enabled: true
   lambda: 0.1
   tau: 1.0
-  num_stages: 5
-  epochs_per_stage: 5
+  num_stages: 8
+  epochs_per_stage: 12
+  
+  # Adaptive tau configuration
+  # Set enabled: true to use dynamic tau selection between stages
+  adaptive_tau:
+    enabled: true
+    
+    # Minimum relative spectral gap to consider a meaningful separation
+    min_spectral_gap: 0.30
+    
+    # EMA smoothing coefficient for tau updates
+    # Higher beta -> more stable but slower adaptation
+    # Recommended: 0.60 - 0.80
+    smoothing_beta: 0.70
+    
+    # Numerical epsilon for gap computation
+    epsilon: 1.0e-8
+    
+    # Allow rank 0 (all singular values penalized) after stage 1
+    allow_rank_zero_after_stage1: false
+    
+    # Allow rank 3 (no penalty, only for 3 tasks)
+    allow_zero_penalty_rank: true
+    
+    # Minimum validation improvement to accept new tau
+    # If improvement < this value, keep previous configuration
+    min_validation_gain: 0.001
+    
+    # Penalty for negative transfer (task collapse)
+    negative_transfer_penalty: 0.5
+    
+    # Validation probe configuration
+    # Probes candidates by running short training and evaluating on validation set
+    validation_probe:
+      enabled: true        # Set to true to enable expensive but accurate probing
+      epochs: 1             # Number of epochs to train per candidate probe
 
 training:
-  num_epochs: 25
+  num_epochs: 96
   batch_size: 2048
   learning_rate: 0.0025
   label_smoothing: 0.1
