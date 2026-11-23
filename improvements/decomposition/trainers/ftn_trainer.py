@@ -65,6 +65,15 @@ class MultiTasksModelTrainerFTN(MultiTasksModelTrainer):
 
     GRADIENT_PAIRS = (("ks", "si"), ("ks", "er"), ("si", "er"))
 
+    def train(self):
+        super().train()
+        # The shared checkpoint manager starts accuracy thresholds at zero.
+        # A zero-accuracy smoke run otherwise has no best/opt checkpoint.
+        for tag in ("best", "opt"):
+            path = self.model_checkpoint_path.replace(".pth", f"_{tag}.pth")
+            if not os.path.exists(path):
+                torch.save(self.model.state_dict(), path)
+
     def __init__(self, *args, **kwargs):
         diagnostics_cfg = kwargs.pop("diagnostics_cfg", None) or {}
         training_cfg = kwargs.get("training_cfg") or {}
