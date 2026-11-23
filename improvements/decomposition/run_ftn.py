@@ -1,4 +1,4 @@
-"""Train and evaluate the three-task FTN-inspired wavCSE model.
+"""Train and evaluate configurable FTN-inspired wavCSE task combinations.
 
 Usage:
     python run_ftn.py --task_type ks_si_er --config configs/ftn_config.yml \
@@ -6,6 +6,8 @@ Usage:
 """
 
 import argparse
+import csv
+import json
 import logging
 import os
 import random
@@ -144,13 +146,58 @@ def _parameter_counts(model: DownstreamMultiTaskModelFTN) -> dict[str, int]:
         "ftn_specific_parameters_total": adapter_total,
         "task_update_parameters_per_task": per_task[0],
         "task_update_parameters_total": adapter_total,
-        "ftn_rank_ks": model.ftn_rank,
-        "ftn_rank_si": model.ftn_rank,
-        "ftn_rank_er": model.ftn_rank,
-        "ftn_total_rank": model.ftn_rank * len(model.TASK_ORDER),
+        "ftn_total_rank": model.ftn_rank * len(model.active_tasks),
         "rank": model.ftn_rank,
         "ftn_rank": model.ftn_rank,
+        **{f"ftn_rank_{task}": model.ftn_rank for task in model.active_tasks},
     }
+
+
+def _task_type_from_args(args, parser):
+    aliases = {"KS": "ks", "SID": "si", "SI": "si", "ER": "er"}
+    if args.tasks and args.task_type:
+        parser.error("Use either --tasks or --task_type")
+    if args.tasks:
+        try:
+            selected = {aliases[task.upper()] for task in args.tasks}
+        except KeyError:
+            parser.error("--tasks accepts only KS SID ER")
+        if len(selected) != len(args.tasks):
+            parser.error("Duplicate tasks are not allowed")
+        return "_".join(task for task in DownstreamMultiTaskModelFTN.TASK_ORDER if task in selected)
+    task_type = args.task_type or "ks_si_er"
+    tasks = task_type.split("_")
+    if not tasks or len(set(tasks)) != len(tasks) or tasks != [
+        task for task in DownstreamMultiTaskModelFTN.TASK_ORDER if task in tasks
+    ]:
+        parser.error("--task_type must be an ordered subset of ks_si_er")
+    return task_type
+
+
+def _write_summary(results_root, task_type, stats):
+    path = os.path.join(results_root, "summary.csv")
+    columns = ["Combination", "KS Accuracy", "SID Accuracy", "ER Accuracy"]
+    combinations = ["ks", "si", "er", "ks_si", "ks_er", "si_er", "ks_si_er"]
+    rows = {}
+    if os.path.isfile(path):
+        with open(path, newline="") as handle:
+            rows = {row["Combination"]: row for row in csv.DictReader(handle)}
+    def empty_row(combination):
+        active = combination.split("_")
+        return {"Combination": combination, **{
+            column: ("" if task in active else "N/A")
+            for task, column in (("ks", columns[1]), ("si", columns[2]), ("er", columns[3]))
+        }}
+
+    row = empty_row(task_type)
+    for index, task in enumerate(task_type.split("_")):
+        row[{"ks": "KS Accuracy", "si": "SID Accuracy", "er": "ER Accuracy"}[task]] = stats.accuracy_task[index]
+    rows[task_type] = row
+    with open(path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        for combination in combinations:
+            writer.writerow(rows.get(combination, empty_row(combination)))
 
 
 def _set_seed(seed: int) -> None:
@@ -170,7 +217,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Train and evaluate FTN-inspired wavCSE decomposition"
     )
-    parser.add_argument("--task_type", required=True, help="Must be ks_si_er")
+    parser.add_argument("--task_type", help="Legacy ordered task string, e.g. ks_er")
+    parser.add_argument("--tasks", nargs="+", help="Active tasks: KS SID ER")
     parser.add_argument(
         "--config",
         default=os.path.join(_THIS_DIR, "configs", "ftn_config.yml"),
@@ -181,8 +229,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.task_type != DownstreamMultiTaskModelFTN.SUPPORTED_TASK_TYPE:
-        parser.error("FTN v1 supports only --task_type ks_si_er")
+    task_type = _task_type_from_args(args, parser)
 
     load_dotenv(os.path.join(_REPO_ROOT, ".env"))
     cfg = load_config(_config_path(args.config))
@@ -194,12 +241,25 @@ def main() -> None:
     device_index = (
         args.device_index if args.device_index is not None else cfg["device"]["index"]
     )
+    if cfg["device"]["type"].lower() == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "CUDA was requested, but PyTorch cannot access a GPU. "
+                "Check nvidia-smi and the CUDA driver before starting this run."
+            )
+        if device_index < 0 or device_index >= torch.cuda.device_count():
+            raise ValueError(
+                f"GPU index {device_index} is unavailable; "
+                f"PyTorch sees {torch.cuda.device_count()} CUDA device(s)."
+            )
     device = set_device(cfg["device"]["type"], device_index)
 
     transformer_layers = parse_transformer_layers(
         transformer_layers=cfg["upstream"]["selected_transformer_layers"],
         upstream_model_type=cfg["upstream"]["model_type"],
     )
+    if cfg["upstream"]["model_type"] != "wavlm_large" or transformer_layers != list(range(25)):
+        raise ValueError("FTN experiments require wavlm_large and ordered hidden states 0..24")
     layer_pooling_type = cfg["pooling"]["layer_pooling_type"]
     layer_pooling_param = (
         len(transformer_layers)
@@ -207,16 +267,15 @@ def main() -> None:
         else cfg["pooling"]["layer_pooling_param"]
     )
 
-    results_root = _owner_relative_path(cfg["paths"]["results_root"])
-    checkpoints_root = _owner_relative_path(cfg["paths"]["checkpoints_root"])
-    task_type = args.task_type
+    results_root = os.path.join(_owner_relative_path(cfg["paths"]["results_root"]), task_type.upper())
+    checkpoints_root = os.path.join(_owner_relative_path(cfg["paths"]["checkpoints_root"]), task_type.upper())
 
     mlflow_utils.setup_mlflow(cfg)
     model_cfg = cfg["model"]
     er_label_smoothing = float(cfg["training"].get("er_label_smoothing", 0.0))
     run_name = (
         f"ftn_r{model_cfg['ftn_rank']}_erls{int(er_label_smoothing * 100):03d}_"
-        f"ks_si_er_"
+        f"{task_type}_"
         f"{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}"
     )
 
@@ -239,6 +298,12 @@ def main() -> None:
             task_type=task_type,
             subset_percentage=cfg["dataset"]["subset_percentage"],
         )
+        for split_name, dataset in (("train", train_data), ("validation", val_data), ("test", test_data)):
+            if len(dataset) == 0:
+                raise ValueError(f"Empty {split_name} split for {task_type}")
+            sample, labels = dataset[0]
+            if tuple(sample.shape) != (25, 1024) or labels.numel() != len(task_type.split("_")):
+                raise ValueError(f"Incompatible {split_name} embedding/labels: {tuple(sample.shape)}, {tuple(labels.shape)}")
 
         model = DownstreamMultiTaskModelFTN(
             upstream_model_type=cfg["upstream"]["model_type"],
@@ -265,6 +330,8 @@ def main() -> None:
             ignore_index=cfg["dataset"]["ignore_index"],
             diagnostics_cfg=cfg.get("diagnostics", {}),
         )
+        with open(os.path.join(trainer.results_dir, "configuration.json"), "w") as handle:
+            json.dump({"task_type": task_type, "selected_transformer_layers": transformer_layers, "config": cfg}, handle, indent=2, default=str)
         trainer.train()
 
         results_run_id = os.path.basename(trainer.results_dir)
@@ -285,6 +352,13 @@ def main() -> None:
                 er_label_smoothing=er_label_smoothing,
             )
             stats = evaluator.write_metrics()
+            with open(os.path.join(trainer.results_dir, f"eval_metrics_{tag}.json"), "w") as handle:
+                json.dump({"checkpoint": tag, "task_type": task_type, "accuracy_all": stats.accuracy_all,
+                           "loss_all": stats.avg_loss_all, "tasks": {task: {"accuracy": stats.accuracy_task[i],
+                           "loss": stats.avg_loss_task[i], "samples": stats.total_samples_task[i]}
+                           for i, task in enumerate(trainer.task_array)}}, handle, indent=2)
+            if tag == "opt":
+                _write_summary(os.path.dirname(results_root), task_type, stats)
             evaluator.write_predictions_csv()
             mlflow_utils.log_eval_stats(stats, tag, trainer.task_array)
 
@@ -308,4 +382,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        logging.exception("FTN run failed")
+        raise

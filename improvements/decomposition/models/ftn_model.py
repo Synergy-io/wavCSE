@@ -62,14 +62,13 @@ class LowRankTaskUpdate(nn.Module):
 
 
 class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
-    """Three-task wavCSE model with independent low-rank FC2 updates.
+    """wavCSE model with independent low-rank FC2 updates for active tasks.
 
     The existing FC2 and its bias are shared; each task uses the bias-free
     residual ``U_t V_t`` on the pre-FC2 input. This is FTN-inspired, not an
     exact reproduction of FTN.
     """
 
-    SUPPORTED_TASK_TYPE = "ks_si_er"
     TASK_ORDER = ("ks", "si", "er")
 
     def __init__(
@@ -84,11 +83,11 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
         ftn_rank: int = 8,
         layer_pooling_param: Optional[Union[int, float]] = None,
     ):
-        if task_type != self.SUPPORTED_TASK_TYPE:
-            raise ValueError(
-                "The first FTN decomposition implementation supports only the "
-                f"exact ordered task type '{self.SUPPORTED_TASK_TYPE}', got '{task_type}'."
-            )
+        tasks = tuple(task_type.split("_"))
+        if not tasks or len(set(tasks)) != len(tasks) or any(
+            task not in self.TASK_ORDER for task in tasks
+        ) or tasks != tuple(task for task in self.TASK_ORDER if task in tasks):
+            raise ValueError(f"Invalid FTN task_type '{task_type}'; use an ordered subset of ks_si_er")
 
         super().__init__(
             upstream_model_type=upstream_model_type,
@@ -101,13 +100,14 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
             layer_pooling_param=layer_pooling_param,
         )
 
+        self.active_tasks = tasks
         self.ftn_rank = int(ftn_rank)
         fc2_input_dim = self.hidden_layer.in_features
         fc2_output_dim = self.hidden_layer.out_features
         self.task_updates = nn.ModuleList(
             [
                 LowRankTaskUpdate(fc2_input_dim, fc2_output_dim, self.ftn_rank)
-                for _ in self.TASK_ORDER
+                for _ in self.active_tasks
             ]
         )
 
@@ -118,12 +118,16 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
             self.ftn_rank,
             fc2_output_dim,
             fc2_input_dim,
-            self.TASK_ORDER,
+            self.active_tasks,
         )
 
     def _pre_fc2_representation(
         self, input_seq: torch.Tensor, apply_dropout: bool
     ) -> torch.Tensor:
+        if input_seq.ndim != 3 or input_seq.shape[1] != 25:
+            raise ValueError(
+                f"FTN requires all 25 WavLM hidden states [batch, 25, 1024]; got {tuple(input_seq.shape)}"
+            )
         x = self.projector_layer(input_seq)
         x = self.pooling.get_vector_after_pooling(x, dim=1)
         if apply_dropout:
@@ -166,7 +170,7 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
         x = self._pre_fc2_representation(input_seq, apply_dropout=False)
         return dict(
             zip(
-                self.TASK_ORDER,
+                self.active_tasks,
                 self._adapted_representations(x, apply_dropout=False),
             )
         )
@@ -174,14 +178,14 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
     def get_delta_weights(self) -> Dict[str, torch.Tensor]:
         return {
             task: update.delta_weight()
-            for task, update in zip(self.TASK_ORDER, self.task_updates)
+            for task, update in zip(self.active_tasks, self.task_updates)
         }
 
     def get_delta_norms(self) -> Dict[str, float]:
         with torch.no_grad():
             return {
                 task: float(update.delta_frobenius_norm().item())
-                for task, update in zip(self.TASK_ORDER, self.task_updates)
+                for task, update in zip(self.active_tasks, self.task_updates)
             }
 
     def get_shared_weight_norm(self) -> float:
@@ -194,7 +198,7 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
         delta_norms = self.get_delta_norms()
         shared_norm = self.get_shared_weight_norm()
         if shared_norm == 0.0:
-            return {task: 0.0 for task in self.TASK_ORDER}
+            return {task: 0.0 for task in self.active_tasks}
         return {task: norm / shared_norm for task, norm in delta_norms.items()}
 
     def get_delta_cosine_similarities(self) -> Dict[str, float]:
@@ -203,6 +207,8 @@ class DownstreamMultiTaskModelFTN(DownstreamMultiTaskModel):
             deltas = self.get_delta_weights()
             similarities = {}
             for left, right in (("ks", "si"), ("ks", "er"), ("si", "er")):
+                if left not in deltas or right not in deltas:
+                    continue
                 left_flat = deltas[left].reshape(-1)
                 right_flat = deltas[right].reshape(-1)
                 if left_flat.norm() == 0 or right_flat.norm() == 0:
