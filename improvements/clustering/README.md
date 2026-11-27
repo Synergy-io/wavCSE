@@ -3,10 +3,10 @@
 Owner: Induwara
 MTL branch: Task Clustering
 
-This folder implements the first NCMTL milestone for exactly three tasks:
-keyword spotting (`ks`), speaker identification (`si`), and emotion
-recognition (`er`). The supported task string is `ks_si_er`; intent
-classification is not supported by NCMTL v1.
+This folder implements NCMTL for keyword spotting (`ks`), speaker
+identification (`si`), and emotion recognition (`er`). Use any nonempty
+combination of these tasks in `--task_type`, without duplicates. Intent
+classification is not supported.
 
 ## Architecture
 
@@ -49,6 +49,20 @@ clustering/
   validation and test loss remain standard unsmoothed cross-entropy.
 
 These values are initial experiment settings, not claimed optimal values.
+
+The 30-epoch, full-layer task-combination run is configured in
+`configs/task_combinations/soft_margin_all_layers_seed42_30ep.yml`. Run all six
+single and pairwise selections sequentially with
+`bash configs/task_combinations/run_task_combinations_30ep.sh 0` from this
+directory. The script starts with `ks_si_er`, then runs the three pairs and
+the three single tasks. The GPU index is the script's optional argument. Console logs and
+training results are under `logs/epoch30/task_combinations/`.
+
+With two tasks, the one candidate pair uses normalized row distance to gate
+sharing after adaptive warm-up: close rows share, distant rows stay independent,
+and intermediate rows share partially. With one task, the candidate layer is
+retained but there is no pair to cluster or share. The original three-task
+soft-margin behavior is unchanged.
 
 ## Run
 

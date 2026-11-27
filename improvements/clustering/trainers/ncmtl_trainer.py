@@ -24,8 +24,8 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
 
     def __init__(self, *args, ncmtl_cfg: dict, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.task_type != "ks_si_er":
-            raise ValueError("NCMTL v1 supports only three tasks: task_type='ks_si_er'.")
+        if len(set(self.task_array)) != self.num_tasks or not set(self.task_array) <= {"ks", "si", "er"}:
+            raise ValueError("NCMTL requires unique tasks from ks, si, er")
 
         self.label_smoothing = float(self.training_cfg.get("label_smoothing", 0.0))
         if not 0.0 <= self.label_smoothing < 1.0:
@@ -99,8 +99,8 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             ncmtl_cfg.get("log_candidate_row_distances", False)
         )
 
-        if not 1 <= self.num_clusters <= 3:
-            raise ValueError("num_clusters must satisfy 1 <= K <= 3")
+        if self.sharing_granularity == "matrix" and not 1 <= self.num_clusters <= self.num_tasks:
+            raise ValueError("num_clusters must satisfy 1 <= K <= number of tasks")
         if self.cluster_every_n_batches <= 0:
             raise ValueError("cluster_every_n_batches must be positive")
         if self.warmup_epochs < 0:
@@ -127,7 +127,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         self._latest_row_distance_snapshot = None
         self.row_distance_logger = (
             CandidateRowDistanceLogger(self.results_dir, self.task_array)
-            if self.log_candidate_row_distances
+            if self.log_candidate_row_distances and self.num_tasks > 1
             else None
         )
         self.row_task_sharing = (
@@ -143,8 +143,14 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                 sharing_mode=self.row_sharing_mode,
                 soft_min_margin=self.row_soft_min_margin,
                 soft_full_margin=self.row_soft_full_margin,
+                pair_full_share_max_relative_distance=ncmtl_cfg.get(
+                    "pair_full_share_max_relative_distance", 0.05
+                ),
+                pair_independent_min_relative_distance=ncmtl_cfg.get(
+                    "pair_independent_min_relative_distance", 0.20
+                ),
             )
-            if self.sharing_granularity == "row"
+            if self.sharing_granularity == "row" and self.num_tasks > 1
             else None
         )
 
@@ -189,10 +195,12 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             )
             adaptive_row_ready = (
                 self.row_warmup_mode == "adaptive"
+                and self.row_task_sharing is not None
                 and self.row_task_sharing.ready_to_freeze
             )
             if (
                 self.sharing_granularity == "row"
+                and self.row_task_sharing is not None
                 and not self.row_task_sharing.initialized
                 and (fixed_row_ready or adaptive_row_ready)
             ):
@@ -228,6 +236,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             train_mode
             and self.sharing_granularity == "row"
             and self.row_warmup_mode == "adaptive"
+            and self.row_task_sharing is not None
             and not self.row_task_sharing.initialized
         ):
             became_ready = self.row_task_sharing.observe_adaptive_warmup(
@@ -268,6 +277,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
     def _should_recluster(self) -> bool:
         return (
             self.sharing_granularity == "matrix"
+            and self.num_tasks > 1
             and
             not bool(self.model.cluster_frozen.item())
             and self.current_epoch > self.warmup_epochs
@@ -354,10 +364,12 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             loss_task[task_index] = float(task_loss.item()) if raw_loss is not None else 0.0
             batch_task[task_index] = int(present)
 
-        if self.sharing_granularity == "row":
+        if self.row_task_sharing is not None:
             cluster_loss = self.row_task_sharing.cluster_loss(
                 self.model.get_candidate_weight_tensors()
             )
+        elif self.sharing_granularity == "row":
+            cluster_loss = self.model.candidate_layers[0].weight.new_zeros(())
         else:
             cluster_loss = self.model.get_cluster_loss()
         loss_all = loss_all + self.alpha * cluster_loss
@@ -380,7 +392,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                 )
             self.optimizer.step()
             if (
-                self.log_candidate_row_distances
+                self.row_distance_logger is not None
                 and self._expected_training_batches is not None
                 and self.current_batch == self._expected_training_batches
             ):
@@ -394,7 +406,7 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
             if self._should_recluster():
                 self._update_cluster_state()
                 self._write_cluster_history(float(cluster_loss.detach().item()))
-            elif self.sharing_granularity == "row":
+            elif self.row_task_sharing is not None:
                 self.row_task_sharing.share(
                     self.model.get_candidate_weight_tensors()
                 )
@@ -445,11 +457,24 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
         return super()._epoch_report_line(epoch, phase, stats)
 
     def _write_cluster_summary(self) -> None:
+        if self.sharing_granularity == "row" and self.row_task_sharing is None:
+            summary = {
+                "task_type": self.task_type,
+                "sharing_granularity": "row",
+                "strategy": "no_pair_single_task",
+                "frozen": False,
+                "row_pair_counts": {},
+                "shared_row_pair_counts": {},
+                "independent_rows": self.model.candidate_dim,
+            }
+            with open(self.cluster_summary_path, "w") as summary_file:
+                json.dump(summary, summary_file, indent=2)
+            return
         if self.sharing_granularity == "row":
             summary = {
                 "task_type": self.task_type,
                 "sharing_granularity": "row",
-                "strategy": "closest_pair",
+                "strategy": "closest_pair" if self.num_tasks == 3 else "pair_distance_gate",
                 "row_warmup_mode": self.row_warmup_mode,
                 "frozen": self.row_task_sharing.initialized,
                 "frozen_epoch": self.row_task_sharing.assignment_epoch,
@@ -466,6 +491,8 @@ class MultiTasksModelTrainerNCMTL(MultiTasksModelTrainer):
                 "row_sharing_mode": self.row_sharing_mode,
                 "soft_min_margin": self.row_soft_min_margin,
                 "soft_full_margin": self.row_soft_full_margin,
+                "pair_full_share_max_relative_distance": self.row_task_sharing.pair_full_share_max_relative_distance,
+                "pair_independent_min_relative_distance": self.row_task_sharing.pair_independent_min_relative_distance,
                 "sharing_coefficient_statistics": (
                     self.row_task_sharing.sharing_coefficient_statistics()
                 ),

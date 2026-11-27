@@ -3,6 +3,7 @@
 import csv
 import json
 import os
+from itertools import combinations
 
 import torch
 
@@ -12,13 +13,12 @@ from .candidate_row_distances import compute_candidate_row_distances
 class RowTaskSharing:
     """Assign each candidate row to its closest pair and project that pair.
 
-    Soft mode freezes one coefficient per row at the assignment epoch:
-    beta = clip((relative_margin - soft_min) / (soft_full - soft_min), 0, 1).
+    Soft mode freezes one coefficient per row at the assignment epoch.
+    Three tasks use the gap to the second-closest pair. Two tasks use their
+    sole pair's normalized row distance.
     The selected rows move a beta fraction toward their pair centre after each
     optimizer update. Assignments and coefficients remain fixed thereafter.
     """
-
-    PAIRS = (("ks_si", 0, 1), ("ks_er", 0, 2), ("si_er", 1, 2))
 
     def __init__(
         self,
@@ -33,10 +33,17 @@ class RowTaskSharing:
         sharing_mode: str = "hard",
         soft_min_margin: float = 0.0,
         soft_full_margin: float = 0.10,
+        pair_full_share_max_relative_distance: float = 0.05,
+        pair_independent_min_relative_distance: float = 0.20,
     ):
-        if list(task_names) != ["ks", "si", "er"]:
-            raise ValueError("Row task sharing requires tasks ['ks', 'si', 'er']")
+        if not 2 <= len(task_names) <= 3 or len(set(task_names)) != len(task_names):
+            raise ValueError("Row task sharing requires two or three distinct tasks")
         self.task_names = list(task_names)
+        self.PAIRS = tuple(
+            (f"{self.task_names[first]}_{self.task_names[second]}", first, second)
+            for first, second in combinations(range(len(self.task_names)), 2)
+        )
+        self.pair_names = [name for name, _, _ in self.PAIRS]
         self.warmup_mode = str(warmup_mode).strip().lower()
         if self.warmup_mode not in {"fixed", "adaptive"}:
             raise ValueError("row_warmup_mode must be 'fixed' or 'adaptive'")
@@ -48,6 +55,8 @@ class RowTaskSharing:
         self.sharing_mode = str(sharing_mode).strip().lower()
         self.soft_min_margin = float(soft_min_margin)
         self.soft_full_margin = float(soft_full_margin)
+        self.pair_full_share_max_relative_distance = float(pair_full_share_max_relative_distance)
+        self.pair_independent_min_relative_distance = float(pair_independent_min_relative_distance)
         if self.warmup_min_epochs < 1:
             raise ValueError("row_warmup_min_epochs must be at least 1")
         if self.warmup_max_epochs < self.warmup_min_epochs:
@@ -72,6 +81,8 @@ class RowTaskSharing:
             raise ValueError(
                 "row_soft_full_margin must be greater than row_soft_min_margin"
             )
+        if not 0 <= self.pair_full_share_max_relative_distance < self.pair_independent_min_relative_distance:
+            raise ValueError("pair distance thresholds must be nonnegative and increasing")
 
         self.assignments = None
         self.shared_row_mask = None
@@ -100,16 +111,15 @@ class RowTaskSharing:
             csv.writer(stability_file).writerow(
                 [
                     "epoch", "rows", "matching_frozen_assignment",
-                    "match_rate", "observed_ks_si", "observed_ks_er",
-                    "observed_si_er",
+                    "match_rate", *(f"observed_{name}" for name in self.pair_names),
                 ]
             )
         with open(self.warmup_stability_path, "w", newline="") as warmup_file:
             csv.writer(warmup_file).writerow(
                 [
                     "epoch", "unchanged_rows", "stability_rate",
-                    "stable_transition_count", "proposed_ks_si",
-                    "proposed_ks_er", "proposed_si_er", "decision",
+                    "stable_transition_count",
+                    *(f"proposed_{name}" for name in self.pair_names), "decision",
                 ]
             )
 
@@ -127,26 +137,45 @@ class RowTaskSharing:
         sorted_distances, sorted_indices = torch.sort(stacked, dim=0)
         self.assignments = sorted_indices[0].to(dtype=torch.long)
         best_distances = sorted_distances[0]
-        second_distances = sorted_distances[1]
-        absolute_margins = second_distances - best_distances
-        relative_margins = torch.where(
-            second_distances > 0.0,
-            absolute_margins / second_distances,
-            torch.zeros_like(second_distances),
-        )
-        if self.sharing_mode == "soft":
-            self.sharing_coefficients = torch.clamp(
-                (relative_margins - self.soft_min_margin)
-                / (self.soft_full_margin - self.soft_min_margin),
-                min=0.0,
-                max=1.0,
-            )
-            self.shared_row_mask = self.sharing_coefficients > 0.0
+        if len(self.PAIRS) == 1:
+            second_distances = None
+            absolute_margins = None
+            relative_margins = None
+            norms = torch.linalg.vector_norm(weights[0].detach(), dim=1).cpu()
+            norms += torch.linalg.vector_norm(weights[1].detach(), dim=1).cpu()
+            normalized_pair_distances = best_distances / norms.clamp_min(1e-12)
+            if self.sharing_mode == "soft":
+                self.sharing_coefficients = torch.clamp(
+                    (self.pair_independent_min_relative_distance - normalized_pair_distances)
+                    / (self.pair_independent_min_relative_distance - self.pair_full_share_max_relative_distance),
+                    min=0.0,
+                    max=1.0,
+                )
+            else:
+                self.sharing_coefficients = (
+                    normalized_pair_distances <= self.pair_full_share_max_relative_distance
+                ).to(dtype=best_distances.dtype)
         else:
-            self.shared_row_mask = relative_margins >= self.min_relative_margin
-            self.sharing_coefficients = self.shared_row_mask.to(
-                dtype=relative_margins.dtype
+            normalized_pair_distances = None
+            second_distances = sorted_distances[1]
+            absolute_margins = second_distances - best_distances
+            relative_margins = torch.where(
+                second_distances > 0.0,
+                absolute_margins / second_distances,
+                torch.zeros_like(second_distances),
             )
+            if self.sharing_mode == "soft":
+                self.sharing_coefficients = torch.clamp(
+                    (relative_margins - self.soft_min_margin)
+                    / (self.soft_full_margin - self.soft_min_margin),
+                    min=0.0,
+                    max=1.0,
+                )
+            else:
+                self.sharing_coefficients = (
+                    relative_margins >= self.min_relative_margin
+                ).to(dtype=relative_margins.dtype)
+        self.shared_row_mask = self.sharing_coefficients > 0.0
         self.assignment_epoch = int(epoch)
 
         with open(self.assignment_csv_path, "w", newline="") as assignment_file:
@@ -155,16 +184,21 @@ class RowTaskSharing:
                 [
                     "row", "pair_id", "selected_pair", "selected_distance",
                     "second_distance", "absolute_margin", "relative_margin",
+                    "normalized_pair_distance",
                     "sharing_coefficient", "sharing_decision",
-                    "ks_si_distance", "ks_er_distance", "si_er_distance",
+                    *(f"{name}_distance" for name in self.pair_names),
                 ]
             )
             for row_index in range(stacked.shape[1]):
                 selected = int(self.assignments[row_index].item())
                 best = float(best_distances[row_index].item())
-                second = float(second_distances[row_index].item())
-                margin = float(absolute_margins[row_index].item())
-                relative_margin = float(relative_margins[row_index].item())
+                second = "" if second_distances is None else float(second_distances[row_index].item())
+                margin = "" if absolute_margins is None else float(absolute_margins[row_index].item())
+                relative_margin = "" if relative_margins is None else float(relative_margins[row_index].item())
+                normalized_distance = (
+                    "" if normalized_pair_distances is None
+                    else float(normalized_pair_distances[row_index].item())
+                )
                 writer.writerow(
                     [
                         row_index,
@@ -174,11 +208,10 @@ class RowTaskSharing:
                         second,
                         margin,
                         relative_margin,
+                        normalized_distance,
                         float(self.sharing_coefficients[row_index].item()),
                         self._sharing_decision(row_index),
-                        float(stacked[0, row_index].item()),
-                        float(stacked[1, row_index].item()),
-                        float(stacked[2, row_index].item()),
+                        *(float(stacked[pair_id, row_index].item()) for pair_id in range(len(self.PAIRS))),
                     ]
                 )
 
@@ -194,7 +227,7 @@ class RowTaskSharing:
             & (self.sharing_coefficients < 1.0)
         ).item())
         summary = {
-            "strategy": "closest_pair",
+            "strategy": "closest_pair" if len(self.PAIRS) > 1 else "pair_distance_gate",
             "sharing_mode": self.sharing_mode,
             "assignment_epoch": self.assignment_epoch,
             "frozen": True,
@@ -202,6 +235,8 @@ class RowTaskSharing:
             "minimum_relative_margin": self.min_relative_margin,
             "soft_min_margin": self.soft_min_margin,
             "soft_full_margin": self.soft_full_margin,
+            "pair_full_share_max_relative_distance": self.pair_full_share_max_relative_distance,
+            "pair_independent_min_relative_distance": self.pair_independent_min_relative_distance,
             "pair_ids": {name: pair_id for pair_id, (name, _, _) in enumerate(self.PAIRS)},
             "counts": counts,
             "proportions": {name: count / total for name, count in counts.items()},
@@ -288,7 +323,7 @@ class RowTaskSharing:
                     "" if unchanged is None else unchanged,
                     "" if stability_rate is None else stability_rate,
                     self._stable_transition_count,
-                    counts["ks_si"], counts["ks_er"], counts["si_er"],
+                    *(counts[name] for name in self.pair_names),
                     decision,
                 ]
             )
@@ -398,6 +433,6 @@ class RowTaskSharing:
             csv.writer(stability_file).writerow(
                 [
                     epoch, total, matches, matches / total,
-                    counts["ks_si"], counts["ks_er"], counts["si_er"],
+                    *(counts[name] for name in self.pair_names),
                 ]
             )

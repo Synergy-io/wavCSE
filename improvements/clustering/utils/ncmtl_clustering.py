@@ -1,4 +1,4 @@
-"""K-Means++ helpers for the three NCMTL candidate networks."""
+"""K-Means++ helpers for NCMTL candidate networks."""
 
 import logging
 import warnings
@@ -30,10 +30,10 @@ def cluster_candidate_weights(
     previous_assignments: Optional[Iterable[int]] = None,
 ) -> list[int]:
     """Run CPU K-Means++ and return deterministic canonical assignments."""
-    if task_parameter_matrix.ndim != 2 or task_parameter_matrix.shape[0] != 3:
-        raise ValueError("NCMTL expects a task parameter matrix with shape [3, P]")
-    if not 1 <= int(num_clusters) <= 3:
-        raise ValueError("num_clusters must satisfy 1 <= K <= 3")
+    if task_parameter_matrix.ndim != 2 or not 1 <= task_parameter_matrix.shape[0] <= 3:
+        raise ValueError("NCMTL expects a task parameter matrix with shape [T, P], 1 <= T <= 3")
+    if not 1 <= int(num_clusters) <= task_parameter_matrix.shape[0]:
+        raise ValueError("num_clusters must satisfy 1 <= K <= number of tasks")
 
     matrix = task_parameter_matrix.detach().cpu().numpy()
     with warnings.catch_warnings():

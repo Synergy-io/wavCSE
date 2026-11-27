@@ -1,4 +1,4 @@
-"""Three-task Network Clustering for Multi-Task Learning model."""
+"""Network Clustering for Multi-Task Learning model."""
 
 from typing import List
 
@@ -11,7 +11,7 @@ from model.downstream_model import DownstreamMultiTaskModel, MultiClassifierOutp
 class DownstreamMultiTaskModelNCMTL(DownstreamMultiTaskModel):
     """Baseline downstream network with one clusterable layer per task."""
 
-    SUPPORTED_TASK_TYPE = "ks_si_er"
+    SUPPORTED_TASKS = {"ks", "si", "er"}
 
     def __init__(
         self,
@@ -23,10 +23,10 @@ class DownstreamMultiTaskModelNCMTL(DownstreamMultiTaskModel):
         task_type = kwargs.get("task_type")
         if task_type is None and len(args) >= 2:
             task_type = args[1]
-        if task_type != self.SUPPORTED_TASK_TYPE:
+        tasks = task_type.split("_") if isinstance(task_type, str) else []
+        if not tasks or len(tasks) != len(set(tasks)) or not set(tasks) <= self.SUPPORTED_TASKS:
             raise ValueError(
-                "NCMTL v1 currently supports only task_type='ks_si_er' "
-                "(three tasks; intent classification is not supported)."
+                "NCMTL task_type must contain unique tasks from ks, si, er"
             )
         super().__init__(*args, **kwargs)
 
@@ -114,7 +114,7 @@ class DownstreamMultiTaskModelNCMTL(DownstreamMultiTaskModel):
             assignments, dtype=torch.long, device=self.cluster_assignments.device
         )
         if assignments_tensor.shape != self.cluster_assignments.shape:
-            raise ValueError("cluster assignments must contain exactly three labels")
+            raise ValueError(f"cluster assignments must contain exactly {len(self.candidate_layers)} labels")
         self.cluster_assignments.copy_(assignments_tensor)
 
     def get_cluster_centers(self, detach: bool = False) -> dict[int, torch.Tensor]:

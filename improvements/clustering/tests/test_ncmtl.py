@@ -1,4 +1,4 @@
-"""Synthetic, data-free checks for the three-task NCMTL implementation."""
+"""Synthetic, data-free checks for NCMTL task combinations."""
 
 import json
 import os
@@ -26,6 +26,7 @@ from improvements.clustering.utils.candidate_row_distances import (
     compute_candidate_row_distances,
 )
 from improvements.clustering.utils.row_task_sharing import RowTaskSharing
+from evaluator.evaluator_model import MultiTasksModelEvaluator
 
 
 def build_model(
@@ -55,6 +56,20 @@ class SyntheticDataset(Dataset):
             [0, -1, -1], [-1, 1, -1], [-1, -1, 2],
             [3, -1, -1], [-1, 4, -1], [-1, -1, 1],
         ])
+
+    def __len__(self):
+        return len(self.inputs)
+
+    def __getitem__(self, index):
+        return self.inputs[index], self.labels[index]
+
+
+class SyntheticSubsetDataset(Dataset):
+    def __init__(self, task_type):
+        source = SyntheticDataset()
+        indices = [{"ks": 0, "si": 1, "er": 2}[task] for task in task_type.split("_")]
+        self.inputs = source.inputs
+        self.labels = source.labels[:, indices]
 
     def __len__(self):
         return len(self.inputs)
@@ -244,13 +259,93 @@ class NCMTLModelTests(unittest.TestCase):
         self.assertEqual(restored.get_cluster_state(), model.get_cluster_state())
         self.assertEqual(tuple(outputs.logits[1].shape), (2, 1251))
 
-    def test_three_task_guard(self):
-        build_model("ks_si_er")
-        with self.assertRaisesRegex(ValueError, "only task_type='ks_si_er'"):
-            build_model("ks_si_er_ic")
+    def test_task_combinations_and_guard(self):
+        dimensions = {"ks": 12, "si": 1251, "er": 4}
+        for task_type in ("ks", "si", "er", "ks_si", "si_er", "ks_er", "ks_si_er"):
+            with self.subTest(task_type=task_type):
+                model = build_model(task_type)
+                outputs = model(torch.randn(2, 3, 768))
+                self.assertEqual(
+                    [logits.shape[1] for logits in outputs.logits],
+                    [dimensions[task] for task in task_type.split("_")],
+                )
+                self.assertEqual(len(model.candidate_layers), len(task_type.split("_")))
+        for invalid in ("ks_si_er_ic", "ks_ks", "", "ks__er"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "unique tasks"):
+                    build_model(invalid)
+
+    def test_pairwise_soft_sharing_gates_each_row_by_distance(self):
+        for task_names in (["ks", "si"], ["si", "er"], ["ks", "er"]):
+            with self.subTest(task_names=task_names), tempfile.TemporaryDirectory() as directory:
+                sharing = RowTaskSharing(
+                    directory, task_names, sharing_mode="soft",
+                    soft_min_margin=0.05, soft_full_margin=0.20,
+                )
+                weights = [
+                    torch.tensor([[1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 0.0]]),
+                    torch.tensor([[1.0, 0.0], [0.85, 0.0], [0.5, 0.0], [0.0, 0.0]]),
+                ]
+                sharing.initialize(weights, epoch=3)
+                self.assertEqual(sharing.shared_assignment_counts(), {"_".join(task_names): 3})
+                coefficients = sharing.sharing_coefficients
+                self.assertEqual(float(coefficients[0]), 1.0)
+                self.assertGreater(float(coefficients[1]), 0.0)
+                self.assertLess(float(coefficients[1]), 1.0)
+                self.assertEqual(float(coefficients[2]), 0.0)
+                self.assertEqual(float(coefficients[3]), 1.0)
+                before = [weight.clone() for weight in weights]
+                sharing.share(weights)
+                self.assertTrue(torch.equal(weights[0][2], before[0][2]))
+                self.assertTrue(torch.equal(weights[1][2], before[1][2]))
+                self.assertLess(float((weights[0][0] - weights[1][0]).abs().max()), 1e-6)
+                self.assertLess(
+                    float((weights[0][1] - weights[1][1]).abs().max()),
+                    float((before[0][1] - before[1][1]).abs().max()),
+                )
 
 
 class NCMTLTrainerTests(unittest.TestCase):
+    def test_three_pair_and_single_training_and_evaluation_paths(self):
+        for task_type in ("ks_si_er", "si_er", "ks"):
+            with self.subTest(task_type=task_type), tempfile.TemporaryDirectory() as directory:
+                dataset = SyntheticSubsetDataset(task_type)
+                trainer = MultiTasksModelTrainerNCMTL(
+                    model=build_model(task_type), device=torch.device("cpu"),
+                    task_type=task_type, training_cfg=training_config(),
+                    results_root=os.path.join(directory, "results"),
+                    checkpoints_root=os.path.join(directory, "checkpoints"),
+                    training_data=dataset, validation_data=dataset,
+                    ignore_index=-1,
+                    ncmtl_cfg=ncmtl_config(
+                        sharing_granularity="row", row_sharing_mode="soft",
+                        row_warmup_mode="adaptive",
+                        log_candidate_row_distances=True,
+                    ),
+                )
+                trainer.train()
+                with open(trainer.cluster_summary_path) as summary_file:
+                    summary = json.load(summary_file)
+                self.assertEqual(summary["task_type"], task_type)
+                if task_type == "ks":
+                    self.assertEqual(summary["strategy"], "no_pair_single_task")
+                else:
+                    self.assertTrue(os.path.exists(trainer.row_distance_logger.summary_path))
+                evaluator = MultiTasksModelEvaluator(
+                    model=trainer.model, device=torch.device("cpu"),
+                    task_type=task_type,
+                    evaluation_cfg={"batch_size": 6, "pin_memory": False},
+                    results_root=os.path.join(directory, "results"),
+                    dataset=dataset,
+                    checkpoints_root=os.path.join(directory, "checkpoints"),
+                    checkpoint_tag="epoch",
+                    results_run_id=os.path.basename(trainer.results_dir),
+                    checkpoint_run_id=os.path.basename(trainer.ckpt_dir),
+                )
+                stats = evaluator.write_metrics()
+                evaluator.write_predictions_csv()
+                self.assertEqual(len(stats.accuracy_task), len(task_type.split("_")))
+
     def _build_trainer(self, directory, **overrides):
         dataset = SyntheticDataset()
         return MultiTasksModelTrainerNCMTL(

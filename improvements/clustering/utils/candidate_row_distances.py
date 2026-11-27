@@ -33,11 +33,8 @@ class CandidateRowDistanceLogger:
 
     def __init__(self, results_dir: str, task_names: Sequence[str]):
         self.task_names = list(task_names)
-        if self.task_names != ["ks", "si", "er"]:
-            raise ValueError(
-                "Candidate row-distance matrices currently require tasks "
-                "['ks', 'si', 'er']"
-            )
+        if not 2 <= len(self.task_names) <= 3:
+            raise ValueError("Candidate row distances require two or three tasks")
 
         self.summary_path = os.path.join(
             results_dir, "candidate_row_distance_summary.csv"
@@ -108,6 +105,11 @@ class CandidateRowDistanceLogger:
                 )
 
         means = snapshot["summaries"]
+        matrix = [
+            [0.0 if first == second else means[f"{self.task_names[min(first, second)]}_{self.task_names[max(first, second)]}"]["mean"]
+             for second in range(len(self.task_names))]
+            for first in range(len(self.task_names))
+        ]
         self._matrices.append(
             {
                 "epoch": snapshot["epoch"],
@@ -116,11 +118,7 @@ class CandidateRowDistanceLogger:
                 "tasks": self.task_names,
                 "assignments_before_sharing": snapshot["assignments_before_sharing"],
                 "clusters_frozen": snapshot["clusters_frozen"],
-                "matrix": [
-                    [0.0, means["ks_si"]["mean"], means["ks_er"]["mean"]],
-                    [means["ks_si"]["mean"], 0.0, means["si_er"]["mean"]],
-                    [means["ks_er"]["mean"], means["si_er"]["mean"], 0.0],
-                ],
+                "matrix": matrix,
             }
         )
         with open(self.matrices_path, "w") as matrices_file:

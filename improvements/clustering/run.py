@@ -1,4 +1,4 @@
-"""Train and evaluate the three-task NCMTL downstream model.
+"""Train and evaluate NCMTL for any subset of KS, SI, and ER.
 
 Usage from this directory:
     python run.py --task_type ks_si_er --config configs/ncmtl_config.yml --device_index 0
@@ -82,7 +82,7 @@ def _log_final_mlflow_state(trainer, model):
                 mlflow.log_artifact(path, artifact_path="checkpoints")
 
         mlflow.log_param("sharing_granularity", trainer.sharing_granularity)
-        if trainer.sharing_granularity == "row":
+        if trainer.sharing_granularity == "row" and trainer.row_task_sharing is not None:
             for pair, count in trainer.row_task_sharing.assignment_counts().items():
                 mlflow.log_param(f"row_pair_count_{pair}", count)
             for pair, count in trainer.row_task_sharing.shared_assignment_counts().items():
@@ -104,7 +104,7 @@ def _log_final_mlflow_state(trainer, model):
                 "cluster_frozen_epoch",
                 trainer.row_task_sharing.assignment_epoch,
             )
-        else:
+        elif trainer.sharing_granularity == "matrix":
             state = model.get_cluster_state()
             for task, cluster in zip(trainer.task_array, state["assignments"]):
                 mlflow.log_param(f"final_cluster_{task}", cluster)
@@ -120,13 +120,13 @@ def _log_final_mlflow_state(trainer, model):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Train and evaluate the three-task wavCSE-NCMTL model"
+        description="Train and evaluate the wavCSE-NCMTL model"
     )
     parser.add_argument(
         "--task_type",
         type=str,
         default="ks_si_er",
-        help="NCMTL v1 supports only ks_si_er",
+        help="Unique tasks from ks, si, er, separated by underscores",
     )
     parser.add_argument(
         "--config",
@@ -148,11 +148,15 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.task_type != "ks_si_er":
-        parser.error("NCMTL v1 supports only --task_type ks_si_er")
+    tasks = args.task_type.split("_")
+    if not tasks or len(tasks) != len(set(tasks)) or not set(tasks) <= {"ks", "si", "er"}:
+        parser.error("--task_type must contain unique tasks from ks, si, er")
 
     load_dotenv(os.path.join(_REPO_ROOT, ".env"))
     cfg = load_config(args.config)
+    if cfg.get("paths", {}).get("partition_by_task", False):
+        for key in ("results_root", "checkpoints_root"):
+            cfg["paths"][key] = os.path.join(cfg["paths"][key], args.task_type)
 
     seed = args.seed if args.seed is not None else cfg.get("seed", 42)
     set_seed(seed)
